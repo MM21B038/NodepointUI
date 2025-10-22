@@ -14,11 +14,12 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {/* Toaster and Sonner are moved outside TooltipProvider */}
+    <Toaster />
+    <Sonner />
     <TooltipProvider>
-      {/* Wrap multiple children in a div instead of a React Fragment */}
+      {/* This div now contains only BrowserRouter as its child */}
       <div>
-        <Toaster />
-        <Sonner />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
