@@ -1,6 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+// import { TooltipProvider } from "@/components/ui/tooltip"; // Temporarily removed
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
@@ -16,19 +16,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <Toaster />
     <Sonner />
-    <TooltipProvider>
-      {/* TooltipProvider expects a single React element child. BrowserRouter is a single element. */}
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/documents" element={<Layout><Documents /></Layout>} />
-          <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
-          <Route path="/ask" element={<Layout><Ask /></Layout>} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    {/* TooltipProvider temporarily removed to isolate the error */}
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/documents" element={<Layout><Documents /></Layout>} />
+        <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
+        <Route path="/ask" element={<Layout><Ask /></Layout>} />
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 
