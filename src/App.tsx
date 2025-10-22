@@ -21,6 +21,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          {/* Using Layout to wrap page components */}
           <Route path="/documents" element={<Layout><Documents /></Layout>} />
           <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
           <Route path="/ask" element={<Layout><Ask /></Layout>} />

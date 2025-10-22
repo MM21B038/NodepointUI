@@ -65,15 +65,15 @@ const Documents = () => {
             <RefreshCw className="h-4 w-4" />
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">Workspace</Button> {/* Changed to "Workspace" */}
+            <DropdownMenuTrigger>
+              <Button variant="outline">Workspace</Button> {/* Removed asChild */}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
-                + Create New {/* Changed to "+ Create New" */}
+                + Create New
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleOpenWorkspace}>
-                Open Workspace {/* Added "Open Workspace" */}
+                Open Workspace
               </DropdownMenuItem>
               {existingWorkspaces.length > 0 && (
                 <>
