@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,14 +12,31 @@ import {
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
 import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
-import { getWorkspaces } from "@/database/workspaceStorage";
+import FileUpload from "@/components/FileUpload";
+import { getWorkspaces, listFiles } from "@/database/workspaceStorage";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+
+  const fetchFiles = useCallback(async (workspaceName: string) => {
+    setIsLoadingFiles(true);
+    try {
+      const loadedFiles = await listFiles(workspaceName);
+      setFiles(loadedFiles);
+    } catch (error) {
+      toast.error(`Failed to load files for ${workspaceName}.`);
+      setFiles([]);
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  }, []);
 
   const fetchWorkspaces = useCallback(async () => {
     setIsLoadingWorkspaces(true);
@@ -27,15 +44,24 @@ const Documents = () => {
       const loadedWorkspaces = await getWorkspaces();
       setExistingWorkspaces(loadedWorkspaces);
       
-      // If the current workspace is no longer in the list, or if none is selected,
-      // set the first one as current if available.
-      if (
-        loadedWorkspaces.length > 0 &&
-        (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace))
-      ) {
-        setCurrentWorkspace(loadedWorkspaces[0]);
-      } else if (loadedWorkspaces.length === 0) {
-        setCurrentWorkspace(null);
+      let newCurrentWorkspace = currentWorkspace;
+
+      // Determine the new current workspace
+      if (loadedWorkspaces.length > 0) {
+        if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
+          newCurrentWorkspace = loadedWorkspaces[0];
+        }
+      } else {
+        newCurrentWorkspace = null;
+      }
+      
+      setCurrentWorkspace(newCurrentWorkspace);
+      
+      // If a workspace is selected, fetch its files
+      if (newCurrentWorkspace) {
+        await fetchFiles(newCurrentWorkspace);
+      } else {
+        setFiles([]);
       }
       
       return true;
@@ -46,12 +72,22 @@ const Documents = () => {
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace, fetchFiles]);
 
   // Load existing workspaces on mount
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
+
+  // Refetch files whenever currentWorkspace changes
+  useEffect(() => {
+    if (currentWorkspace) {
+      fetchFiles(currentWorkspace);
+    } else {
+      setFiles([]);
+    }
+  }, [currentWorkspace, fetchFiles]);
+
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
@@ -73,6 +109,12 @@ const Documents = () => {
     setIsOpenWorkspaceDialogOpen(false); // Close dialog after selection
   };
 
+  const handleUploadSuccess = () => {
+    if (currentWorkspace) {
+      fetchFiles(currentWorkspace); // Refresh file list after successful upload
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -80,6 +122,10 @@ const Documents = () => {
           Documents {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <div className="flex items-center space-x-4">
+          <FileUpload 
+            workspaceName={currentWorkspace} 
+            onUploadSuccess={handleUploadSuccess} 
+          />
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
@@ -99,17 +145,43 @@ const Documents = () => {
         </div>
       </div>
 
-      <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px] flex items-center justify-center">
+      <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px]">
         {isLoadingWorkspaces ? (
-          <p className="text-muted-foreground">Loading workspaces...</p>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Loading workspaces...</p>
+          </div>
         ) : currentWorkspace ? (
-          <p className="text-muted-foreground">
-            Displaying documents for workspace: {currentWorkspace}. (Ready to upload files)
-          </p>
+          <div className="space-y-4">
+            <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
+            {isLoadingFiles ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : files.length > 0 ? (
+              <ScrollArea className="h-64">
+                <ul className="space-y-2">
+                  {files.map((file) => (
+                    <li key={file} className="flex items-center p-2 border rounded-md bg-secondary/50">
+                      <FileText className="h-4 w-4 mr-3 text-primary" />
+                      <span>{file}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
+            ) : (
+              <div className="flex items-center justify-center h-48">
+                <p className="text-muted-foreground">
+                  No documents found in this workspace. Upload one to get started!
+                </p>
+              </div>
+            )}
+          </div>
         ) : (
-          <p className="text-muted-foreground">
-            Please create or open a workspace to view documents.
-          </p>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">
+              Please create or open a workspace to view documents.
+            </p>
+          </div>
         )}
       </div>
 

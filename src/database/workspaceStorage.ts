@@ -83,10 +83,29 @@ export async function listFiles(workspaceName: string): Promise<string[]> {
 }
 
 /**
- * Checks if a workspace name already exists by attempting to create it.
- * NOTE: Since we have a dedicated API endpoint for creation that handles existence, 
- * we will rely on the API response from createWorkspace for existence checks.
- * For now, we will remove the client-side check as it's redundant/inaccurate with a backend.
- * The dialog component will handle the existence check based on the result of createWorkspace.
+ * Uploads a file to the specified workspace.
+ * @param workspaceName The name of the target workspace.
+ * @param file The file object to upload.
+ * @returns A promise that resolves to true on success.
  */
-// export function workspaceExists(name: string): boolean { ... } - Removed as it's now handled by the API call.
+export async function uploadFile(workspaceName: string, file: File): Promise<boolean> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/upload_file/${workspaceName}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Failed to upload file: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Error uploading file to ${workspaceName}:`, error);
+    throw error;
+  }
+}
