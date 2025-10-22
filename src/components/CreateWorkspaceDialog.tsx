@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { workspaceExists } from "@/database/workspaceStorage";
 
 interface CreateWorkspaceDialogProps {
   isOpen: boolean;
@@ -28,13 +29,21 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   const [workspaceName, setWorkspaceName] = useState("");
 
   const handleSubmit = () => {
-    if (workspaceName.trim()) {
-      onCreate(workspaceName.trim());
-      setWorkspaceName("");
-      onClose();
-    } else {
+    const name = workspaceName.trim();
+    
+    if (!name) {
       toast.error("Workspace name cannot be empty.");
+      return;
     }
+    
+    if (workspaceExists(name)) {
+      toast.error(`Workspace "${name}" already exists. Please choose another name.`);
+      return;
+    }
+
+    onCreate(name);
+    setWorkspaceName("");
+    onClose();
   };
 
   return (

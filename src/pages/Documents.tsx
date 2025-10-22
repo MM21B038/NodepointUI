@@ -7,36 +7,52 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
 import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
+import { getWorkspaces, createWorkspace } from "@/database/workspaceStorage";
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
+  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
-  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]); // Initialize as empty
 
-  // In a real app, you would fetch existing workspaces from your backend here.
+  // Load existing workspaces and set initial current workspace
   useEffect(() => {
-    // Simulate fetching workspaces from a backend if needed, but for now, it's empty.
+    const loadedWorkspaces = getWorkspaces();
+    setExistingWorkspaces(loadedWorkspaces);
+    
+    // Set the first workspace as current if none is selected yet
+    if (loadedWorkspaces.length > 0 && currentWorkspace === null) {
+      setCurrentWorkspace(loadedWorkspaces[0]);
+    }
   }, []);
 
   const handleRefresh = () => {
-    toast.info("Refreshing documents...");
-    // TODO: Implement actual data refresh logic (requires backend)
-    console.log("Refreshing documents");
+    // Reload workspaces from storage
+    const refreshedWorkspaces = getWorkspaces();
+    setExistingWorkspaces(refreshedWorkspaces);
+    toast.info("Workspaces refreshed.");
+    console.log("Refreshing documents/workspaces");
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // In a real app, this would be an API call to create a directory
-    toast.success(`Simulating creation of workspace: ${name}`);
-    setExistingWorkspaces((prev) => [...prev, name]);
-    setCurrentWorkspace(name); // Automatically switch to the new workspace
-    console.log(`Creating new workspace: ${name}`);
+    // This function is called only if workspaceExists check passed in the dialog
+    const success = createWorkspace(name);
+    
+    if (success) {
+      // Update local state and set as current
+      const updatedWorkspaces = getWorkspaces();
+      setExistingWorkspaces(updatedWorkspaces);
+      setCurrentWorkspace(name); 
+      toast.success(`Workspace "${name}" created and opened.`);
+    } else {
+      // Should not happen if dialog check is correct, but good fallback
+      toast.error(`Failed to create workspace "${name}". It might already exist.`);
+    }
   };
 
   const handleSelectWorkspace = (workspaceName: string) => {
@@ -65,9 +81,8 @@ const Documents = () => {
                 + Create New
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
-                Open Workspace
+                Open Existing
               </DropdownMenuItem>
-              {/* Removed existing workspace list from dropdown */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
