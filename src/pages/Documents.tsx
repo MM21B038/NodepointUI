@@ -119,7 +119,7 @@ const Documents = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-semibold">
-          Documents {currentWorkspace && `(${currentWorkspace})`}
+          Workspace {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <div className="flex items-center space-x-4">
           <FileUpload 
