@@ -14,23 +14,20 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    {/* Toaster and Sonner are moved outside TooltipProvider */}
     <Toaster />
     <Sonner />
     <TooltipProvider>
-      {/* This div now contains only BrowserRouter as its child */}
-      <div>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/documents" element={<Layout><Documents /></Layout>} />
-            <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
-            <Route path="/ask" element={<Layout><Ask /></Layout>} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </div>
+      {/* TooltipProvider expects a single React element child. BrowserRouter is a single element. */}
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/documents" element={<Layout><Documents /></Layout>} />
+          <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
+          <Route path="/ask" element={<Layout><Ask /></Layout>} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
