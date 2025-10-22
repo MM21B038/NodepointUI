@@ -16,27 +16,19 @@ import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
-  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
+  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]); // Initialize as empty
 
-  // Simulate fetching workspaces from a backend
+  // In a real app, you would fetch existing workspaces from your backend here.
+  // For now, we'll keep it empty until a backend is integrated.
   useEffect(() => {
-    const fetchWorkspaces = async () => {
-      // In a real app, this would be an API call to list directories in 'database/'
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate network delay
-      setExistingWorkspaces(["Project Alpha", "Project Beta", "Project Gamma"]);
-      // Set a default workspace if none is selected
-      if (!currentWorkspace && existingWorkspaces.length > 0) {
-        setCurrentWorkspace(existingWorkspaces[0]);
-      }
-    };
-    fetchWorkspaces();
-  }, [currentWorkspace, existingWorkspaces.length]); // Re-run if currentWorkspace or initial existingWorkspaces change
+    // Simulate fetching workspaces from a backend if needed, but for now, it's empty.
+    // If you integrate Supabase, this is where you'd make an API call to list directories.
+  }, []);
 
   const handleRefresh = () => {
     toast.info("Refreshing documents...");
     // TODO: Implement actual data refresh logic (requires backend)
     console.log("Refreshing documents");
-    // In a real app, this would also re-fetch workspaces
   };
 
   const handleCreateWorkspace = (name: string) => {
@@ -45,6 +37,14 @@ const Documents = () => {
     setExistingWorkspaces((prev) => [...prev, name]);
     setCurrentWorkspace(name); // Automatically switch to the new workspace
     console.log(`Creating new workspace: ${name}`);
+  };
+
+  const handleOpenWorkspace = () => {
+    toast.info("Simulating opening an existing workspace...");
+    // TODO: Implement logic to open an existing workspace.
+    // This would typically involve a backend call to list available workspaces
+    // or a file picker if using a desktop app or specific browser APIs.
+    console.log("Opening existing workspace");
   };
 
   const handleSelectWorkspace = (workspaceName: string) => {
@@ -66,11 +66,14 @@ const Documents = () => {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">Workspace Options</Button>
+              <Button variant="outline">Workspace</Button> {/* Changed to "Workspace" */}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
-                + Create New Workspace
+                + Create New {/* Changed to "+ Create New" */}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleOpenWorkspace}>
+                Open Workspace {/* Added "Open Workspace" */}
               </DropdownMenuItem>
               {existingWorkspaces.length > 0 && (
                 <>
@@ -86,9 +89,6 @@ const Documents = () => {
                   ))}
                 </>
               )}
-              {existingWorkspaces.length === 0 && (
-                <DropdownMenuItem disabled>No existing workspaces</DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -98,7 +98,7 @@ const Documents = () => {
         <p className="text-muted-foreground">
           {currentWorkspace
             ? `Displaying documents for workspace: ${currentWorkspace}. (Requires backend to fetch data)`
-            : "Please create or select a workspace to view documents."}
+            : "Please create or open a workspace to view documents."}
         </p>
       </div>
 
