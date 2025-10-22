@@ -109,3 +109,50 @@ export async function uploadFile(workspaceName: string, file: File): Promise<boo
     throw error;
   }
 }
+
+/**
+ * Deletes a specific file from a workspace.
+ * @param workspaceName The name of the workspace.
+ * @param fileName The name of the file to delete.
+ * @returns A promise that resolves to true on success.
+ */
+export async function deleteFile(workspaceName: string, fileName: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/delete_file/${workspaceName}/${fileName}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Failed to delete file: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Error deleting file ${fileName} from ${workspaceName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes an entire workspace.
+ * @param workspaceName The name of the workspace to delete.
+ * @returns A promise that resolves to true on success.
+ */
+export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/delete_workspace/${workspaceName}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Failed to delete workspace: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`Error deleting workspace ${workspaceName}:`, error);
+    throw error;
+  }
+}

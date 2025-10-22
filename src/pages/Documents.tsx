@@ -1,24 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, FileText, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
 import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
 import FileUpload from "@/components/FileUpload";
-import { getWorkspaces, listFiles } from "@/database/workspaceStorage";
+import FileListItem from "@/components/FileListItem";
+import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { getWorkspaces, listFiles, deleteWorkspace } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
+  const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
+  
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -114,6 +119,27 @@ const Documents = () => {
       fetchFiles(currentWorkspace); // Refresh file list after successful upload
     }
   };
+  
+  const handleDeleteWorkspace = async () => {
+    if (!currentWorkspace) return;
+
+    const workspaceToDelete = currentWorkspace;
+    const loadingToastId = toast.loading(`Deleting workspace ${workspaceToDelete}...`);
+
+    try {
+      await deleteWorkspace(workspaceToDelete);
+      toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
+      
+      // After deletion, reset current workspace and refetch list
+      setCurrentWorkspace(null);
+      fetchWorkspaces();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
+      toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
+    } finally {
+      setIsDeleteWorkspaceDialogOpen(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -140,6 +166,19 @@ const Documents = () => {
               <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
                 Open Existing
               </DropdownMenuItem>
+              
+              {currentWorkspace && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => setIsDeleteWorkspaceDialogOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Current Workspace
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -161,10 +200,12 @@ const Documents = () => {
               <ScrollArea className="h-64">
                 <ul className="space-y-2">
                   {files.map((file) => (
-                    <li key={file} className="flex items-center p-2 border rounded-md bg-secondary/50">
-                      <FileText className="h-4 w-4 mr-3 text-primary" />
-                      <span>{file}</span>
-                    </li>
+                    <FileListItem 
+                      key={file} 
+                      fileName={file} 
+                      workspaceName={currentWorkspace} 
+                      onDeleteSuccess={() => fetchFiles(currentWorkspace)}
+                    />
                   ))}
                 </ul>
               </ScrollArea>
@@ -198,6 +239,17 @@ const Documents = () => {
         onSelect={handleSelectWorkspace}
         currentWorkspace={currentWorkspace}
       />
+      
+      {currentWorkspace && (
+        <DeleteConfirmationDialog
+          isOpen={isDeleteWorkspaceDialogOpen}
+          onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
+          onConfirm={handleDeleteWorkspace}
+          title={`Delete Workspace: ${currentWorkspace}`}
+          description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
+          itemName={currentWorkspace}
+        />
+      )}
     </div>
   );
 };
