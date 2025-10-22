@@ -14,19 +14,21 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <Toaster />
-    <Sonner />
-    {/* TooltipProvider temporarily removed to isolate the error */}
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/documents" element={<Layout><Documents /></Layout>} />
-        <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
-        <Route path="/ask" element={<Layout><Ask /></Layout>} />
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    {/* Wrapping all children in a Fragment to ensure QueryClientProvider receives a single child */}
+    <>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/documents" element={<Layout><Documents /></Layout>} />
+          <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
+          <Route path="/ask" element={<Layout><Ask /></Layout>} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </>
   </QueryClientProvider>
 );
 
