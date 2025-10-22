@@ -15,8 +15,8 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      {/* Wrap multiple children in a React Fragment */}
-      <>
+      {/* Wrap multiple children in a div instead of a React Fragment */}
+      <div>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -29,7 +29,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-      </>
+      </div>
     </TooltipProvider>
   </QueryClientProvider>
 );
