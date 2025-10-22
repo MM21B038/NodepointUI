@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,54 +12,65 @@ import {
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
 import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
-import { getWorkspaces, createWorkspace } from "@/database/workspaceStorage";
+import { getWorkspaces } from "@/database/workspaceStorage";
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
 
-  // Load existing workspaces and set initial current workspace
-  useEffect(() => {
-    const loadedWorkspaces = getWorkspaces();
-    setExistingWorkspaces(loadedWorkspaces);
-    
-    // Set the first workspace as current if none is selected yet
-    if (loadedWorkspaces.length > 0 && currentWorkspace === null) {
-      setCurrentWorkspace(loadedWorkspaces[0]);
+  const fetchWorkspaces = useCallback(async () => {
+    setIsLoadingWorkspaces(true);
+    try {
+      const loadedWorkspaces = await getWorkspaces();
+      setExistingWorkspaces(loadedWorkspaces);
+      
+      // If the current workspace is no longer in the list, or if none is selected,
+      // set the first one as current if available.
+      if (
+        loadedWorkspaces.length > 0 &&
+        (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace))
+      ) {
+        setCurrentWorkspace(loadedWorkspaces[0]);
+      } else if (loadedWorkspaces.length === 0) {
+        setCurrentWorkspace(null);
+      }
+      
+      return true;
+    } catch (error) {
+      toast.error("Failed to load workspaces from the API.");
+      console.error(error);
+      return false;
+    } finally {
+      setIsLoadingWorkspaces(false);
     }
-  }, []);
+  }, [currentWorkspace]);
 
-  const handleRefresh = () => {
-    // Reload workspaces from storage
-    const refreshedWorkspaces = getWorkspaces();
-    setExistingWorkspaces(refreshedWorkspaces);
-    toast.info("Workspaces refreshed.");
-    console.log("Refreshing documents/workspaces");
+  // Load existing workspaces on mount
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
+
+  const handleRefresh = async () => {
+    const success = await fetchWorkspaces();
+    if (success) {
+      toast.info("Workspaces refreshed from API.");
+    }
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // This function is called only if workspaceExists check passed in the dialog
-    const success = createWorkspace(name);
-    
-    if (success) {
-      // Update local state and set as current
-      const updatedWorkspaces = getWorkspaces();
-      setExistingWorkspaces(updatedWorkspaces);
-      setCurrentWorkspace(name); 
-      toast.success(`Workspace "${name}" created and opened.`);
-    } else {
-      // Should not happen if dialog check is correct, but good fallback
-      toast.error(`Failed to create workspace "${name}". It might already exist.`);
-    }
+    // After successful creation via API (handled in dialog), refresh the list
+    fetchWorkspaces();
+    setCurrentWorkspace(name); 
+    toast.success(`Workspace "${name}" created and opened.`);
   };
 
   const handleSelectWorkspace = (workspaceName: string) => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false); // Close dialog after selection
-    console.log(`Selected workspace: ${workspaceName}`);
   };
 
   return (
@@ -69,12 +80,12 @@ const Documents = () => {
           Documents {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="icon" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
+            <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">Workspace</Button>
+              <Button variant="outline" disabled={isLoadingWorkspaces}>Workspace</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
@@ -89,11 +100,17 @@ const Documents = () => {
       </div>
 
       <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px] flex items-center justify-center">
-        <p className="text-muted-foreground">
-          {currentWorkspace
-            ? `Displaying documents for workspace: ${currentWorkspace}. (Requires backend to fetch data)`
-            : "Please create or open a workspace to view documents."}
-        </p>
+        {isLoadingWorkspaces ? (
+          <p className="text-muted-foreground">Loading workspaces...</p>
+        ) : currentWorkspace ? (
+          <p className="text-muted-foreground">
+            Displaying documents for workspace: {currentWorkspace}. (Ready to upload files)
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            Please create or open a workspace to view documents.
+          </p>
+        )}
       </div>
 
       <CreateWorkspaceDialog
