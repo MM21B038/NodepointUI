@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Trash2, Zap, HardHat } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import FileListItem from "@/components/FileListItem";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import PipelineStatusDialog from "@/components/PipelineStatusDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
+import PipelineStatusIndicator from "@/components/PipelineStatusIndicator"; // New import
 import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
@@ -40,6 +41,7 @@ const Documents = () => {
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
+  // Hook call is unconditional
   const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus, startPolling } = usePipelineStatus(currentWorkspace);
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
@@ -170,9 +172,9 @@ const Documents = () => {
     try {
       const result = await startPreprocess(currentWorkspace);
       
-      // Backend now returns immediately, so we show success and immediately check status
+      // Backend now returns immediately, so we show success and immediately start polling
       toast.success(result.message, { id: loadingToastId });
-      startPolling(); // Use the new function to ensure polling starts immediately
+      startPolling(); // Start polling immediately to track progress
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
@@ -188,20 +190,12 @@ const Documents = () => {
           <h2 className="text-3xl font-semibold">
             Workspace {currentWorkspace && `(${currentWorkspace})`}
           </h2>
-          {currentWorkspace && isPipelineRunning && (
-            <Button
-              variant="ghost"
-              size="icon"
+          {/* Display the status indicator if a workspace is selected */}
+          {currentWorkspace && (
+            <PipelineStatusIndicator
+              isPipelineRunning={isPipelineRunning}
               onClick={() => setIsPipelineStatusDialogOpen(true)}
-              className={cn(
-                "relative h-8 w-8 rounded-full transition-all duration-300",
-                "text-yellow-500 hover:text-yellow-600",
-                "animate-yellow-blink"
-              )}
-              title="Pipeline Running"
-            >
-              <HardHat className="h-5 w-5" />
-            </Button>
+            />
           )}
         </div>
         
