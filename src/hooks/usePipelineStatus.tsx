@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getPipelineStatus } from "@/database/workspaceStorage";
+import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
 const POLLING_INTERVAL = 2000; // 2 seconds
 
 export function usePipelineStatus(workspaceName: string | null) {
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
-  const [pipelineData, setPipelineData] = useState<any>(null);
+  const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [lastCheck, setLastCheck] = useState(Date.now());
   const [forcePolling, setForcePolling] = useState(false);
 
@@ -22,7 +22,7 @@ export function usePipelineStatus(workspaceName: string | null) {
 
     // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
     const running = (response.pipeline || []).some(
-      (chunk) => chunk.status === 'queued' || chunk.status === 'running'
+      (chunk: ChunkEntry) => chunk.status === 'queued' || chunk.status === 'running'
     );
     
     setIsPipelineRunning(running);
@@ -46,23 +46,26 @@ export function usePipelineStatus(workspaceName: string | null) {
     }
   }, [workspaceName, checkStatus]);
 
+  // Effect 1: Initial check when workspace changes
   useEffect(() => {
-    if (!workspaceName) {
+    if (workspaceName) {
+      // Reset states when workspace changes and perform initial check
+      setIsPipelineRunning(false);
+      setForcePolling(false);
+      checkStatus();
+    } else {
       setIsPipelineRunning(false);
       setPipelineData(null);
       setForcePolling(false);
-      return;
     }
+  }, [workspaceName, checkStatus]);
 
-    // Run initial check when workspace changes
-    if (!isPipelineRunning && !forcePolling) {
-        checkStatus();
-    }
-
+  // Effect 2: Polling interval management
+  useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
-    // Start polling if the pipeline is running OR if we are forcing a check (right after starting a job)
-    if (isPipelineRunning || forcePolling) {
+    // Start polling if the pipeline is running OR if we are forcing a check
+    if (workspaceName && (isPipelineRunning || forcePolling)) {
       intervalId = setInterval(checkStatus, POLLING_INTERVAL);
     }
 
