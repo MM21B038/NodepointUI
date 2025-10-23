@@ -19,7 +19,8 @@ export function usePipelineStatus(workspaceName: string | null) {
     setPipelineData(response);
 
     // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
-    const running = response.pipeline.some(
+    // Safely access response.pipeline, defaulting to an empty array if undefined/null
+    const running = (response.pipeline || []).some(
       (chunk) => chunk.status === 'queued' || chunk.status === 'running'
     );
     
