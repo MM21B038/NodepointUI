@@ -35,14 +35,23 @@ export function usePipelineStatus(workspaceName: string | null) {
       return;
     }
 
-    // Initial check
+    // Always run initial check when workspace changes or when polling starts/restarts
     checkStatus();
 
-    // Set up polling
-    const intervalId = setInterval(checkStatus, POLLING_INTERVAL);
+    let intervalId: ReturnType<typeof setInterval> | undefined;
 
-    return () => clearInterval(intervalId);
-  }, [workspaceName, checkStatus]);
+    // Only start polling if the pipeline is currently running (as determined by the last checkStatus call)
+    if (isPipelineRunning) {
+      intervalId = setInterval(checkStatus, POLLING_INTERVAL);
+    }
+
+    // Cleanup function runs when dependencies change or component unmounts
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [workspaceName, isPipelineRunning, checkStatus]);
 
   return {
     isPipelineRunning,
