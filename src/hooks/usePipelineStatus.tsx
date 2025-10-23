@@ -13,7 +13,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     if (!workspaceName) {
       setIsPipelineRunning(false);
       setPipelineData(null);
-      setForcePolling(false); // Stop forcing if workspace is gone
+      setForcePolling(false);
       return;
     }
 
@@ -37,8 +37,12 @@ export function usePipelineStatus(workspaceName: string | null) {
 
   const startPolling = useCallback(() => {
     if (workspaceName) {
+      // 1. Set running state immediately to show the icon
+      setIsPipelineRunning(true); 
+      // 2. Force polling flag
       setForcePolling(true);
-      checkStatus(); // Run initial check immediately
+      // 3. Run initial check (which will correct the state if the job finished instantly)
+      checkStatus(); 
     }
   }, [workspaceName, checkStatus]);
 
@@ -51,7 +55,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     }
 
     // Run initial check when workspace changes
-    if (!forcePolling) {
+    if (!isPipelineRunning && !forcePolling) {
         checkStatus();
     }
 
@@ -75,6 +79,6 @@ export function usePipelineStatus(workspaceName: string | null) {
     pipelineData,
     lastCheck,
     refetch: checkStatus,
-    startPolling, // New function to initiate polling
+    startPolling,
   };
 }
