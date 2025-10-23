@@ -40,7 +40,7 @@ const Documents = () => {
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
-  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus } = usePipelineStatus(currentWorkspace);
+  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus, startPolling } = usePipelineStatus(currentWorkspace);
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -105,12 +105,12 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
-  // Removed: Redundant manual refetch when opening dialog, as polling is continuous.
-  // useEffect(() => {
-  //   if (isPipelineStatusDialogOpen) {
-  //     refetchPipelineStatus();
-  //   }
-  // }, [isPipelineStatusDialogOpen, refetchPipelineStatus]);
+  // Refetch pipeline status when opening the dialog
+  useEffect(() => {
+    if (isPipelineStatusDialogOpen) {
+      refetchPipelineStatus();
+    }
+  }, [isPipelineStatusDialogOpen, refetchPipelineStatus]);
 
 
   const handleRefresh = async () => {
@@ -172,7 +172,7 @@ const Documents = () => {
       
       // Backend now returns immediately, so we show success and immediately check status
       toast.success(result.message, { id: loadingToastId });
-      refetchPipelineStatus(); // Force immediate status check to show HardHat icon
+      startPolling(); // Use the new function to ensure polling starts immediately
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
