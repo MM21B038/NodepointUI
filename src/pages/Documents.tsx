@@ -105,6 +105,13 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
+  // Refetch pipeline status when opening the dialog
+  useEffect(() => {
+    if (isPipelineStatusDialogOpen) {
+      refetchPipelineStatus();
+    }
+  }, [isPipelineStatusDialogOpen, refetchPipelineStatus]);
+
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
@@ -287,7 +294,6 @@ const Documents = () => {
                         fileName={file} 
                         workspaceName={currentWorkspace} 
                         onDeleteSuccess={() => fetchFiles(currentWorkspace)}
-                        // Removed onPreprocessStart prop
                       />
                     ))}
                   </ul>
