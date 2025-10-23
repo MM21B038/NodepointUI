@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Trash2, Zap } from "lucide-react";
+import { FileText, Trash2, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { deleteFile, startPreprocess } from "@/database/workspaceStorage";
