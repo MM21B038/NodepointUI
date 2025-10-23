@@ -9,6 +9,46 @@ interface FileListResponse {
   files: string[];
 }
 
+export interface ChunkEntry {
+  chunk_uuid: string;
+  pdf: string;
+  range: [number, number];
+  status: 'queued' | 'running' | 'success' | 'failed';
+  queued_position: number | null;
+  pid: number | null;
+  pid_cpu_percent: number | null;
+  pid_mem_mb: number | null;
+  attempts: number;
+  submitted_at: number | null;
+  submitted_iso: string | null;
+  completed_at: number | null;
+  completed_iso: string | null;
+  next_to_process: boolean;
+}
+
+export interface PipelineStatusResponse {
+  workspace: string;
+  pipeline: ChunkEntry[];
+  error?: string;
+}
+
+export interface FilePreprocessStatus {
+  pdf_name: string;
+  total_pages: number;
+  chunks_total: number;
+  status: 'success' | 'failed' | 'pending';
+  start_time: string | null;
+  end_time: string | null;
+  total_time: string | null;
+}
+
+export interface PreprocessStatusResponse {
+  workspace: string;
+  files: FilePreprocessStatus[];
+  error?: string;
+}
+
+
 /**
  * Retrieves all existing workspace names from the API.
  * @returns A promise that resolves to an array of workspace names.
@@ -154,5 +194,68 @@ export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
   } catch (error) {
     console.error(`Error deleting workspace ${workspaceName}:`, error);
     throw error;
+  }
+}
+
+/**
+ * Starts the preprocessing pipeline for a workspace.
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves with the API message.
+ */
+export async function startPreprocess(workspaceName: string): Promise<{ message: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/do_preprocess`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: workspaceName }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Failed to start preprocessing: ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error(`Error starting preprocessing for ${workspaceName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Gets the detailed pipeline status (queued/running chunks).
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves with the pipeline status data.
+ */
+export async function getPipelineStatus(workspaceName: string): Promise<PipelineStatusResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/pipeline_status/${workspaceName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error fetching pipeline status for ${workspaceName}:`, error);
+    return { workspace: workspaceName, pipeline: [], error: "Failed to fetch pipeline status." };
+  }
+}
+
+/**
+ * Gets the overall preprocessing status summary for all files.
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves with the preprocessing status summary.
+ */
+export async function getPreprocessStatus(workspaceName: string): Promise<PreprocessStatusResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/preprocess_status/${workspaceName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error fetching preprocess status for ${workspaceName}:`, error);
+    return { workspace: workspaceName, files: [], error: "Failed to fetch preprocess status." };
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Trash2 } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, Zap, HardHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,19 +16,30 @@ import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
 import FileUpload from "@/components/FileUpload";
 import FileListItem from "@/components/FileListItem";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import PipelineStatusDialog from "@/components/PipelineStatusDialog";
+import PreprocessStatusTable from "@/components/PreprocessStatusTable";
 import { getWorkspaces, listFiles, deleteWorkspace } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { usePipelineStatus } from "@/hooks/usePipelineStatus";
+import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+type ViewMode = 'files' | 'status';
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
+  const [isPipelineStatusDialogOpen, setIsPipelineStatusDialogOpen] = useState(false);
   
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('files');
+
+  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus } = usePipelineStatus(currentWorkspace);
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -102,7 +113,6 @@ const Documents = () => {
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // After successful creation via API (handled in dialog), refresh the list
     fetchWorkspaces();
     setCurrentWorkspace(name); 
     toast.success(`Workspace "${name}" created and opened.`);
@@ -111,12 +121,12 @@ const Documents = () => {
   const handleSelectWorkspace = (workspaceName: string) => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
-    setIsOpenWorkspaceDialogOpen(false); // Close dialog after selection
+    setIsOpenWorkspaceDialogOpen(false);
   };
 
   const handleUploadSuccess = () => {
     if (currentWorkspace) {
-      fetchFiles(currentWorkspace); // Refresh file list after successful upload
+      fetchFiles(currentWorkspace);
     }
   };
   
@@ -130,7 +140,6 @@ const Documents = () => {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
       
-      // After deletion, reset current workspace and refetch list
       setCurrentWorkspace(null);
       fetchWorkspaces();
     } catch (error) {
@@ -140,13 +149,36 @@ const Documents = () => {
       setIsDeleteWorkspaceDialogOpen(false);
     }
   };
+  
+  const handlePreprocessStart = () => {
+    // Immediately refetch pipeline status to start polling feedback
+    refetchPipelineStatus();
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-semibold">
-          Workspace {currentWorkspace && `(${currentWorkspace})`}
-        </h2>
+        <div className="flex items-center space-x-3">
+          <h2 className="text-3xl font-semibold">
+            Workspace {currentWorkspace && `(${currentWorkspace})`}
+          </h2>
+          {currentWorkspace && isPipelineRunning && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsPipelineStatusDialogOpen(true)}
+              className={cn(
+                "relative h-8 w-8 rounded-full transition-all duration-300",
+                "text-yellow-500 hover:text-yellow-600",
+                "animate-yellow-blink"
+              )}
+              title="Pipeline Running"
+            >
+              <HardHat className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
+        
         <div className="flex items-center space-x-4">
           <FileUpload 
             workspaceName={currentWorkspace} 
@@ -184,39 +216,63 @@ const Documents = () => {
         </div>
       </div>
 
+      {/* View Toggle */}
+      {currentWorkspace && (
+        <div className="flex justify-end">
+          <ToggleGroup 
+            type="single" 
+            value={viewMode} 
+            onValueChange={(value: ViewMode) => value && setViewMode(value)}
+            className="border rounded-md"
+          >
+            <ToggleGroupItem value="files" aria-label="Toggle files view">
+              Files
+            </ToggleGroupItem>
+            <ToggleGroupItem value="status" aria-label="Toggle status view">
+              Status Page
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      )}
+
       <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px]">
         {isLoadingWorkspaces ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">Loading workspaces...</p>
           </div>
         ) : currentWorkspace ? (
-          <div className="space-y-4">
-            <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
-            {isLoadingFiles ? (
-              <div className="flex items-center justify-center h-48">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : files.length > 0 ? (
-              <ScrollArea className="h-64">
-                <ul className="space-y-2">
-                  {files.map((file) => (
-                    <FileListItem 
-                      key={file} 
-                      fileName={file} 
-                      workspaceName={currentWorkspace} 
-                      onDeleteSuccess={() => fetchFiles(currentWorkspace)}
-                    />
-                  ))}
-                </ul>
-              </ScrollArea>
-            ) : (
-              <div className="flex items-center justify-center h-48">
-                <p className="text-muted-foreground">
-                  No documents found in this workspace. Upload one to get started!
-                </p>
-              </div>
-            )}
-          </div>
+          viewMode === 'files' ? (
+            <div className="space-y-4">
+              <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
+              {isLoadingFiles ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : files.length > 0 ? (
+                <ScrollArea className="h-64">
+                  <ul className="space-y-2">
+                    {files.map((file) => (
+                      <FileListItem 
+                        key={file} 
+                        fileName={file} 
+                        workspaceName={currentWorkspace} 
+                        onDeleteSuccess={() => fetchFiles(currentWorkspace)}
+                        onPreprocessStart={handlePreprocessStart}
+                      />
+                    ))}
+                  </ul>
+                </ScrollArea>
+              ) : (
+                <div className="flex items-center justify-center h-48">
+                  <p className="text-muted-foreground">
+                    No documents found in this workspace. Upload one to get started!
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <PreprocessStatusTable workspaceName={currentWorkspace} />
+          )
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">
@@ -241,14 +297,21 @@ const Documents = () => {
       />
       
       {currentWorkspace && (
-        <DeleteConfirmationDialog
-          isOpen={isDeleteWorkspaceDialogOpen}
-          onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
-          onConfirm={handleDeleteWorkspace}
-          title={`Delete Workspace: ${currentWorkspace}`}
-          description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
-          itemName={currentWorkspace}
-        />
+        <>
+          <DeleteConfirmationDialog
+            isOpen={isDeleteWorkspaceDialogOpen}
+            onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
+            onConfirm={handleDeleteWorkspace}
+            title={`Delete Workspace: ${currentWorkspace}`}
+            description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
+            itemName={currentWorkspace}
+          />
+          <PipelineStatusDialog
+            isOpen={isPipelineStatusDialogOpen}
+            onClose={() => setIsPipelineStatusDialogOpen(false)}
+            data={pipelineData}
+          />
+        </>
       )}
     </div>
   );

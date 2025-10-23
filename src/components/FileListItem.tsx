@@ -1,25 +1,28 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Trash2 } from "lucide-react";
+import { FileText, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { deleteFile } from "@/database/workspaceStorage";
+import { deleteFile, startPreprocess } from "@/database/workspaceStorage";
 import DeleteConfirmationDialog from "./DeleteConfirmationDialog";
 
 interface FileListItemProps {
   fileName: string;
   workspaceName: string;
   onDeleteSuccess: () => void;
+  onPreprocessStart: () => void;
 }
 
 const FileListItem: React.FC<FileListItemProps> = ({
   fileName,
   workspaceName,
   onDeleteSuccess,
+  onPreprocessStart,
 }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPreprocessing, setIsPreprocessing] = useState(false);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -37,6 +40,22 @@ const FileListItem: React.FC<FileListItemProps> = ({
       setIsDeleteDialogOpen(false);
     }
   };
+  
+  const handleStartPreprocess = async () => {
+    setIsPreprocessing(true);
+    const loadingToastId = toast.loading(`Starting preprocessing for ${workspaceName}...`);
+
+    try {
+      const result = await startPreprocess(workspaceName);
+      toast.success(result.message, { id: loadingToastId });
+      onPreprocessStart(); // Notify parent to start polling
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
+      toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
+    } finally {
+      setIsPreprocessing(false);
+    }
+  };
 
   return (
     <>
@@ -45,15 +64,31 @@ const FileListItem: React.FC<FileListItemProps> = ({
           <FileText className="h-4 w-4 mr-3 text-primary" />
           <span>{fileName}</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-destructive hover:bg-destructive/10"
-          onClick={() => setIsDeleteDialogOpen(true)}
-          disabled={isDeleting}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleStartPreprocess}
+            disabled={isPreprocessing || isDeleting}
+            className="flex items-center space-x-1"
+          >
+            {isPreprocessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            <span>Start Preprocess</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:bg-destructive/10"
+            onClick={() => setIsDeleteDialogOpen(true)}
+            disabled={isDeleting || isPreprocessing}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </li>
 
       <DeleteConfirmationDialog
