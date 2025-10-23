@@ -18,7 +18,7 @@ import FileListItem from "@/components/FileListItem";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import PipelineStatusDialog from "@/components/PipelineStatusDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
-import { getWorkspaces, listFiles, deleteWorkspace } from "@/database/workspaceStorage";
+import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ const Documents = () => {
   const [files, setFiles] = useState<string[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
   const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus } = usePipelineStatus(currentWorkspace);
@@ -150,9 +151,25 @@ const Documents = () => {
     }
   };
   
-  const handlePreprocessStart = () => {
-    // Immediately refetch pipeline status to start polling feedback
-    refetchPipelineStatus();
+  const handleStartPreprocess = async () => {
+    if (!currentWorkspace) {
+      toast.error("Please select a workspace first.");
+      return;
+    }
+    
+    setIsStartingPreprocess(true);
+    const loadingToastId = toast.loading(`Starting preprocessing for ${currentWorkspace}...`);
+
+    try {
+      const result = await startPreprocess(currentWorkspace);
+      toast.success(result.message, { id: loadingToastId });
+      refetchPipelineStatus(); // Notify hook to start/continue polling
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
+      toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
+    } finally {
+      setIsStartingPreprocess(false);
+    }
   };
 
   return (
@@ -184,6 +201,19 @@ const Documents = () => {
             workspaceName={currentWorkspace} 
             onUploadSuccess={handleUploadSuccess} 
           />
+          <Button
+            variant="default"
+            onClick={handleStartPreprocess}
+            disabled={!currentWorkspace || isStartingPreprocess}
+            className="flex items-center space-x-1"
+          >
+            {isStartingPreprocess ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            <span>Start Preprocess</span>
+          </Button>
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
@@ -257,7 +287,7 @@ const Documents = () => {
                         fileName={file} 
                         workspaceName={currentWorkspace} 
                         onDeleteSuccess={() => fetchFiles(currentWorkspace)}
-                        onPreprocessStart={handlePreprocessStart}
+                        // Removed onPreprocessStart prop
                       />
                     ))}
                   </ul>
