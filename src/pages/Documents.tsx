@@ -24,6 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ViewMode = 'files' | 'status';
 
@@ -87,8 +88,7 @@ const Documents = () => {
       // If a workspace is selected, fetch its files
       if (newCurrentWorkspace) {
         await fetchFiles(newCurrentWorkspace);
-        // *** NEW: Trigger initial status check after selecting a workspace ***
-        // This ensures isPipelineRunning is correctly set on load.
+        // *** Trigger initial status check after selecting a workspace ***
         await refetchPipelineStatus(); 
       } else {
         setFiles([]);
@@ -102,18 +102,16 @@ const Documents = () => {
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]); // Added refetchPipelineStatus dependency
+  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
 
   // Load existing workspaces on mount
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
 
-  // Refetch files whenever currentWorkspace changes (this is redundant now as fetchWorkspaces handles it, but kept for safety)
+  // Refetch files whenever currentWorkspace changes
   useEffect(() => {
     if (currentWorkspace) {
-      // Only fetch files if currentWorkspace changes and fetchWorkspaces didn't already handle it
-      // Since fetchWorkspaces calls fetchFiles, we can rely on that, but keeping this ensures file list updates if currentWorkspace changes outside of fetchWorkspaces (e.g., handleSelectWorkspace)
       fetchFiles(currentWorkspace);
     } else {
       setFiles([]);
@@ -134,7 +132,6 @@ const Documents = () => {
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // After creation, we rely on fetchWorkspaces to set currentWorkspace and trigger the initial status check
     fetchWorkspaces();
     setCurrentWorkspace(name); 
     toast.success(`Workspace "${name}" created and opened.`);
@@ -144,8 +141,6 @@ const Documents = () => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
-    // Status check will be triggered by the useEffect dependency on currentWorkspace change, 
-    // but since we rely on fetchWorkspaces for the initial load, let's ensure we call refetch here too.
     refetchPipelineStatus();
   };
 
@@ -205,10 +200,56 @@ const Documents = () => {
   };
 
   const handleOpenPipelineStatus = () => {
-    // We rely on the dialog's internal logic or the onClose handler to update the status.
-    // We do NOT call refetchPipelineStatus() here to avoid immediate state changes 
-    // that might disable the Start Preprocess button prematurely.
     setIsPipelineStatusDialogOpen(true);
+  };
+
+  const getDisabledTooltipMessage = () => {
+    if (!currentWorkspace) {
+      return "Please select a workspace first.";
+    }
+    if (isStartingPreprocess) {
+      return "Starting preprocessing...";
+    }
+    if (isPipelineRunning) {
+      return "Pipeline is currently running or queued. Check status for details.";
+    }
+    return "";
+  };
+
+  const renderStartPreprocessButton = () => {
+    const tooltipMessage = getDisabledTooltipMessage();
+    
+    const button = (
+      <Button
+        variant="default"
+        onClick={handleStartPreprocess}
+        disabled={!currentWorkspace || isProcessing}
+        className="flex items-center space-x-1"
+      >
+        {isStartingPreprocess ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Zap className="h-4 w-4" />
+        )}
+        <span>Start Preprocess</span>
+      </Button>
+    );
+
+    if (isProcessing || !currentWorkspace) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* We wrap the button in a div when disabled to ensure the tooltip works */}
+            <div>{button}</div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{tooltipMessage}</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return button;
   };
 
   return (
@@ -232,19 +273,7 @@ const Documents = () => {
             workspaceName={currentWorkspace} 
             onUploadSuccess={handleUploadSuccess} 
           />
-          <Button
-            variant="default"
-            onClick={handleStartPreprocess}
-            disabled={!currentWorkspace || isProcessing}
-            className="flex items-center space-x-1"
-          >
-            {isStartingPreprocess ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Zap className="h-4 w-4" />
-            )}
-            <span>Start Preprocess</span>
-          </Button>
+          {renderStartPreprocessButton()}
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
