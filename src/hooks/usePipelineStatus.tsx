@@ -65,6 +65,8 @@ export function usePipelineStatus(workspaceName: string | null) {
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
     // Start polling if the pipeline is running OR if we are forcing a check
+    // This ensures polling continues automatically if the pipeline is running,
+    // or if we just started it (forcePolling).
     if (workspaceName && (isPipelineRunning || forcePolling)) {
       intervalId = setInterval(checkStatus, POLLING_INTERVAL);
     }
