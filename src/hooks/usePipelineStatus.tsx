@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
+const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
+
 export function usePipelineStatus(workspaceName: string | null) {
   const [isPipelineRunning, setIsPipelineRunning] = useState(false); 
   const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [lastCheck, setLastCheck] = useState(Date.now());
-  const [isLoading, setIsLoading] = useState(false); // New state
+  const [isLoading, setIsLoading] = useState(false);
 
   const checkStatus = useCallback(async () => {
     if (!workspaceName) {
@@ -15,7 +17,11 @@ export function usePipelineStatus(workspaceName: string | null) {
       return;
     }
 
-    setIsLoading(true); // Set loading before fetch
+    // Only show loading indicator if we are not already running a pipeline, 
+    // or if it's the first check.
+    if (!isPipelineRunning) {
+      setIsLoading(true);
+    }
 
     try {
       const response = await getPipelineStatus(workspaceName);
@@ -38,13 +44,9 @@ export function usePipelineStatus(workspaceName: string | null) {
       setIsLoading(false); // Clear loading after fetch
     }
     
-  }, [workspaceName]);
+  }, [workspaceName, isPipelineRunning]); // Include isPipelineRunning in dependency array
 
-  // startPolling is now just an alias for checkStatus, as there is no polling loop to start
-  const startPolling = checkStatus; 
-
-  // Effect 1: Removed initial check on mount/workspace change. 
-  // Status is now only updated via manual calls to refetch/startPolling.
+  // Effect 1: Reset state when workspace changes
   useEffect(() => {
     if (!workspaceName) {
       setIsPipelineRunning(false);
@@ -53,13 +55,37 @@ export function usePipelineStatus(workspaceName: string | null) {
     }
   }, [workspaceName]);
 
+  // Effect 2: Polling loop
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (workspaceName && isPipelineRunning) {
+      // Start polling only if the pipeline is currently running
+      intervalId = setInterval(() => {
+        checkStatus();
+      }, POLLING_INTERVAL_MS);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [workspaceName, isPipelineRunning, checkStatus]);
+
+  // Effect 3: Initial check when workspace is selected (or when component mounts)
+  useEffect(() => {
+    if (workspaceName) {
+      checkStatus();
+    }
+  }, [workspaceName]);
+
 
   return {
     isPipelineRunning,
     pipelineData,
     lastCheck,
-    isLoading, // Export new state
+    isLoading,
     refetch: checkStatus,
-    startPolling,
   };
 }

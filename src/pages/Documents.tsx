@@ -83,7 +83,8 @@ const Documents = () => {
       setCurrentWorkspace(newCurrentWorkspace);
 
       if (newCurrentWorkspace) {
-        await fetchFiles(newCurrentWorkspace);
+        // We don't await fetchFiles here to allow fetchWorkspaces to finish quickly
+        fetchFiles(newCurrentWorkspace);
       } else {
         setFiles([]);
       }
@@ -111,11 +112,13 @@ const Documents = () => {
   }, [currentWorkspace, fetchFiles]);
 
   const handleRefresh = async () => {
+    // 1. Refresh workspaces and files
     const success = await fetchWorkspaces();
     if (success) {
-      toast.info("Workspaces refreshed from API.");
+      toast.info("Workspaces and files refreshed from API.");
     }
 
+    // 2. Refresh pipeline status (which is now polled automatically if running, but manual refresh is good)
     if (currentWorkspace) {
       refetchPipelineStatus();
     }
@@ -174,11 +177,12 @@ const Documents = () => {
       // Backend returns immediately; show success and then check status.
       toast.success(result.message, { id: loadingToastId });
 
-      // Immediately refetch status to update isPipelineRunning.
+      // Immediately refetch status to update isPipelineRunning and start polling.
       await refetchPipelineStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
+      // Even on failure, refetch status to ensure state is correct
       await refetchPipelineStatus();
     } finally {
       setIsStartingPreprocess(false);
@@ -186,7 +190,10 @@ const Documents = () => {
   };
 
   const handleOpenPipelineStatus = () => {
-    // Do not refetch here so we avoid immediate disables; let the dialog or close handler refetch.
+    // Refetch status immediately when opening the dialog to show the latest data
+    if (currentWorkspace) {
+      refetchPipelineStatus();
+    }
     setIsPipelineStatusDialogOpen(true);
   };
 
@@ -201,7 +208,7 @@ const Documents = () => {
           {currentWorkspace && (
             <PipelineStatusIndicator
               isPipelineRunning={isPipelineRunning}
-              onClick={() => handleOpenPipelineStatus()}
+              onClick={handleOpenPipelineStatus}
             />
           )}
         </div>
@@ -358,6 +365,7 @@ const Documents = () => {
             isOpen={isPipelineStatusDialogOpen}
             onClose={() => {
               setIsPipelineStatusDialogOpen(false);
+              // When closing the dialog, force a status check to update the indicator immediately
               if (currentWorkspace) {
                 refetchPipelineStatus();
               }
