@@ -30,14 +30,11 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
       size="icon"
       onClick={handleClick}
       className={cn(
-        "relative h-8 w-8 rounded-full transition-all duration-300",
-        isPipelineRunning
-          ? "text-blue-500 hover:text-blue-600"
-          : "text-muted-foreground hover:text-foreground"
+        "relative h-8 w-8 rounded-full transition-all duration-300 text-muted-foreground hover:text-foreground"
       )}
       title={isPipelineRunning ? "Pipeline Running (Click for status)" : "Pipeline Ready (Click for status)"}
     >
-      <HardHat className={cn(iconClasses, isPipelineRunning && "animate-spin-slow")} />
+      <HardHat className={iconClasses} />
     </Button>
   );
 };
