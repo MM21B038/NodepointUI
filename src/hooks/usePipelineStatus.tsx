@@ -21,11 +21,18 @@ export function usePipelineStatus(workspaceName: string | null) {
       const response = await getPipelineStatus(workspaceName);
       setPipelineData(response);
 
-      // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
-      const running = (response.pipeline || []).some(
-        (chunk: ChunkEntry) => chunk.status === 'queued' || chunk.status === 'running'
-      );
+      const pipeline = response.pipeline || [];
       
+      let running = false;
+      
+      if (pipeline.length > 0) {
+        // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
+        running = pipeline.some(
+          (chunk: ChunkEntry) => chunk.status === 'queued' || chunk.status === 'running'
+        );
+      }
+      // If pipeline is empty, running remains false.
+
       setIsPipelineRunning(running);
       setLastCheck(Date.now());
       
