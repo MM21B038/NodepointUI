@@ -45,7 +45,7 @@ const Documents = () => {
   const { 
     isPipelineRunning, 
     pipelineData, 
-    isLoading: isLoadingPipelineStatus, // Use new loading state
+    isLoading: isLoadingPipelineStatus, 
     refetch: refetchPipelineStatus 
   } = usePipelineStatus(currentWorkspace);
   
@@ -196,11 +196,9 @@ const Documents = () => {
   };
 
   const handleOpenPipelineStatus = () => {
-    if (currentWorkspace) {
-      // 1. Trigger fetch immediately
-      refetchPipelineStatus();
-    }
-    // 2. Open dialog
+    // We rely on the dialog's internal logic or the onClose handler to update the status.
+    // We do NOT call refetchPipelineStatus() here to avoid immediate state changes 
+    // that might disable the Start Preprocess button prematurely.
     setIsPipelineStatusDialogOpen(true);
   };
 
