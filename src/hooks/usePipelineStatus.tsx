@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
-const POLLING_INTERVAL = 20000; // 20 seconds
+const POLLING_INTERVAL = 2000; // 20 seconds
 
 export function usePipelineStatus(workspaceName: string | null) {
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
