@@ -1,4 +1,3 @@
-// src/pages/Documents.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -52,19 +51,20 @@ const Documents = () => {
     forceReset,
   } = usePipelineStatus(currentWorkspace);
 
-  // Ensure boolean
-  const isProcessing = isStartingPreprocess || Boolean(isPipelineRunning);
+  // Ensure boolean value
+  const isProcessing = Boolean(isStartingPreprocess) || Boolean(isPipelineRunning);
 
-  // --- Debug: log key values to console so you can inspect why button is disabled
+  // ---- Debug: visible state panel on the page + console logs ----
   useEffect(() => {
     console.log("[Docs] currentWorkspace:", currentWorkspace);
+    console.log("[Docs] existingWorkspaces:", existingWorkspaces);
     console.log("[Docs] isStartingPreprocess:", isStartingPreprocess);
     console.log("[Docs] isPipelineRunning:", isPipelineRunning);
     console.log("[Docs] isProcessing:", isProcessing);
     console.log("[Docs] isLoadingWorkspaces:", isLoadingWorkspaces);
     console.log("[Docs] pipelineData:", pipelineData);
-  }, [currentWorkspace, isStartingPreprocess, isPipelineRunning, isProcessing, isLoadingWorkspaces, pipelineData]);
-  // ------------------------------------------------------------------------
+  }, [currentWorkspace, existingWorkspaces, isStartingPreprocess, isPipelineRunning, isProcessing, isLoadingWorkspaces, pipelineData]);
+  // ---------------------------------------------------------------
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -79,78 +79,78 @@ const Documents = () => {
     }
   }, []);
 
+  /**
+   * Fetch workspaces and set currentWorkspace safely using functional update to avoid stale closures.
+   * This will:
+   *  - set existingWorkspaces
+   *  - if currentWorkspace is null or not present in the returned list, pick the first workspace
+   */
   const fetchWorkspaces = useCallback(async () => {
     setIsLoadingWorkspaces(true);
     try {
       const loadedWorkspaces = await getWorkspaces();
       setExistingWorkspaces(loadedWorkspaces);
 
-      let newCurrentWorkspace = currentWorkspace;
-
-      if (loadedWorkspaces.length > 0) {
-        if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
-          newCurrentWorkspace = loadedWorkspaces[0];
+      // Safely update currentWorkspace using the latest previous value
+      setCurrentWorkspace((prev) => {
+        if (loadedWorkspaces.length === 0) {
+          return null;
         }
-      } else {
-        newCurrentWorkspace = null;
-      }
+        if (prev && loadedWorkspaces.includes(prev)) {
+          return prev; // keep existing selection
+        }
+        // otherwise pick the first workspace
+        return loadedWorkspaces[0];
+      });
 
-      // set the workspace - the hook will automatically call checkStatus when workspaceName changes
-      setCurrentWorkspace(newCurrentWorkspace);
-
-      if (newCurrentWorkspace) {
-        await fetchFiles(newCurrentWorkspace);
-        // DO NOT call refetchPipelineStatus() here (it may run before the hook sees the new workspace).
-        // The hook's useEffect will run after currentWorkspace updates and fetch status.
-      } else {
-        setFiles([]);
-      }
-
-      return true;
+      return loadedWorkspaces;
     } catch (error) {
       toast.error("Failed to load workspaces from the API.");
-      console.error(error);
-      return false;
+      console.error("fetchWorkspaces error:", error);
+      return null;
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace, fetchFiles]);
+  }, []);
 
   // Load existing workspaces on mount
   useEffect(() => {
     void fetchWorkspaces();
   }, [fetchWorkspaces]);
 
-  // Refetch files whenever currentWorkspace changes
+  // Whenever currentWorkspace becomes set, load its files and trigger a status fetch.
   useEffect(() => {
-    if (currentWorkspace) {
-      void fetchFiles(currentWorkspace);
-    } else {
+    if (!currentWorkspace) {
       setFiles([]);
+      return;
     }
-  }, [currentWorkspace, fetchFiles]);
+
+    // load files for the workspace
+    void (async () => {
+      await fetchFiles(currentWorkspace);
+      // Make sure we fetch pipeline status for the exact workspace (avoid stale closure)
+      await refetchPipelineStatus(currentWorkspace);
+    })();
+  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
 
   const handleRefresh = async () => {
-    const success = await fetchWorkspaces();
-    if (success) {
-      toast.info("Workspaces refreshed from API.");
-    }
+    const loaded = await fetchWorkspaces();
+    if (loaded) toast.info("Workspaces refreshed from API.");
 
-    // After user asks for refresh, explicitly refetch status for the current workspace (hook's refetch accepts an override)
+    // Explicitly refetch status if we have a selected workspace after refresh
     if (currentWorkspace) {
       void refetchPipelineStatus(currentWorkspace);
     }
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // create logic elsewhere will persist workspace; re-fetch list and set selected
+    // re-fetch list; setCurrentWorkspace will keep or pick first
     void fetchWorkspaces();
     setCurrentWorkspace(name);
     toast.success(`Workspace "${name}" created and opened.`);
   };
 
   const handleSelectWorkspace = (workspaceName: string) => {
-    // simply set workspace: hook will fetch status automatically
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
@@ -171,7 +171,7 @@ const Documents = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-
+      // re-fetch and clear selection
       setCurrentWorkspace(null);
       void fetchWorkspaces();
     } catch (error) {
@@ -193,15 +193,13 @@ const Documents = () => {
 
     try {
       const result = await startPreprocess(currentWorkspace);
-
       toast.success(result.message, { id: loadingToastId });
 
-      // Immediately refetch to pick up queue/running status (pass override to avoid stale closure)
+      // Immediately refetch to pick up queue/running status (pass override to avoid stale closure).
       await refetchPipelineStatus(currentWorkspace);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
-
       if (currentWorkspace) {
         await refetchPipelineStatus(currentWorkspace);
       }
@@ -233,8 +231,6 @@ const Documents = () => {
     return "";
   };
 
-  // NOTE: we keep original renderStartPreprocessButton for normal use,
-  // but below we also render a TEMPORARY native button to isolate the issue.
   const renderStartPreprocessButton = () => {
     const tooltipMessage = getDisabledTooltipMessage();
 
@@ -255,7 +251,6 @@ const Documents = () => {
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* wrap to ensure tooltip works even when the button is disabled */}
             <div>{button}</div>
           </TooltipTrigger>
           <TooltipContent>
@@ -270,6 +265,30 @@ const Documents = () => {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG PANEL - remove when done */}
+      <div className="p-3 rounded-md border bg-muted/5 text-sm">
+        <strong>Debug panel (temporary)</strong>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <div className="font-medium">existingWorkspaces</div>
+            <pre className="whitespace-pre-wrap">{JSON.stringify(existingWorkspaces, null, 2)}</pre>
+          </div>
+          <div>
+            <div className="font-medium">currentWorkspace</div>
+            <div>{String(currentWorkspace)}</div>
+            <div className="font-medium mt-2">isProcessing</div>
+            <div>{String(isProcessing)}</div>
+            <div className="font-medium mt-2">isLoadingWorkspaces</div>
+            <div>{String(isLoadingWorkspaces)}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="font-medium mt-2">pipelineData</div>
+            <pre className="whitespace-pre-wrap max-h-40 overflow-auto">{JSON.stringify(pipelineData, null, 2)}</pre>
+          </div>
+        </div>
+      </div>
+      {/* END DEBUG PANEL */}
+
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <h2 className="text-3xl font-semibold">Workspace {currentWorkspace && `(${currentWorkspace})`}</h2>
@@ -281,7 +300,7 @@ const Documents = () => {
         <div className="flex items-center space-x-4">
           <FileUpload workspaceName={currentWorkspace} onUploadSuccess={handleUploadSuccess} />
 
-          {/* =================== TEMP TEST: Native <button> to isolate custom Button issues =================== */}
+          {/* TEMP: native button to isolate UI lib vs upstream */}
           <div>
             <button
               type="button"
@@ -291,17 +310,12 @@ const Documents = () => {
                 (!currentWorkspace || isProcessing) ? "opacity-60 cursor-not-allowed" : "bg-primary text-primary-foreground"
               }`}
             >
-              {isStartingPreprocess ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="h-4 w-4" />
-              )}
+              {isStartingPreprocess ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
               <span>Start Preprocess (native)</span>
             </button>
           </div>
-          {/* =================== end TEMP TEST ============================================================ */}
 
-          {/* Original (custom) Start Preprocess button (kept for comparison) */}
+          {/* Keep original, but hidden on small screens so the native button is the easy target */}
           <div className="hidden md:block">{renderStartPreprocessButton()}</div>
 
           <Button type="button" variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
@@ -336,7 +350,7 @@ const Documents = () => {
         </div>
       </div>
 
-      {/* View toggle & content... (unchanged) */}
+      {/* View toggle & content */}
       {currentWorkspace && (
         <div className="flex justify-end">
           <ToggleGroup type="single" value={viewMode} onValueChange={(value: ViewMode) => value && setViewMode(value)} className="border rounded-md">
