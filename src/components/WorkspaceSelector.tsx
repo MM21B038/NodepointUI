@@ -71,6 +71,7 @@ const WorkspaceSelector = () => {
           onClick={fetchWorkspaces}
           disabled={isLoading}
           title="Refresh Workspaces"
+          className="text-muted-foreground hover:text-primary hover:bg-accent" // Custom styling for better contrast and hover effect
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
