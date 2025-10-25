@@ -16,20 +16,18 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
 }) => {
   const iconClasses = "h-5 w-5";
   
+  // Use a neutral color (e.g., text-muted-foreground) and remove conditional styling/animation
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={onClick}
       className={cn(
-        "relative h-8 w-8 rounded-full transition-all duration-300",
-        isPipelineRunning 
-          ? "text-primary hover:text-primary/80" 
-          : "text-muted-foreground hover:text-foreground",
+        "relative h-8 w-8 rounded-full transition-all duration-300 text-muted-foreground hover:text-foreground",
       )}
       title={isPipelineRunning ? "Pipeline Running (Click for status)" : "Pipeline Ready (Click for status)"}
     >
-      <HardHat className={cn(iconClasses, isPipelineRunning && "animate-spin")} />
+      <HardHat className={iconClasses} />
     </Button>
   );
 };
