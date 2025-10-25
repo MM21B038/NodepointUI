@@ -292,9 +292,13 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
 export async function getKnowledgeGraph(workspaceName: string): Promise<KnowledgeGraphResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/knowledge_base/${workspaceName}`);
+    
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API Error Response (${response.status}):`, errorText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
     const data: KnowledgeGraphResponse = await response.json();
     
     if (data.error) {

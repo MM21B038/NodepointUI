@@ -7,6 +7,12 @@ import KnowledgeGraph from "@/components/KnowledgeGraph";
 const KnowledgeBase = () => {
   const { currentWorkspace } = useWorkspace();
 
+  if (currentWorkspace) {
+    console.log(`KnowledgeBase: Current workspace is set to: ${currentWorkspace}`);
+  } else {
+    console.log("KnowledgeBase: No current workspace selected.");
+  }
+
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-semibold">Knowledge Base</h2>
