@@ -41,6 +41,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
+    if (!workspaceName) {
+      console.log("KnowledgeGraph: Workspace name is missing, skipping fetch.");
+      setIsLoading(false);
+      return;
+    }
+    console.log(`KnowledgeGraph: Fetching data for workspace: ${workspaceName}`);
+    
     setIsLoading(true);
     setError(null);
     try {
@@ -213,7 +220,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               Knowledge Graph Visualization
             </CardTitle>
             <div className="text-sm text-muted-foreground">
-              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData?.nodes.length || 0} nodes, {graphData?.edges.length || 0} edges)
             </div>
           </CardHeader>
           <CardContent className="p-4 h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
