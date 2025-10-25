@@ -59,12 +59,11 @@ export interface GraphNode {
 }
 
 export interface GraphEdge {
-  id: string;
-  node_a: string; // Source Node ID
-  node_b: string; // Target Node ID
-  description: string; // Relationship description
+  source: string; // Source Node ID
+  target: string; // Target Node ID
+  label: string; // Relationship description (was 'description')
   score: number; // Relationship score/weight
-  source: string; // file.stem (document name)
+  source_file: string; // Document file name (was 'source')
 }
 
 export interface KnowledgeGraphResponse {

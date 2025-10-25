@@ -49,7 +49,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
       
       // Initialize filters with all available types and sources upon first load
       const initialTypes = getUniqueValues(data.nodes, 'type');
-      const initialSources = getUniqueValues(data.nodes, 'source');
+      // Use 'source' field from GraphNode for filtering
+      const initialSources = getUniqueValues(data.nodes, 'source'); 
       
       setSelectedTypes(new Set(initialTypes));
       setSelectedSources(new Set(initialSources));
@@ -111,8 +112,9 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     if (!graphData) return [];
     const visibleNodeIds = new Set(filteredNodes.map(n => n.id));
     
+    // Edges must connect two visible nodes
     return graphData.edges.filter(edge => 
-      visibleNodeIds.has(edge.node_a) && visibleNodeIds.has(edge.node_b)
+      visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
     );
   }, [graphData, filteredNodes]);
 
