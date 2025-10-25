@@ -18,7 +18,7 @@ import FileListItem from "@/components/FileListItem";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import PipelineStatusDialog from "@/components/PipelineStatusDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
-import PipelineStatusIndicator from "@/components/PipelineStatusIndicator"; // New import
+import PipelineStatusIndicator from "@/components/PipelineStatusIndicator";
 import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineStatus } from "@/hooks/usePipelineStatus";
@@ -43,6 +43,9 @@ const Documents = () => {
 
   // Hook call is unconditional
   const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus, startPolling } = usePipelineStatus(currentWorkspace);
+  
+  // Determine if the button should be disabled and blinking
+  const isProcessing = isStartingPreprocess || isPipelineRunning;
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -180,6 +183,7 @@ const Documents = () => {
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
     } finally {
       setIsStartingPreprocess(false);
+      // Note: isPipelineRunning will now control the button state via isProcessing
     }
   };
 
@@ -207,10 +211,13 @@ const Documents = () => {
           <Button
             variant="default"
             onClick={handleStartPreprocess}
-            disabled={!currentWorkspace || isStartingPreprocess}
-            className="flex items-center space-x-1"
+            disabled={!currentWorkspace || isProcessing}
+            className={cn(
+              "flex items-center space-x-1",
+              isProcessing && "bg-yellow-500 hover:bg-yellow-600 text-black animate-yellow-blink"
+            )}
           >
-            {isStartingPreprocess ? (
+            {isProcessing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Zap className="h-4 w-4" />
