@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { HardHat, CheckCircle } from "lucide-react";
+import { HardHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,24 +16,18 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
 }) => {
   const iconClasses = "h-5 w-5";
   
+  // Use a neutral color (e.g., text-muted-foreground) and remove conditional styling/animation
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={onClick}
       className={cn(
-        "relative h-8 w-8 rounded-full transition-all duration-300",
-        isPipelineRunning
-          ? "text-blue-500 hover:text-blue-600 animate-pulse"
-          : "text-green-500 hover:text-green-600"
+        "relative h-8 w-8 rounded-full transition-all duration-300 text-muted-foreground hover:text-foreground",
       )}
       title={isPipelineRunning ? "Pipeline Running (Click for status)" : "Pipeline Ready (Click for status)"}
     >
-      {isPipelineRunning ? (
-        <HardHat className={iconClasses} />
-      ) : (
-        <CheckCircle className={iconClasses} />
-      )}
+      <HardHat className={iconClasses} />
     </Button>
   );
 };
