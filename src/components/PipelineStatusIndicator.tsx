@@ -16,7 +16,6 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
 }) => {
   const iconClasses = "h-5 w-5";
   
-  // Static Green state (Ready/Completed) - removing yellow/blinking
   return (
     <Button
       variant="ghost"
@@ -24,11 +23,17 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
       onClick={onClick}
       className={cn(
         "relative h-8 w-8 rounded-full transition-all duration-300",
-        "text-green-500 hover:text-green-600"
+        isPipelineRunning
+          ? "text-blue-500 hover:text-blue-600 animate-pulse"
+          : "text-green-500 hover:text-green-600"
       )}
       title={isPipelineRunning ? "Pipeline Running (Click for status)" : "Pipeline Ready (Click for status)"}
     >
-      <CheckCircle className={iconClasses} />
+      {isPipelineRunning ? (
+        <HardHat className={iconClasses} />
+      ) : (
+        <CheckCircle className={iconClasses} />
+      )}
     </Button>
   );
 };
