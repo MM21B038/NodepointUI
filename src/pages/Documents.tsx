@@ -112,13 +112,7 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
 
-  // Refetch pipeline status when opening the dialog
-  useEffect(() => {
-    if (isPipelineStatusDialogOpen) {
-      refetchPipelineStatus();
-    }
-  }, [isPipelineStatusDialogOpen, refetchPipelineStatus]);
-
+  // Removed useEffect for dialog status refresh
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
@@ -210,7 +204,10 @@ const Documents = () => {
           {currentWorkspace && (
             <PipelineStatusIndicator
               isPipelineRunning={isPipelineRunning}
-              onClick={() => setIsPipelineStatusDialogOpen(true)}
+              onClick={() => {
+                setIsPipelineStatusDialogOpen(true);
+                refetchPipelineStatus(); // Fetch status immediately upon opening the dialog
+              }}
             />
           )}
         </div>
@@ -356,7 +353,13 @@ const Documents = () => {
           />
           <PipelineStatusDialog
             isOpen={isPipelineStatusDialogOpen}
-            onClose={() => setIsPipelineStatusDialogOpen(false)}
+            onClose={() => {
+              setIsPipelineStatusDialogOpen(false);
+              // Manually refresh status when closing the dialog, as the user likely checked completion
+              if (currentWorkspace) {
+                refetchPipelineStatus();
+              }
+            }}
             data={pipelineData}
           />
         </>
