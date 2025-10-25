@@ -48,6 +48,31 @@ export interface PreprocessStatusResponse {
   error?: string;
 }
 
+// --- Knowledge Graph Interfaces ---
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: string; // e.g., "Person", "Concept"
+  source: string; // file.stem (document name)
+  attributes: Record<string, any>;
+}
+
+export interface GraphEdge {
+  id: string;
+  node_a: string; // Source Node ID
+  node_b: string; // Target Node ID
+  description: string; // Relationship description
+  score: number; // Relationship score/weight
+  source: string; // file.stem (document name)
+}
+
+export interface KnowledgeGraphResponse {
+  workspace: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  error?: string;
+}
 
 /**
  * Retrieves all existing workspace names from the API.
@@ -257,5 +282,29 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
   } catch (error) {
     console.error(`Error fetching preprocess status for ${workspaceName}:`, error);
     return { workspace: workspaceName, files: [], error: "Failed to fetch preprocess status." };
+  }
+}
+
+/**
+ * Retrieves the knowledge graph data for a specific workspace.
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves to the KnowledgeGraphResponse.
+ */
+export async function getKnowledgeGraph(workspaceName: string): Promise<KnowledgeGraphResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/knowledge_base/${workspaceName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data: KnowledgeGraphResponse = await response.json();
+    
+    if (data.error) {
+        throw new Error(data.error);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`Error fetching knowledge graph for ${workspaceName}:`, error);
+    throw error;
   }
 }

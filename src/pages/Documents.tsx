@@ -20,23 +20,24 @@ import PreprocessStatusTable from "@/components/PreprocessStatusTable";
 import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 type ViewMode = 'files' | 'status';
 
 const Documents = () => {
+  const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
+  
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
 
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
-  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
-  // isProcessing is now only dependent on the local state of starting the process
   const isProcessing = isStartingPreprocess;
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
@@ -84,7 +85,7 @@ const Documents = () => {
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace, fetchFiles]);
+  }, [currentWorkspace, fetchFiles, setCurrentWorkspace]);
 
   useEffect(() => {
     fetchWorkspaces();
