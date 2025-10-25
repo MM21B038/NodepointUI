@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
 export function usePipelineStatus(workspaceName: string | null) {
-  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
+  // Initialize to false, as we are no longer checking status automatically on mount
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false); 
   const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [lastCheck, setLastCheck] = useState(Date.now());
 
@@ -34,24 +35,24 @@ export function usePipelineStatus(workspaceName: string | null) {
     
   }, [workspaceName]);
 
-  // Effect 1: Initial check when workspace changes (Manual check only)
+  // startPolling is now just an alias for checkStatus, as there is no polling loop to start
+  const startPolling = checkStatus; 
+
+  // Effect 1: Removed initial check on mount/workspace change. 
+  // Status is now only updated via manual calls to refetch/startPolling.
   useEffect(() => {
-    if (workspaceName) {
-      checkStatus();
-    } else {
+    if (!workspaceName) {
       setIsPipelineRunning(false);
       setPipelineData(null);
     }
-  }, [workspaceName, checkStatus]);
+  }, [workspaceName]);
 
-  // Removed Effect 2 (Polling interval management)
 
   return {
     isPipelineRunning,
     pipelineData,
     lastCheck,
     refetch: checkStatus,
-    // startPolling is now redundant, we will rely on refetch
-    startPolling: checkStatus, 
+    startPolling,
   };
 }
