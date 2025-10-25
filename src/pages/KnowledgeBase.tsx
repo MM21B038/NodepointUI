@@ -252,9 +252,12 @@ const KnowledgeBase = () => {
                         checked={selectedTypes.has(type)}
                         onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
                       />
-                      <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
-                        <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
-                        {type}
+                      <Label 
+                        htmlFor={`type-${type}`} 
+                        className="flex items-center text-sm font-normal cursor-pointer w-full overflow-hidden"
+                      >
+                        <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
+                        <span className="truncate">{type}</span>
                       </Label>
                     </div>
                   ))}
