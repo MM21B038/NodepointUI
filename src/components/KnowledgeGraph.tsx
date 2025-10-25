@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface KnowledgeGraphProps {
   workspaceName: string;
@@ -22,14 +23,138 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   return Array.from(new Set(values)).sort();
 };
 
-// Simple color mapping for node types
+// Simple color mapping for node types (Tailwind classes)
 const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500',
-  'Organization': 'bg-green-500',
-  'Concept': 'bg-purple-500',
-  'Date': 'bg-yellow-500',
-  'Location': 'bg-red-500',
+  'Person': 'bg-blue-500 text-white',
+  'Organization': 'bg-green-500 text-white',
+  'Concept': 'bg-purple-500 text-white',
+  'Date': 'bg-yellow-500 text-gray-900',
+  'Location': 'bg-red-500 text-white',
+  'default': 'bg-gray-400 text-gray-900',
 };
+
+const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
+
+// --- Visualization Component ---
+
+interface SimpleGraphVisualizationProps {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+const SimpleGraphVisualization: React.FC<SimpleGraphVisualizationProps> = ({ nodes, edges }) => {
+  const width = 800;
+  const height = 400;
+  const radius = 150;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const nodeRadius = 10;
+
+  if (nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center w-full h-full text-muted-foreground">
+        No nodes match the current filters.
+      </div>
+    );
+  }
+
+  // Calculate positions for nodes in a circular layout
+  const positionedNodes = nodes.map((node, index) => {
+    const angle = (index / nodes.length) * 2 * Math.PI;
+    return {
+      ...node,
+      x: centerX + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  });
+
+  // Map node IDs to their positions for drawing edges
+  const nodeMap = new Map(positionedNodes.map(n => [n.id, n]));
+
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} className="border rounded-lg bg-background/50">
+      <defs>
+        <marker
+          id="arrowhead"
+          markerWidth="10"
+          markerHeight="7"
+          refX="10"
+          refY="3.5"
+          orient="auto"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" className="fill-foreground" />
+        </marker>
+      </defs>
+
+      {/* Draw Edges */}
+      {edges.map((edge, index) => {
+        const sourceNode = nodeMap.get(edge.source);
+        const targetNode = nodeMap.get(edge.target);
+
+        if (!sourceNode || !targetNode) return null;
+
+        // Calculate line end points adjusted for node radius
+        const dx = targetNode.x - sourceNode.x;
+        const dy = targetNode.y - sourceNode.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Normalize vector
+        const ux = dx / distance;
+        const uy = dy / distance;
+
+        // Adjust target point to stop before the node circle
+        const targetX = targetNode.x - ux * nodeRadius;
+        const targetY = targetNode.y - uy * nodeRadius;
+
+        return (
+          <g key={index}>
+            <line
+              x1={sourceNode.x}
+              y1={sourceNode.y}
+              x2={targetX}
+              y2={targetY}
+              stroke="#94a3b8"
+              strokeWidth="1"
+              markerEnd="url(#arrowhead)"
+            />
+            {/* Edge Label (placed near the center of the line) */}
+            <text
+              x={(sourceNode.x + targetNode.x) / 2}
+              y={(sourceNode.y + targetNode.y) / 2}
+              fontSize="8"
+              fill="#64748b"
+              textAnchor="middle"
+              className="pointer-events-none"
+            >
+              {edge.label}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Draw Nodes */}
+      {positionedNodes.map((node) => (
+        <g key={node.id} transform={`translate(${node.x}, ${node.y})`}>
+          <circle
+            r={nodeRadius}
+            className={cn("stroke-2", getNodeColorClass(node.type).replace('bg-', 'fill-').replace('text-', 'stroke-'))}
+            stroke="hsl(var(--border))"
+          />
+          {/* Node Label */}
+          <text
+            y={nodeRadius + 10}
+            fontSize="10"
+            textAnchor="middle"
+            className="fill-foreground pointer-events-none"
+          >
+            {node.label.length > 15 ? node.label.substring(0, 12) + '...' : node.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+};
+
 
 const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
@@ -42,11 +167,9 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   const fetchData = useCallback(async () => {
     if (!workspaceName) {
-      console.log("KnowledgeGraph: Workspace name is missing, skipping fetch.");
       setIsLoading(false);
       return;
     }
-    console.log(`KnowledgeGraph: Fetching data for workspace: ${workspaceName}`);
     
     setIsLoading(true);
     setError(null);
@@ -56,7 +179,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
       
       // Initialize filters with all available types and sources upon first load
       const initialTypes = getUniqueValues(data.nodes, 'type');
-      // Use 'source' field from GraphNode for filtering
       const initialSources = getUniqueValues(data.nodes, 'source'); 
       
       setSelectedTypes(new Set(initialTypes));
@@ -179,7 +301,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                     onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
                   />
                   <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
-                    <span className={`h-3 w-3 rounded-full mr-2 ${TYPE_COLORS[type] || 'bg-gray-400'}`}></span>
+                    <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
                     {type}
                   </Label>
                 </div>
@@ -220,29 +342,11 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               Knowledge Graph Visualization
             </CardTitle>
             <div className="text-sm text-muted-foreground">
-              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData?.nodes.length || 0} nodes, {graphData?.edges.length || 0} edges)
+              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
             </div>
           </CardHeader>
           <CardContent className="p-4 h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
-            {/* Placeholder for actual Graph Visualization */}
-            <div className="text-center text-muted-foreground">
-              <p className="mb-2">Interactive Graph Visualization Area</p>
-              <p className="text-sm">
-                (Integration with a library like D3 or Vis.js would go here)
-              </p>
-              <div className="mt-4 space-y-2 text-left max-w-md mx-auto p-4 border rounded-lg bg-white dark:bg-card">
-                <h5 className="font-semibold">Filtered Nodes Preview:</h5>
-                <ScrollArea className="h-24">
-                  {filteredNodes.slice(0, 10).map(node => (
-                    <div key={node.id} className="flex justify-between text-xs py-0.5">
-                      <span className="truncate">{node.label}</span>
-                      <Badge variant="secondary" className={`h-4 ${TYPE_COLORS[node.type] || 'bg-gray-400'}`}>{node.type}</Badge>
-                    </div>
-                  ))}
-                  {filteredNodes.length > 10 && <p className="text-xs text-center mt-1">...and {filteredNodes.length - 10} more</p>}
-                </ScrollArea>
-              </div>
-            </div>
+            <SimpleGraphVisualization nodes={filteredNodes} edges={filteredEdges} />
           </CardContent>
         </Card>
       </div>
