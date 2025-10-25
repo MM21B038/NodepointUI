@@ -17,20 +17,28 @@ export function usePipelineStatus(workspaceName: string | null) {
       return;
     }
 
-    const response = await getPipelineStatus(workspaceName);
-    setPipelineData(response);
+    try {
+      const response = await getPipelineStatus(workspaceName);
+      setPipelineData(response);
 
-    // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
-    const running = (response.pipeline || []).some(
-      (chunk: ChunkEntry) => chunk.status === 'queued' || chunk.status === 'running'
-    );
-    
-    setIsPipelineRunning(running);
-    setLastCheck(Date.now());
-    
-    // If the API confirms it's not running, stop forcing polling
-    if (!running) {
+      // Determine if the pipeline is running (i.e., if there are any queued or running chunks)
+      const running = (response.pipeline || []).some(
+        (chunk: ChunkEntry) => chunk.status === 'queued' || chunk.status === 'running'
+      );
+      
+      setIsPipelineRunning(running);
+      setLastCheck(Date.now());
+      
+      // If the API confirms it's not running, stop forcing polling
+      if (!running) {
+        setForcePolling(false);
+      }
+    } catch (error) {
+      console.error("Error checking pipeline status, resetting state:", error);
+      // If API call fails, assume pipeline is not running to prevent stuck UI
+      setIsPipelineRunning(false);
       setForcePolling(false);
+      setPipelineData({ workspace: workspaceName, pipeline: [], error: "Failed to fetch status." });
     }
     
   }, [workspaceName]);
@@ -65,8 +73,6 @@ export function usePipelineStatus(workspaceName: string | null) {
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
     // Start polling if the pipeline is running OR if we are forcing a check
-    // This ensures polling continues automatically if the pipeline is running,
-    // or if we just started it (forcePolling).
     if (workspaceName && (isPipelineRunning || forcePolling)) {
       intervalId = setInterval(checkStatus, POLLING_INTERVAL);
     }
