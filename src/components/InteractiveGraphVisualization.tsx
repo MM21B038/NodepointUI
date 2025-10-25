@@ -262,11 +262,12 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
       <div className="p-4 space-y-3">
         <div className="flex items-center space-x-2">
           <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
-          <h4 className="text-lg font-semibold break-words">{item.label}</h4>
+          {/* Ensure node label wraps aggressively */}
+          <h4 className="text-lg font-semibold break-words flex-1 min-w-0">{item.label}</h4>
           <Badge variant="secondary" className="flex-shrink-0">{item.type}</Badge>
         </div>
         <p className="text-sm text-muted-foreground overflow-hidden">
-          Source Document: <span className="truncate max-w-full inline-block align-bottom">{item.source}</span>
+          Source Document: <span className="font-medium text-foreground break-all">{item.source}</span>
         </p>
         <Separator />
         <h5 className="font-medium text-sm">Attributes:</h5>
@@ -299,7 +300,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <div className="text-sm space-y-1">
           <p className="break-words"><strong>Relationship Type:</strong> {item.label}</p>
           <p><strong>Score/Weight:</strong> {item.score.toFixed(2)}</p>
-          <p className="break-words"><strong>Source Document:</strong> {item.source_file}</p>
+          <p className="break-words"><strong>Source Document:</strong> <span className="break-all">{item.source_file}</span></p>
         </div>
       </div>
     );
