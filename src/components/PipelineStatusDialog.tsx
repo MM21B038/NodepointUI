@@ -19,11 +19,13 @@ import {
 import { ChunkEntry, PipelineStatusResponse } from "@/database/workspaceStorage";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 interface PipelineStatusDialogProps {
   isOpen: boolean;
   onClose: () => void;
   data: PipelineStatusResponse | null;
+  isLoading: boolean; // New prop
 }
 
 const getStatusBadge = (status: ChunkEntry['status']) => {
@@ -45,6 +47,7 @@ const PipelineStatusDialog: React.FC<PipelineStatusDialogProps> = ({
   isOpen,
   onClose,
   data,
+  isLoading,
 }) => {
   const pipelineEntries = data?.pipeline || [];
   const workspaceName = data?.workspace || "N/A";
@@ -56,7 +59,12 @@ const PipelineStatusDialog: React.FC<PipelineStatusDialogProps> = ({
           <DialogTitle>Pipeline Status: {workspaceName}</DialogTitle>
         </DialogHeader>
         
-        {data?.error ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="ml-2 text-muted-foreground">Loading pipeline status...</p>
+          </div>
+        ) : data?.error ? (
           <div className="text-red-500 p-4 border border-red-300 rounded-md">
             Error loading status: {data.error}
           </div>

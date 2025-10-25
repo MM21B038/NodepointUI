@@ -2,17 +2,20 @@ import React, { useState, useEffect, useCallback } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
 export function usePipelineStatus(workspaceName: string | null) {
-  // Initialize to false, as we are no longer checking status automatically on mount
   const [isPipelineRunning, setIsPipelineRunning] = useState(false); 
   const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [lastCheck, setLastCheck] = useState(Date.now());
+  const [isLoading, setIsLoading] = useState(false); // New state
 
   const checkStatus = useCallback(async () => {
     if (!workspaceName) {
       setIsPipelineRunning(false);
       setPipelineData(null);
+      setIsLoading(false);
       return;
     }
+
+    setIsLoading(true); // Set loading before fetch
 
     try {
       const response = await getPipelineStatus(workspaceName);
@@ -31,6 +34,8 @@ export function usePipelineStatus(workspaceName: string | null) {
       // If API call fails, assume pipeline is not running to prevent stuck UI
       setIsPipelineRunning(false);
       setPipelineData({ workspace: workspaceName, pipeline: [], error: "Failed to fetch status." });
+    } finally {
+      setIsLoading(false); // Clear loading after fetch
     }
     
   }, [workspaceName]);
@@ -44,6 +49,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     if (!workspaceName) {
       setIsPipelineRunning(false);
       setPipelineData(null);
+      setIsLoading(false);
     }
   }, [workspaceName]);
 
@@ -52,6 +58,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     isPipelineRunning,
     pipelineData,
     lastCheck,
+    isLoading, // Export new state
     refetch: checkStatus,
     startPolling,
   };

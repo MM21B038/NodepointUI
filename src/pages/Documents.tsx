@@ -42,7 +42,12 @@ const Documents = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
   // Hook call is unconditional
-  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus } = usePipelineStatus(currentWorkspace);
+  const { 
+    isPipelineRunning, 
+    pipelineData, 
+    isLoading: isLoadingPipelineStatus, // Use new loading state
+    refetch: refetchPipelineStatus 
+  } = usePipelineStatus(currentWorkspace);
   
   // Determine if the button should be disabled
   const isProcessing = isStartingPreprocess || isPipelineRunning;
@@ -190,6 +195,15 @@ const Documents = () => {
     }
   };
 
+  const handleOpenPipelineStatus = () => {
+    if (currentWorkspace) {
+      // 1. Trigger fetch immediately
+      refetchPipelineStatus();
+    }
+    // 2. Open dialog
+    setIsPipelineStatusDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -201,10 +215,7 @@ const Documents = () => {
           {currentWorkspace && (
             <PipelineStatusIndicator
               isPipelineRunning={isPipelineRunning}
-              onClick={() => {
-                setIsPipelineStatusDialogOpen(true);
-                // Removed immediate refetch here. Status will be fetched when dialog closes.
-              }}
+              onClick={handleOpenPipelineStatus}
             />
           )}
         </div>
@@ -358,6 +369,7 @@ const Documents = () => {
               }
             }}
             data={pipelineData}
+            isLoading={isLoadingPipelineStatus}
           />
         </>
       )}
