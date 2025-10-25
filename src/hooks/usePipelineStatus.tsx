@@ -17,11 +17,9 @@ export function usePipelineStatus(workspaceName: string | null) {
       return;
     }
 
-    // Only show loading indicator if we are not already running a pipeline, 
-    // or if it's the first check.
-    if (!isPipelineRunning) {
-      setIsLoading(true);
-    }
+    // Set loading state only if we are not already running a pipeline (to avoid flicker during polling)
+    // We use a functional update to ensure we don't rely on stale isPipelineRunning state here.
+    setIsLoading(prev => prev || !isPipelineRunning); 
 
     try {
       const response = await getPipelineStatus(workspaceName);
@@ -44,7 +42,7 @@ export function usePipelineStatus(workspaceName: string | null) {
       setIsLoading(false); // Clear loading after fetch
     }
     
-  }, [workspaceName, isPipelineRunning]); // Include isPipelineRunning in dependency array
+  }, [workspaceName]); // Removed isPipelineRunning from dependencies
 
   // Effect 1: Reset state when workspace changes
   useEffect(() => {
@@ -66,6 +64,7 @@ export function usePipelineStatus(workspaceName: string | null) {
       }, POLLING_INTERVAL_MS);
     }
 
+    // If the pipeline stops running, clear the interval
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
