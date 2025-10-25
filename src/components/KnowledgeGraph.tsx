@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { InteractiveGraphVisualization, DetailPanel } from "./InteractiveGraphVisualization";
 
 interface KnowledgeGraphProps {
   workspaceName: string;
@@ -25,141 +25,21 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
 
 // Simple color mapping for node types (Tailwind classes)
 const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500 text-white',
-  'Organization': 'bg-green-500 text-white',
-  'Concept': 'bg-purple-500 text-white',
-  'Date': 'bg-yellow-500 text-gray-900',
-  'Location': 'bg-red-500 text-white',
-  'default': 'bg-gray-400 text-gray-900',
+  'Person': 'bg-blue-500',
+  'Organization': 'bg-green-500',
+  'Concept': 'bg-purple-500',
+  'Date': 'bg-yellow-500',
+  'Location': 'bg-red-500',
 };
 
-const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
-
-// --- Visualization Component ---
-
-interface SimpleGraphVisualizationProps {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-const SimpleGraphVisualization: React.FC<SimpleGraphVisualizationProps> = ({ nodes, edges }) => {
-  const width = 800;
-  const height = 400;
-  const radius = 150;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const nodeRadius = 10;
-
-  if (nodes.length === 0) {
-    return (
-      <div className="flex items-center justify-center w-full h-full text-muted-foreground">
-        No nodes match the current filters.
-      </div>
-    );
-  }
-
-  // Calculate positions for nodes in a circular layout
-  const positionedNodes = nodes.map((node, index) => {
-    const angle = (index / nodes.length) * 2 * Math.PI;
-    return {
-      ...node,
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle),
-    };
-  });
-
-  // Map node IDs to their positions for drawing edges
-  const nodeMap = new Map(positionedNodes.map(n => [n.id, n]));
-
-  return (
-    <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} className="border rounded-lg bg-background/50">
-      <defs>
-        <marker
-          id="arrowhead"
-          markerWidth="10"
-          markerHeight="7"
-          refX="10"
-          refY="3.5"
-          orient="auto"
-        >
-          <polygon points="0 0, 10 3.5, 0 7" className="fill-foreground" />
-        </marker>
-      </defs>
-
-      {/* Draw Edges */}
-      {edges.map((edge, index) => {
-        const sourceNode = nodeMap.get(edge.source);
-        const targetNode = nodeMap.get(edge.target);
-
-        if (!sourceNode || !targetNode) return null;
-
-        // Calculate line end points adjusted for node radius
-        const dx = targetNode.x - sourceNode.x;
-        const dy = targetNode.y - sourceNode.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Normalize vector
-        const ux = dx / distance;
-        const uy = dy / distance;
-
-        // Adjust target point to stop before the node circle
-        const targetX = targetNode.x - ux * nodeRadius;
-        const targetY = targetNode.y - uy * nodeRadius;
-
-        return (
-          <g key={index}>
-            <line
-              x1={sourceNode.x}
-              y1={sourceNode.y}
-              x2={targetX}
-              y2={targetY}
-              stroke="#94a3b8"
-              strokeWidth="1"
-              markerEnd="url(#arrowhead)"
-            />
-            {/* Edge Label (placed near the center of the line) */}
-            <text
-              x={(sourceNode.x + targetNode.x) / 2}
-              y={(sourceNode.y + targetNode.y) / 2}
-              fontSize="8"
-              fill="#64748b"
-              textAnchor="middle"
-              className="pointer-events-none"
-            >
-              {edge.label}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Draw Nodes */}
-      {positionedNodes.map((node) => (
-        <g key={node.id} transform={`translate(${node.x}, ${node.y})`}>
-          <circle
-            r={nodeRadius}
-            className={cn("stroke-2", getNodeColorClass(node.type).replace('bg-', 'fill-').replace('text-', 'stroke-'))}
-            stroke="hsl(var(--border))"
-          />
-          {/* Node Label */}
-          <text
-            y={nodeRadius + 10}
-            fontSize="10"
-            textAnchor="middle"
-            className="fill-foreground pointer-events-none"
-          >
-            {node.label.length > 15 ? node.label.substring(0, 12) + '...' : node.label}
-          </text>
-        </g>
-      ))}
-    </svg>
-  );
-};
+const getNodeColorClass = (type: string) => TYPE_COLORS[type] || 'bg-gray-400';
 
 
 const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -173,6 +53,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     
     setIsLoading(true);
     setError(null);
+    setSelectedItem(null);
     try {
       const data = await getKnowledgeGraph(workspaceName);
       setGraphData(data);
@@ -336,17 +217,37 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
       {/* Right Content: Visualization and Summary */}
       <div className="flex-grow flex flex-col space-y-4">
-        <Card>
-          <CardHeader className="p-4 border-b">
-            <CardTitle className="text-lg">
-              Knowledge Graph Visualization
-            </CardTitle>
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+        <Card className="flex-grow flex flex-col">
+          <CardHeader className="p-4 border-b flex flex-row justify-between items-center">
+            <div>
+              <CardTitle className="text-lg">
+                Knowledge Graph Visualization
+              </CardTitle>
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+              </div>
             </div>
+            <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
+              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            </Button>
           </CardHeader>
-          <CardContent className="p-4 h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-gray-900/50 rounded-b-lg">
-            <SimpleGraphVisualization nodes={filteredNodes} edges={filteredEdges} />
+          <CardContent className="p-4 flex-grow h-[50vh]">
+            <InteractiveGraphVisualization 
+              nodes={filteredNodes} 
+              edges={filteredEdges} 
+              onSelect={setSelectedItem}
+              selectedItem={selectedItem}
+            />
+          </CardContent>
+        </Card>
+        
+        {/* Detail Box */}
+        <Card className="h-40 flex-shrink-0">
+          <CardHeader className="p-4 border-b">
+            <CardTitle className="text-lg">Details</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DetailPanel item={selectedItem} />
           </CardContent>
         </Card>
       </div>
