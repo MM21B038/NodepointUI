@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { getPreprocessStatus, FilePreprocessStatus } from "@/database/workspaceStorage";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { usePipelineStatus } from "@/hooks/usePipelineStatus";
 
 interface PreprocessStatusTableProps {
   workspaceName: string;
@@ -35,6 +36,8 @@ const getStatusBadge = (status: FilePreprocessStatus['status']) => {
 const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   workspaceName,
 }) => {
+  const { isPipelineRunning, refetch: refetchPipelineStatus } = usePipelineStatus(workspaceName);
+  
   const [statusData, setStatusData] = useState<FilePreprocessStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,11 +59,39 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
     }
   }, [workspaceName]);
 
+  // 1. Fetch status when workspace changes
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
 
+  // 2. If the pipeline is running, automatically refresh the status summary every 5 seconds
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    if (isPipelineRunning) {
+      // If pipeline is running, refresh the summary table every 5 seconds
+      intervalId = setInterval(() => {
+        void fetchStatus();
+      }, 5000);
+    } else {
+      // When pipeline stops, do one final refresh to get the completed status
+      if (!isLoading) {
+        void fetchStatus();
+      }
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isPipelineRunning, fetchStatus, isLoading]);
+
+
   const handleRefresh = () => {
+    // Manually refresh both the pipeline status (which triggers polling if running)
+    // and the file status summary.
+    refetchPipelineStatus();
     fetchStatus();
     toast.info("Preprocessing status refreshed.");
   };
