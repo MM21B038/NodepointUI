@@ -110,9 +110,6 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
-  // Removed Polling effect for pipeline status. Status is now only updated manually.
-  // useEffect(() => { ... }, [currentWorkspace, viewMode, refetchPipelineStatus]);
-
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
@@ -206,7 +203,7 @@ const Documents = () => {
               isPipelineRunning={isPipelineRunning}
               onClick={() => {
                 setIsPipelineStatusDialogOpen(true);
-                refetchPipelineStatus(); // Fetch status immediately upon opening the dialog
+                // Removed immediate refetch here. Status will be fetched when dialog closes.
               }}
             />
           )}
