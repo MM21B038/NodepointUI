@@ -47,6 +47,14 @@ export function usePipelineStatus(workspaceName: string | null) {
     
   }, [workspaceName]);
 
+  // Function to manually reset the running state and trigger a refetch
+  const forceReset = useCallback(() => {
+    setIsPipelineRunning(false);
+    // Immediately trigger a refetch to get the true status from the API
+    checkStatus();
+  }, [checkStatus]);
+
+
   // Effect: Reset state when workspace changes, but DO NOT trigger a fetch.
   useEffect(() => {
     if (!workspaceName) {
@@ -63,5 +71,6 @@ export function usePipelineStatus(workspaceName: string | null) {
     lastCheck,
     isLoading,
     refetch: checkStatus,
+    forceReset, // Expose forceReset
   };
 }

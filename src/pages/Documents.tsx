@@ -47,7 +47,8 @@ const Documents = () => {
     isPipelineRunning, 
     pipelineData, 
     isLoading: isLoadingPipelineStatus, 
-    refetch: refetchPipelineStatus 
+    refetch: refetchPipelineStatus,
+    forceReset // Destructure the new function
   } = usePipelineStatus(currentWorkspace);
   
   // Determine if the button should be disabled
@@ -204,17 +205,13 @@ const Documents = () => {
     setIsPipelineStatusDialogOpen(true);
   };
   
-  const handleClearPipelineStatus = async () => {
+  const handleClearPipelineStatus = () => {
     if (!currentWorkspace) return;
     
-    // Temporarily set isPipelineRunning to false locally to enable the button
-    // We achieve this by forcing a refetch that we know will return false if the API is stuck.
-    // Since we cannot directly manipulate the state inside the hook, we rely on the user to refresh.
-    
-    toast.info("Attempting to clear stuck pipeline status. Please refresh the page if the button remains disabled.");
-    
-    // Trigger a refresh which will call fetchWorkspaces and refetchPipelineStatus
-    await handleRefresh();
+    // Use the exposed forceReset function to immediately clear the running state 
+    // and trigger a fresh API check.
+    forceReset();
+    toast.info("Pipeline status reset initiated. Checking API for current status...");
   };
 
   const getDisabledTooltipMessage = () => {
