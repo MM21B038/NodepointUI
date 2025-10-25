@@ -207,7 +207,7 @@ const KnowledgeBase = () => {
               className="mr-2"
               title={isFilterPanelContentVisible ? "Minimize Filters" : "Maximize Filters"}
             >
-              {isFilterPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4"} />}
+              {isFilterPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
             <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
               <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
