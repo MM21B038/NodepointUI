@@ -105,14 +105,29 @@ const Documents = () => {
   useEffect(() => {
     if (currentWorkspace) {
       fetchFiles(currentWorkspace);
-      // Removed automatic refetchPipelineStatus here. Status is now only updated manually 
-      // via the refresh button, status indicator click, or after starting preprocess.
     } else {
       setFiles([]);
     }
   }, [currentWorkspace, fetchFiles]);
 
-  // Removed useEffect for dialog status refresh
+  // Polling effect for pipeline status when viewing the status page
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (currentWorkspace && viewMode === 'status') {
+      // Start polling every 5 seconds
+      intervalId = setInterval(() => {
+        refetchPipelineStatus();
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [currentWorkspace, viewMode, refetchPipelineStatus]);
+
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
