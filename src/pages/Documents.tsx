@@ -115,19 +115,31 @@ const Documents = () => {
 
   // Effect 2: Monitor pipeline status transition (Running -> Not Running)
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
     if (currentWorkspace) {
       // Check if the pipeline just finished (was running, now is not running)
       if (wasPipelineRunning && !isPipelineRunning) {
         // Pipeline finished, refresh files and status view data
         fetchFiles(currentWorkspace);
-        // Note: PreprocessStatusTable handles its own refresh on mount/workspace change, 
-        // but a manual refetch here ensures immediate update if the user is on the status tab.
-        // Since PreprocessStatusTable uses its own internal fetch, we rely on the user refreshing that component 
-        // or switching tabs, or we could pass a refetch prop, but for now, let's focus on the button state.
         toast.success(`Preprocessing completed for workspace: ${currentWorkspace}`);
+        
+        // Use a small delay before setting wasPipelineRunning to false 
+        // to ensure the state is stable after the API reports completion.
+        timeoutId = setTimeout(() => {
+          setWasPipelineRunning(isPipelineRunning);
+        }, 500); 
+      } else if (!wasPipelineRunning && isPipelineRunning) {
+        // Pipeline just started running
+        setWasPipelineRunning(isPipelineRunning);
       }
-      setWasPipelineRunning(isPipelineRunning);
     }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [isPipelineRunning, wasPipelineRunning, currentWorkspace, fetchFiles]);
 
 
