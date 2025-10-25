@@ -171,12 +171,39 @@ const KnowledgeBase = () => {
     );
   }
 
-  // --- Main Visualization Layout ---
+  // --- Main Visualization Layout (Full Screen Canvas with Floating Panels) ---
   return (
-    <div className="flex h-full w-full relative">
+    <div className="relative h-full w-full">
       
-      {/* Left Sidebar: Filters (Fixed) */}
-      <Card className="w-64 flex-shrink-0 h-full flex flex-col rounded-none border-t-0 border-l-0">
+      {/* 1. Visualization Canvas (Background) */}
+      <div className="absolute inset-0">
+        <InteractiveGraphVisualization 
+          nodes={filteredNodes} 
+          edges={filteredEdges} 
+          onSelect={setSelectedItem}
+          selectedItem={selectedItem}
+        />
+      </div>
+
+      {/* 2. Top Bar (Floating) */}
+      <div className="absolute top-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm border-b z-20">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-semibold">
+            Knowledge Graph: <span className="text-primary">{currentWorkspace}</span>
+          </h2>
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <span>
+              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+            </span>
+            <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
+              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Left Panel: Filters (Floating) */}
+      <Card className="absolute top-[70px] left-4 w-64 max-h-[calc(100%-84px)] flex flex-col z-20 shadow-xl">
         <CardHeader className="p-4 border-b flex-shrink-0">
           <CardTitle className="text-lg flex items-center">
             <Filter className="h-4 w-4 mr-2" /> Filters
@@ -229,35 +256,8 @@ const KnowledgeBase = () => {
         </ScrollArea>
       </Card>
 
-      {/* Center Area: Visualization */}
-      <div className="flex-grow flex flex-col h-full">
-        <div className="p-4 border-b flex justify-between items-center bg-background/90 z-10">
-          <h2 className="text-xl font-semibold">
-            Knowledge Graph: <span className="text-primary">{currentWorkspace}</span>
-          </h2>
-          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <span>
-              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
-            </span>
-            <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
-              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            </Button>
-          </div>
-        </div>
-        
-        {/* Visualization Container (Takes up remaining height) */}
-        <div className="flex-grow h-full">
-          <InteractiveGraphVisualization 
-            nodes={filteredNodes} 
-            edges={filteredEdges} 
-            onSelect={setSelectedItem}
-            selectedItem={selectedItem}
-          />
-        </div>
-      </div>
-
-      {/* Right Sidebar: Details (Fixed) */}
-      <Card className="w-80 flex-shrink-0 h-full flex flex-col rounded-none border-t-0 border-r-0">
+      {/* 4. Right Panel: Details (Floating) */}
+      <Card className="absolute top-[70px] right-4 w-80 max-h-[calc(100%-84px)] flex flex-col z-20 shadow-xl">
         <CardHeader className="p-4 border-b flex-shrink-0">
           <CardTitle className="text-lg flex items-center">
             <Info className="h-4 w-4 mr-2" /> Details
