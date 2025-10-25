@@ -220,7 +220,7 @@ const KnowledgeBase = () => {
       <Card 
         className={cn(
           "absolute top-20 left-4 w-40 flex flex-col z-20 shadow-xl transition-all duration-300",
-          isFilterPanelContentVisible ? "max-h-[calc(100vh-10rem)]" : "h-fit" // Use max-h instead of bottom-4
+          isFilterPanelContentVisible ? "bottom-4" : "h-fit"
         )}
       >
         <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
@@ -290,7 +290,7 @@ const KnowledgeBase = () => {
       <Card 
         className={cn(
           "absolute top-20 right-4 w-80 flex flex-col z-20 shadow-xl transition-all duration-300",
-          isDetailsPanelContentVisible ? "max-h-[calc(100vh-10rem)]" : "h-fit" // Use max-h instead of bottom-4
+          isDetailsPanelContentVisible ? "bottom-4" : "h-fit"
         )}
       >
         <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
