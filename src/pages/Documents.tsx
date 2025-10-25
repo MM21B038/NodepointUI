@@ -16,13 +16,9 @@ import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
 import FileUpload from "@/components/FileUpload";
 import FileListItem from "@/components/FileListItem";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import PipelineStatusDialog from "@/components/PipelineStatusDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
-import PipelineStatusIndicator from "@/components/PipelineStatusIndicator";
 import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { usePipelineStatus } from "@/hooks/usePipelineStatus";
-import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type ViewMode = 'files' | 'status';
@@ -31,7 +27,6 @@ const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
-  const [isPipelineStatusDialogOpen, setIsPipelineStatusDialogOpen] = useState(false);
 
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
@@ -41,15 +36,8 @@ const Documents = () => {
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
-  const { 
-    isPipelineRunning, 
-    pipelineData, 
-    isLoading: isLoadingPipelineStatus, 
-    refetch: refetchPipelineStatus 
-  } = usePipelineStatus(currentWorkspace);
-
-  // Only treat as "processing" if we're actively starting or backend reports running.
-  const isProcessing = isStartingPreprocess || !!isPipelineRunning;
+  // isProcessing is now only dependent on the local state of starting the process
+  const isProcessing = isStartingPreprocess;
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -115,10 +103,6 @@ const Documents = () => {
     if (success) {
       toast.info("Workspaces refreshed from API.");
     }
-
-    if (currentWorkspace) {
-      refetchPipelineStatus();
-    }
   };
 
   const handleCreateWorkspace = (name: string) => {
@@ -171,23 +155,15 @@ const Documents = () => {
     try {
       const result = await startPreprocess(currentWorkspace);
 
-      // Backend returns immediately; show success and then check status.
+      // Backend returns immediately; show success.
       toast.success(result.message, { id: loadingToastId });
 
-      // Immediately refetch status to update isPipelineRunning.
-      await refetchPipelineStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
-      await refetchPipelineStatus();
     } finally {
       setIsStartingPreprocess(false);
     }
-  };
-
-  const handleOpenPipelineStatus = () => {
-    // Do not refetch here so we avoid immediate disables; let the dialog or close handler refetch.
-    setIsPipelineStatusDialogOpen(true);
   };
 
   return (
@@ -197,13 +173,6 @@ const Documents = () => {
           <h2 className="text-3xl font-semibold">
             Workspace {currentWorkspace && `(${currentWorkspace})`}
           </h2>
-
-          {currentWorkspace && (
-            <PipelineStatusIndicator
-              isPipelineRunning={isPipelineRunning}
-              onClick={() => handleOpenPipelineStatus()}
-            />
-          )}
         </div>
 
         <div className="flex items-center space-x-4">
@@ -345,27 +314,14 @@ const Documents = () => {
       />
 
       {currentWorkspace && (
-        <>
-          <DeleteConfirmationDialog
-            isOpen={isDeleteWorkspaceDialogOpen}
-            onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
-            onConfirm={handleDeleteWorkspace}
-            title={`Delete Workspace: ${currentWorkspace}`}
-            description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
-            itemName={currentWorkspace}
-          />
-          <PipelineStatusDialog
-            isOpen={isPipelineStatusDialogOpen}
-            onClose={() => {
-              setIsPipelineStatusDialogOpen(false);
-              if (currentWorkspace) {
-                refetchPipelineStatus();
-              }
-            }}
-            data={pipelineData}
-            isLoading={isLoadingPipelineStatus}
-          />
-        </>
+        <DeleteConfirmationDialog
+          isOpen={isDeleteWorkspaceDialogOpen}
+          onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
+          onConfirm={handleDeleteWorkspace}
+          title={`Delete Workspace: ${currentWorkspace}`}
+          description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
+          itemName={currentWorkspace}
+        />
       )}
     </div>
   );
