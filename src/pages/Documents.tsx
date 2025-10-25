@@ -132,6 +132,7 @@ const Documents = () => {
   };
 
   const handleCreateWorkspace = (name: string) => {
+    // We rely on fetchWorkspaces to set currentWorkspace and trigger the initial status check
     fetchWorkspaces();
     setCurrentWorkspace(name); 
     toast.success(`Workspace "${name}" created and opened.`);
@@ -141,7 +142,13 @@ const Documents = () => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
-    refetchPipelineStatus();
+    // Removed refetchPipelineStatus() here. We rely on the next call to fetchWorkspaces 
+    // (which is triggered by handleCreateWorkspace/handleRefresh) or the initial load.
+    // Since we are selecting an existing workspace, we should trigger a full refresh 
+    // to ensure files and status are updated correctly for the newly selected workspace.
+    // Let's call fetchWorkspaces here instead of just setting the state, 
+    // as fetchWorkspaces handles the file and status fetch logic robustly.
+    fetchWorkspaces();
   };
 
   const handleUploadSuccess = () => {
