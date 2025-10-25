@@ -6,6 +6,8 @@ import { GraphNode, GraphEdge } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Simple color mapping for node types (Tailwind classes)
 const TYPE_COLORS: Record<string, string> = {
@@ -29,6 +31,26 @@ interface InteractiveGraphVisualizationProps {
 // D3 requires nodes to have x, y, vx, vy properties
 type D3Node = GraphNode & d3.SimulationNodeDatum;
 type D3Edge = GraphEdge & { source: D3Node | string; target: D3Node | string };
+
+// Helper function to clean D3 properties from a node
+const cleanNodeData = (d: D3Node): GraphNode => ({
+    id: d.id,
+    label: d.label,
+    type: d.type,
+    source: d.source,
+    attributes: d.attributes,
+});
+
+// Helper function to clean D3 properties from an edge
+const cleanEdgeData = (d: D3Edge): GraphEdge => ({
+    // D3 resolves source/target to D3Node objects, we extract the original ID string
+    source: (d.source as D3Node).id,
+    target: (d.target as D3Node).id,
+    label: d.label,
+    score: d.score,
+    source_file: d.source_file,
+});
+
 
 const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps> = ({
   nodes: initialNodes,
@@ -120,7 +142,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .attr("marker-end", "url(#arrowhead)")
       .on("click", (event, d) => {
         event.stopPropagation();
-        onSelect(d);
+        onSelect(cleanEdgeData(d));
       })
       .attr("class", d => cn(
         "cursor-pointer transition-all",
@@ -148,7 +170,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       ))
       .on("click", (event, d) => {
         event.stopPropagation();
-        onSelect(d);
+        onSelect(cleanNodeData(d));
       })
       .call(drag(simulation) as any);
 
