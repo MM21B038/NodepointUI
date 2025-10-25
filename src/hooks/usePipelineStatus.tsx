@@ -39,7 +39,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     if (workspaceName) {
       // 1. Set running state immediately to show the icon
       setIsPipelineRunning(true); 
-      // 2. Force polling flag
+      // 2. Force polling flag to ensure polling starts immediately
       setForcePolling(true);
       // 3. Run initial check (which will correct the state if the job finished instantly)
       checkStatus(); 
@@ -51,7 +51,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     if (workspaceName) {
       // Reset states when workspace changes and perform initial check
       setIsPipelineRunning(false);
-      setForcePolling(false);
+      setForcePolling(false); // Ensure forcePolling is reset here
       checkStatus();
     } else {
       setIsPipelineRunning(false);
