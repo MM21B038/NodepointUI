@@ -1,3 +1,4 @@
+// src/pages/Documents.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -51,8 +52,19 @@ const Documents = () => {
     forceReset,
   } = usePipelineStatus(currentWorkspace);
 
-  // Determine if the button should be disabled
+  // Ensure boolean
   const isProcessing = isStartingPreprocess || Boolean(isPipelineRunning);
+
+  // --- Debug: log key values to console so you can inspect why button is disabled
+  useEffect(() => {
+    console.log("[Docs] currentWorkspace:", currentWorkspace);
+    console.log("[Docs] isStartingPreprocess:", isStartingPreprocess);
+    console.log("[Docs] isPipelineRunning:", isPipelineRunning);
+    console.log("[Docs] isProcessing:", isProcessing);
+    console.log("[Docs] isLoadingWorkspaces:", isLoadingWorkspaces);
+    console.log("[Docs] pipelineData:", pipelineData);
+  }, [currentWorkspace, isStartingPreprocess, isPipelineRunning, isProcessing, isLoadingWorkspaces, pipelineData]);
+  // ------------------------------------------------------------------------
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -221,6 +233,8 @@ const Documents = () => {
     return "";
   };
 
+  // NOTE: we keep original renderStartPreprocessButton for normal use,
+  // but below we also render a TEMPORARY native button to isolate the issue.
   const renderStartPreprocessButton = () => {
     const tooltipMessage = getDisabledTooltipMessage();
 
@@ -266,7 +280,30 @@ const Documents = () => {
 
         <div className="flex items-center space-x-4">
           <FileUpload workspaceName={currentWorkspace} onUploadSuccess={handleUploadSuccess} />
-          {renderStartPreprocessButton()}
+
+          {/* =================== TEMP TEST: Native <button> to isolate custom Button issues =================== */}
+          <div>
+            <button
+              type="button"
+              onClick={handleStartPreprocess}
+              disabled={!currentWorkspace || isProcessing}
+              className={`inline-flex items-center space-x-1 px-3 py-1 rounded-md border ${
+                (!currentWorkspace || isProcessing) ? "opacity-60 cursor-not-allowed" : "bg-primary text-primary-foreground"
+              }`}
+            >
+              {isStartingPreprocess ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4" />
+              )}
+              <span>Start Preprocess (native)</span>
+            </button>
+          </div>
+          {/* =================== end TEMP TEST ============================================================ */}
+
+          {/* Original (custom) Start Preprocess button (kept for comparison) */}
+          <div className="hidden md:block">{renderStartPreprocessButton()}</div>
+
           <Button type="button" variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
