@@ -32,7 +32,7 @@ const Documents = () => {
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
   const [isPipelineStatusDialogOpen, setIsPipelineStatusDialogOpen] = useState(false);
-
+  
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -40,17 +40,17 @@ const Documents = () => {
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
-  const [wasPipelineRunning, setWasPipelineRunning] = useState(false); // State to track transition
 
+  // Hook call is unconditional
   const { 
     isPipelineRunning, 
     pipelineData, 
     isLoading: isLoadingPipelineStatus, 
     refetch: refetchPipelineStatus 
   } = usePipelineStatus(currentWorkspace);
-
-  // Only treat as "processing" if we're actively starting or backend reports running.
-  const isProcessing = isStartingPreprocess || !!isPipelineRunning;
+  
+  // Determine if the button should be disabled
+  const isProcessing = isStartingPreprocess || isPipelineRunning;
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -70,9 +70,10 @@ const Documents = () => {
     try {
       const loadedWorkspaces = await getWorkspaces();
       setExistingWorkspaces(loadedWorkspaces);
-
+      
       let newCurrentWorkspace = currentWorkspace;
 
+      // Determine the new current workspace
       if (loadedWorkspaces.length > 0) {
         if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
           newCurrentWorkspace = loadedWorkspaces[0];
@@ -80,16 +81,19 @@ const Documents = () => {
       } else {
         newCurrentWorkspace = null;
       }
-
+      
       setCurrentWorkspace(newCurrentWorkspace);
-
+      
+      // If a workspace is selected, fetch its files
       if (newCurrentWorkspace) {
-        // We don't await fetchFiles here to allow fetchWorkspaces to finish quickly
-        fetchFiles(newCurrentWorkspace);
+        await fetchFiles(newCurrentWorkspace);
+        // *** NEW: Trigger initial status check after selecting a workspace ***
+        // This ensures isPipelineRunning is correctly set on load.
+        await refetchPipelineStatus(); 
       } else {
         setFiles([]);
       }
-
+      
       return true;
     } catch (error) {
       toast.error("Failed to load workspaces from the API.");
@@ -98,67 +102,41 @@ const Documents = () => {
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace, fetchFiles]);
+  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]); // Added refetchPipelineStatus dependency
 
-  // Effect 1: Initial load and workspace change
+  // Load existing workspaces on mount
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
 
+  // Refetch files whenever currentWorkspace changes (this is redundant now as fetchWorkspaces handles it, but kept for safety)
   useEffect(() => {
     if (currentWorkspace) {
+      // Only fetch files if currentWorkspace changes and fetchWorkspaces didn't already handle it
+      // Since fetchWorkspaces calls fetchFiles, we can rely on that, but keeping this ensures file list updates if currentWorkspace changes outside of fetchWorkspaces (e.g., handleSelectWorkspace)
       fetchFiles(currentWorkspace);
     } else {
       setFiles([]);
     }
   }, [currentWorkspace, fetchFiles]);
 
-  // Effect 2: Monitor pipeline status transition (Running -> Not Running)
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    if (currentWorkspace) {
-      // Check if the pipeline just finished (was running, now is not running)
-      if (wasPipelineRunning && !isPipelineRunning) {
-        // Pipeline finished, refresh files and status view data
-        fetchFiles(currentWorkspace);
-        toast.success(`Preprocessing completed for workspace: ${currentWorkspace}`);
-        
-        // Use a small delay before setting wasPipelineRunning to false 
-        // to ensure the state is stable after the API reports completion.
-        timeoutId = setTimeout(() => {
-          setWasPipelineRunning(isPipelineRunning);
-        }, 500); 
-      } else if (!wasPipelineRunning && isPipelineRunning) {
-        // Pipeline just started running
-        setWasPipelineRunning(isPipelineRunning);
-      }
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [isPipelineRunning, wasPipelineRunning, currentWorkspace, fetchFiles]);
-
 
   const handleRefresh = async () => {
-    // 1. Refresh workspaces and files
     const success = await fetchWorkspaces();
     if (success) {
-      toast.info("Workspaces and files refreshed from API.");
+      toast.info("Workspaces refreshed from API.");
     }
-
-    // 2. Refresh pipeline status (which is now polled automatically if running, but manual refresh is good)
+    
+    // Manually refresh pipeline status to ensure button state is correct
     if (currentWorkspace) {
       refetchPipelineStatus();
     }
   };
 
   const handleCreateWorkspace = (name: string) => {
+    // After creation, we rely on fetchWorkspaces to set currentWorkspace and trigger the initial status check
     fetchWorkspaces();
-    setCurrentWorkspace(name);
+    setCurrentWorkspace(name); 
     toast.success(`Workspace "${name}" created and opened.`);
   };
 
@@ -166,6 +144,9 @@ const Documents = () => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
+    // Status check will be triggered by the useEffect dependency on currentWorkspace change, 
+    // but since we rely on fetchWorkspaces for the initial load, let's ensure we call refetch here too.
+    refetchPipelineStatus();
   };
 
   const handleUploadSuccess = () => {
@@ -173,7 +154,7 @@ const Documents = () => {
       fetchFiles(currentWorkspace);
     }
   };
-
+  
   const handleDeleteWorkspace = async () => {
     if (!currentWorkspace) return;
 
@@ -183,7 +164,7 @@ const Documents = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-
+      
       setCurrentWorkspace(null);
       fetchWorkspaces();
     } catch (error) {
@@ -193,39 +174,40 @@ const Documents = () => {
       setIsDeleteWorkspaceDialogOpen(false);
     }
   };
-
+  
   const handleStartPreprocess = async () => {
     if (!currentWorkspace) {
       toast.error("Please select a workspace first.");
       return;
     }
-
+    
     setIsStartingPreprocess(true);
     const loadingToastId = toast.loading(`Starting preprocessing for ${currentWorkspace}...`);
 
     try {
       const result = await startPreprocess(currentWorkspace);
-
-      // Backend returns immediately; show success and then check status.
+      
+      // Backend now returns immediately, so we show success and immediately check status
       toast.success(result.message, { id: loadingToastId });
-
-      // Immediately refetch status to update isPipelineRunning and start polling.
-      await refetchPipelineStatus();
+      
+      // IMPORTANT: Refetch status immediately after starting the job
+      // This will update isPipelineRunning based on the current state of the backend queue.
+      await refetchPipelineStatus(); 
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
-      // Even on failure, refetch status to ensure state is correct
-      await refetchPipelineStatus();
+      // If starting failed, ensure we refetch status to potentially re-enable the button
+      await refetchPipelineStatus(); 
     } finally {
       setIsStartingPreprocess(false);
     }
   };
 
   const handleOpenPipelineStatus = () => {
-    // Refetch status immediately when opening the dialog to show the latest data
-    if (currentWorkspace) {
-      refetchPipelineStatus();
-    }
+    // We rely on the dialog's internal logic or the onClose handler to update the status.
+    // We do NOT call refetchPipelineStatus() here to avoid immediate state changes 
+    // that might disable the Start Preprocess button prematurely.
     setIsPipelineStatusDialogOpen(true);
   };
 
@@ -236,7 +218,7 @@ const Documents = () => {
           <h2 className="text-3xl font-semibold">
             Workspace {currentWorkspace && `(${currentWorkspace})`}
           </h2>
-
+          {/* Display the status indicator if a workspace is selected */}
           {currentWorkspace && (
             <PipelineStatusIndicator
               isPipelineRunning={isPipelineRunning}
@@ -244,15 +226,13 @@ const Documents = () => {
             />
           )}
         </div>
-
+        
         <div className="flex items-center space-x-4">
-          <FileUpload
-            workspaceName={currentWorkspace}
-            onUploadSuccess={handleUploadSuccess}
+          <FileUpload 
+            workspaceName={currentWorkspace} 
+            onUploadSuccess={handleUploadSuccess} 
           />
-
           <Button
-            type="button"
             variant="default"
             onClick={handleStartPreprocess}
             disabled={!currentWorkspace || isProcessing}
@@ -265,20 +245,12 @@ const Documents = () => {
             )}
             <span>Start Preprocess</span>
           </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={isLoadingWorkspaces}
-          >
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" disabled={isLoadingWorkspaces}>Workspace</Button>
+              <Button variant="outline" disabled={isLoadingWorkspaces}>Workspace</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
@@ -287,11 +259,11 @@ const Documents = () => {
               <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
                 Open Existing
               </DropdownMenuItem>
-
+              
               {currentWorkspace && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
+                  <DropdownMenuItem 
                     onClick={() => setIsDeleteWorkspaceDialogOpen(true)}
                     className="text-destructive focus:text-destructive"
                   >
@@ -305,11 +277,12 @@ const Documents = () => {
         </div>
       </div>
 
+      {/* View Toggle */}
       {currentWorkspace && (
         <div className="flex justify-end">
-          <ToggleGroup
-            type="single"
-            value={viewMode}
+          <ToggleGroup 
+            type="single" 
+            value={viewMode} 
             onValueChange={(value: ViewMode) => value && setViewMode(value)}
             className="border rounded-md"
           >
@@ -340,10 +313,10 @@ const Documents = () => {
                 <ScrollArea className="h-64">
                   <ul className="space-y-2">
                     {files.map((file) => (
-                      <FileListItem
-                        key={file}
-                        fileName={file}
-                        workspaceName={currentWorkspace}
+                      <FileListItem 
+                        key={file} 
+                        fileName={file} 
+                        workspaceName={currentWorkspace} 
                         onDeleteSuccess={() => fetchFiles(currentWorkspace)}
                       />
                     ))}
@@ -374,7 +347,7 @@ const Documents = () => {
         onClose={() => setIsCreateWorkspaceDialogOpen(false)}
         onCreate={handleCreateWorkspace}
       />
-
+      
       <OpenWorkspaceDialog
         isOpen={isOpenWorkspaceDialogOpen}
         onClose={() => setIsOpenWorkspaceDialogOpen(false)}
@@ -382,7 +355,7 @@ const Documents = () => {
         onSelect={handleSelectWorkspace}
         currentWorkspace={currentWorkspace}
       />
-
+      
       {currentWorkspace && (
         <>
           <DeleteConfirmationDialog
@@ -397,7 +370,7 @@ const Documents = () => {
             isOpen={isPipelineStatusDialogOpen}
             onClose={() => {
               setIsPipelineStatusDialogOpen(false);
-              // When closing the dialog, force a status check to update the indicator immediately
+              // Manually refresh status when closing the dialog, as the user likely checked completion
               if (currentWorkspace) {
                 refetchPipelineStatus();
               }
