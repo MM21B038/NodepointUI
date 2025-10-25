@@ -262,17 +262,19 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
       <div className="p-4 space-y-3">
         <div className="flex items-center space-x-2">
           <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
-          <h4 className="text-lg font-semibold">{item.label}</h4>
-          <Badge variant="secondary">{item.type}</Badge>
+          <h4 className="text-lg font-semibold break-words">{item.label}</h4>
+          <Badge variant="secondary" className="flex-shrink-0">{item.type}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground">Source Document: {item.source}</p>
+        <p className="text-sm text-muted-foreground overflow-hidden">
+          Source Document: <span className="truncate max-w-full inline-block align-bottom">{item.source}</span>
+        </p>
         <Separator />
         <h5 className="font-medium text-sm">Attributes:</h5>
         <div className="border rounded-md p-3 bg-secondary/50">
           {Object.keys(item.attributes).length > 0 ? (
             <ul className="text-sm space-y-1">
               {Object.entries(item.attributes).map(([key, value]) => (
-                <li key={key}>
+                <li key={key} className="break-words">
                   <span className="font-mono text-xs text-primary/80">{key}:</span> {String(value)}
                 </li>
               ))}
@@ -288,16 +290,16 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
     return (
       <div className="p-4 space-y-3">
         <h4 className="text-lg font-semibold">Relationship</h4>
-        <p className="text-sm">
+        <p className="text-sm break-words">
           <span className="font-medium text-primary">{item.source}</span> 
           <span className="text-muted-foreground mx-2">--({item.label})--&gt;</span> 
           <span className="font-medium text-primary">{item.target}</span>
         </p>
         <Separator />
         <div className="text-sm space-y-1">
-          <p><strong>Relationship Type:</strong> {item.label}</p>
+          <p className="break-words"><strong>Relationship Type:</strong> {item.label}</p>
           <p><strong>Score/Weight:</strong> {item.score.toFixed(2)}</p>
-          <p><strong>Source Document:</strong> {item.source_file}</p>
+          <p className="break-words"><strong>Source Document:</strong> {item.source_file}</p>
         </div>
       </div>
     );
