@@ -123,6 +123,11 @@ const Documents = () => {
     if (success) {
       toast.info("Workspaces refreshed from API.");
     }
+    
+    // Manually refresh pipeline status to ensure button state is correct
+    if (currentWorkspace) {
+      refetchPipelineStatus();
+    }
   };
 
   const handleCreateWorkspace = (name: string) => {
