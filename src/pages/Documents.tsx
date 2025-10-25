@@ -105,12 +105,12 @@ const Documents = () => {
   useEffect(() => {
     if (currentWorkspace) {
       fetchFiles(currentWorkspace);
-      // Also refetch pipeline status when workspace changes to update the indicator/button state
-      refetchPipelineStatus(); 
+      // Removed automatic refetchPipelineStatus here. Status is now only updated manually 
+      // via the refresh button, status indicator click, or after starting preprocess.
     } else {
       setFiles([]);
     }
-  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
+  }, [currentWorkspace, fetchFiles]);
 
   // Removed useEffect for dialog status refresh
 
