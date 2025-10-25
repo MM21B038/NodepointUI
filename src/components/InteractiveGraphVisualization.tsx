@@ -9,20 +9,17 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Define a structure to hold both Tailwind class and D3 fill color (Hex)
-const TYPE_COLOR_MAP: Record<string, { class: string, fill: string }> = {
-  'Person': { class: 'bg-blue-600', fill: '#2563eb' },
-  'Organization': { class: 'bg-green-600', fill: '#16a34a' },
-  'Concept': { class: 'bg-purple-600', fill: '#9333ea' },
-  'Date': { class: 'bg-yellow-600', fill: '#ca8a04' },
-  'Location': { class: 'bg-red-600', fill: '#dc2626' },
-  'default': { class: 'bg-gray-500', fill: '#6b7280' },
+// Simple color mapping for node types (Tailwind classes)
+const TYPE_COLORS: Record<string, string> = {
+  'Person': 'bg-blue-500',
+  'Organization': 'bg-green-500',
+  'Concept': 'bg-purple-500',
+  'Date': 'bg-yellow-500',
+  'Location': 'bg-red-500',
+  'default': 'bg-gray-400',
 };
 
-const getNodeColorData = (type: string) => TYPE_COLOR_MAP[type] || TYPE_COLOR_MAP['default'];
-const getNodeColorClass = (type: string) => getNodeColorData(type).class;
-const getNodeFillColor = (type: string) => getNodeColorData(type).fill;
-
+const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
 interface InteractiveGraphVisualizationProps {
   nodes: GraphNode[];
@@ -161,10 +158,15 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("fill", d => getNodeFillColor(d.type)) // Use distinct hex color for D3 fill
+      .attr("fill", d => {
+        const colorClass = getNodeColorClass(d.type);
+        // Extract HSL values from Tailwind CSS variables (approximation for D3 fill)
+        // Since we can't easily read computed styles in D3, we use a fixed color for now
+        return colorClass.includes('blue') ? 'hsl(222.2 47.4% 11.2%)' : 'hsl(210 40% 96.1%)';
+      })
       .attr("class", d => cn(
         "cursor-pointer transition-all",
-        getNodeColorClass(d.type), // Apply Tailwind class for visual consistency (e.g., for the ring/hover effects)
+        getNodeColorClass(d.type),
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
       ))
       .on("click", (event, d) => {
@@ -256,12 +258,10 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
 
   if ('type' in item) {
     // Node details
-    const colorData = getNodeColorData(item.type);
-    
     return (
       <div className="p-4 space-y-3">
         <div className="flex items-center space-x-2">
-          <span className={cn("h-4 w-4 rounded-full", colorData.class)}></span>
+          <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
           <h4 className="text-lg font-semibold">{item.label}</h4>
           <Badge variant="secondary">{item.type}</Badge>
         </div>
