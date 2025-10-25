@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface PipelineStatusIndicatorProps {
   isPipelineRunning: boolean;
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
@@ -15,15 +15,22 @@ const PipelineStatusIndicator: React.FC<PipelineStatusIndicatorProps> = ({
   onClick,
 }) => {
   const iconClasses = "h-5 w-5";
-  
-  // Use a neutral color (e.g., text-muted-foreground) and remove conditional styling/animation
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Prevent any default/propagation that might interfere with other UI state
+    e.preventDefault();
+    e.stopPropagation();
+    onClick?.(e);
+  };
+
   return (
     <Button
+      type="button"
       variant="ghost"
       size="icon"
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
-        "relative h-8 w-8 rounded-full transition-all duration-300 text-muted-foreground hover:text-foreground",
+        "relative h-8 w-8 rounded-full transition-all duration-300 text-muted-foreground hover:text-foreground"
       )}
       title={isPipelineRunning ? "Pipeline Running (Click for status)" : "Pipeline Ready (Click for status)"}
     >
