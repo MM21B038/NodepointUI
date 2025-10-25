@@ -99,18 +99,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-@keyframes yellow-blink {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(253, 224, 71, 0.7); /* Yellow-300 equivalent */
-  }
-  50% {
-    opacity: 0.7;
-    box-shadow: 0 0 10px 5px rgba(253, 224, 71, 0.3);
-  }
-}
-
-.animate-yellow-blink {
-  animation: yellow-blink 1.5s infinite;
-}

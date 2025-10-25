@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
 
-const POLLING_INTERVAL = 2000; // 2 seconds
-
 export function usePipelineStatus(workspaceName: string | null) {
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [pipelineData, setPipelineData] = useState<PipelineStatusResponse | null>(null);
   const [lastCheck, setLastCheck] = useState(Date.now());
-  const [forcePolling, setForcePolling] = useState(false);
 
   const checkStatus = useCallback(async () => {
     if (!workspaceName) {
       setIsPipelineRunning(false);
       setPipelineData(null);
-      setForcePolling(false);
       return;
     }
 
@@ -29,67 +25,33 @@ export function usePipelineStatus(workspaceName: string | null) {
       setIsPipelineRunning(running);
       setLastCheck(Date.now());
       
-      // If the API confirms it's not running, stop forcing polling
-      if (!running) {
-        setForcePolling(false);
-      }
     } catch (error) {
       console.error("Error checking pipeline status, resetting state:", error);
       // If API call fails, assume pipeline is not running to prevent stuck UI
       setIsPipelineRunning(false);
-      setForcePolling(false);
       setPipelineData({ workspace: workspaceName, pipeline: [], error: "Failed to fetch status." });
     }
     
   }, [workspaceName]);
 
-  const startPolling = useCallback(() => {
-    if (workspaceName) {
-      // 1. Set running state immediately to show the icon
-      setIsPipelineRunning(true); 
-      // 2. Force polling flag to ensure polling starts immediately
-      setForcePolling(true);
-      // 3. Run initial check (which will correct the state if the job finished instantly)
-      checkStatus(); 
-    }
-  }, [workspaceName, checkStatus]);
-
-  // Effect 1: Initial check when workspace changes
+  // Effect 1: Initial check when workspace changes (Manual check only)
   useEffect(() => {
     if (workspaceName) {
-      // Ensure forcePolling is reset on workspace change
-      setForcePolling(false); 
-      // Perform initial check to determine if pipeline is running
       checkStatus();
     } else {
       setIsPipelineRunning(false);
       setPipelineData(null);
-      setForcePolling(false);
     }
   }, [workspaceName, checkStatus]);
 
-  // Effect 2: Polling interval management
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-
-    // Start polling if the pipeline is running OR if we are forcing a check
-    if (workspaceName && (isPipelineRunning || forcePolling)) {
-      intervalId = setInterval(checkStatus, POLLING_INTERVAL);
-    }
-
-    // Cleanup function runs when dependencies change or component unmounts
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [workspaceName, isPipelineRunning, forcePolling, checkStatus]);
+  // Removed Effect 2 (Polling interval management)
 
   return {
     isPipelineRunning,
     pipelineData,
     lastCheck,
     refetch: checkStatus,
-    startPolling,
+    // startPolling is now redundant, we will rely on refetch
+    startPolling: checkStatus, 
   };
 }
