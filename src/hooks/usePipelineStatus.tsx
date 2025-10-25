@@ -1,8 +1,9 @@
-// src/hooks/usePipelineStatus.tsx
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
 import { getPipelineStatus, PipelineStatusResponse, ChunkEntry } from "@/database/workspaceStorage";
+
+const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
 
 /**
  * Hook to track pipeline status for a given workspace.
@@ -82,7 +83,7 @@ export function usePipelineStatus(workspaceName: string | null) {
     void checkStatus();
   }, [checkStatus]);
 
-  // When workspace name changes, refetch for that workspace (avoid stale closure).
+  // 1. Initial fetch/fetch on workspace change
   useEffect(() => {
     let cancelled = false;
 
@@ -106,6 +107,28 @@ export function usePipelineStatus(workspaceName: string | null) {
       cancelled = true;
     };
   }, [workspaceName, checkStatus]);
+
+  // 2. Polling logic: Poll status if a workspace is selected AND the pipeline is currently running.
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (workspaceName && isPipelineRunning) {
+      console.debug(`[usePipelineStatus] Starting polling for ${workspaceName}`);
+      intervalId = setInterval(() => {
+        // Use checkStatus without arguments to rely on the workspaceName captured by the useCallback dependency
+        void checkStatus();
+      }, POLLING_INTERVAL_MS);
+    } else {
+      console.debug(`[usePipelineStatus] Polling stopped.`);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [workspaceName, isPipelineRunning, checkStatus]);
+
 
   return {
     isPipelineRunning,
