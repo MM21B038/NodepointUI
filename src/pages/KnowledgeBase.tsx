@@ -246,7 +246,7 @@ const KnowledgeBase = () => {
                 <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
                 <div className="space-y-2">
                   {uniqueTypes.map(type => (
-                    <div key={type} className="flex items-center space-x-2 overflow-hidden"> {/* Added overflow-hidden here */}
+                    <div key={type} className="flex items-center space-x-2"> {/* Removed overflow-hidden */}
                       <Checkbox
                         id={`type-${type}`}
                         checked={selectedTypes.has(type)}
@@ -254,7 +254,7 @@ const KnowledgeBase = () => {
                       />
                       <Label 
                         htmlFor={`type-${type}`} 
-                        className="flex items-center text-sm font-normal cursor-pointer w-full overflow-hidden"
+                        className="flex items-center text-sm font-normal cursor-pointer flex-1 min-w-0" // Use flex-1 min-w-0
                       >
                         <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
                         <span className="truncate">{type}</span>
@@ -271,7 +271,7 @@ const KnowledgeBase = () => {
                 <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
                 <div className="space-y-2">
                   {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2 overflow-hidden"> {/* Added overflow-hidden here */}
+                    <div key={source} className="flex items-center space-x-2"> {/* Removed overflow-hidden */}
                       <Checkbox
                         id={`source-${source}`}
                         checked={selectedSources.has(source)}
@@ -279,7 +279,7 @@ const KnowledgeBase = () => {
                       />
                       <Label 
                         htmlFor={`source-${source}`} 
-                        className="text-sm font-normal cursor-pointer w-full truncate"
+                        className="text-sm font-normal cursor-pointer flex-1 min-w-0 truncate" // Use flex-1 min-w-0 truncate
                       >
                         {source}
                       </Label>

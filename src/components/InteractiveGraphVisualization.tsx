@@ -266,7 +266,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           <h4 className="text-lg font-semibold break-words flex-1 min-w-0">{item.label}</h4>
           <Badge variant="secondary" className="flex-shrink-0">{item.type}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground overflow-hidden">
+        <p className="text-sm text-muted-foreground break-words"> {/* Removed overflow-hidden, added break-words */}
           Source Document: <span className="font-medium text-foreground break-all">{item.source}</span>
         </p>
         <Separator />
