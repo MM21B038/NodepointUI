@@ -143,6 +143,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanEdgeData(d));
+        simulation.stop(); // Stop simulation on click
       })
       .attr("class", d => cn(
         "cursor-pointer transition-all",
@@ -171,6 +172,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanNodeData(d));
+        simulation.stop(); // Stop simulation on click
       })
       .call(drag(simulation) as any);
 
@@ -187,14 +189,24 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("cy", d => d.y!);
     });
 
-    // Handle click outside nodes/edges to deselect
-    svg.on("click", () => onSelect(null));
+    // Handle click outside nodes/edges to deselect and restart simulation
+    svg.on("click", () => {
+      onSelect(null);
+      // Restart simulation briefly to settle if needed, but only if it was stopped
+      if (!simulation.running) {
+        simulation.alpha(1).restart();
+      }
+    });
+    
+    // Ensure simulation starts when data changes
+    simulation.alpha(1).restart();
+
 
     // Cleanup function
     return () => {
       simulation.stop();
     };
-  }, [graphData, width, height, onSelect, selectedItem]);
+  }, [graphData, width, height, onSelect]); // Removed selectedItem from dependency array
 
   // --- Drag Handlers ---
   const drag = (simulation: d3.Simulation<D3Node, D3Edge>) => {
@@ -211,8 +223,9 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     function dragended(event: d3.D3DragEvent<SVGCircleElement, D3Node, D3Node>, d: D3Node) {
       if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
+      // Keep the node fixed after dragging until the user clicks away
+      // d.fx = null;
+      // d.fy = null;
     }
 
     return d3.drag<SVGCircleElement, D3Node>()
