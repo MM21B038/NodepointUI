@@ -48,7 +48,7 @@ const WorkspaceSelector = () => {
   return (
     <div className="flex items-center space-x-2">
       <Select value={currentWorkspace || ""} onValueChange={handleSelectChange}>
-        <SelectTrigger className="w-[200px]">
+        <SelectTrigger className="w-[200px] bg-card text-foreground hover:bg-card/90">
           <SelectValue placeholder="Select Workspace" />
         </SelectTrigger>
         <SelectContent>
