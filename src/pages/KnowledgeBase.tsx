@@ -246,7 +246,7 @@ const KnowledgeBase = () => {
                 <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
                 <div className="space-y-2">
                   {uniqueTypes.map(type => (
-                    <div key={type} className="flex items-center space-x-2">
+                    <div key={type} className="flex items-center space-x-2 overflow-hidden"> {/* Added overflow-hidden here */}
                       <Checkbox
                         id={`type-${type}`}
                         checked={selectedTypes.has(type)}
@@ -271,7 +271,7 @@ const KnowledgeBase = () => {
                 <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
                 <div className="space-y-2">
                   {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2">
+                    <div key={source} className="flex items-center space-x-2 overflow-hidden"> {/* Added overflow-hidden here */}
                       <Checkbox
                         id={`source-${source}`}
                         checked={selectedSources.has(source)}
