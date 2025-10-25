@@ -265,10 +265,20 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           <h4 className="text-lg font-semibold">{item.label}</h4>
           <Badge variant="secondary">{item.type}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground">Source Document: {item.source}</p>
+        
+        {/* Source Document with Horizontal Scroll */}
+        <div className="text-sm text-muted-foreground flex items-center">
+          <span className="flex-shrink-0 mr-1">Source Document:</span>
+          <div className="flex-grow overflow-x-auto whitespace-nowrap text-foreground font-mono text-xs border rounded-md px-2 py-1 bg-secondary/50">
+            {item.source}
+          </div>
+        </div>
+        
         <Separator />
+        
         <h5 className="font-medium text-sm">Attributes:</h5>
-        <ScrollArea className="h-24 pr-4">
+        {/* Attributes with Vertical Scroll and defined boundary */}
+        <ScrollArea className="h-24 pr-4 border rounded-md p-2">
           {Object.keys(item.attributes).length > 0 ? (
             <ul className="text-sm space-y-1">
               {Object.entries(item.attributes).map(([key, value]) => (
@@ -297,7 +307,14 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <div className="text-sm space-y-1">
           <p><strong>Relationship Type:</strong> {item.label}</p>
           <p><strong>Score/Weight:</strong> {item.score.toFixed(2)}</p>
-          <p><strong>Source Document:</strong> {item.source_file}</p>
+          
+          {/* Source Document with Horizontal Scroll (Edge details) */}
+          <div className="text-sm text-muted-foreground flex items-center">
+            <span className="flex-shrink-0 mr-1">Source Document:</span>
+            <div className="flex-grow overflow-x-auto whitespace-nowrap text-foreground font-mono text-xs border rounded-md px-2 py-1 bg-secondary/50">
+              {item.source_file}
+            </div>
+          </div>
         </div>
       </div>
     );
