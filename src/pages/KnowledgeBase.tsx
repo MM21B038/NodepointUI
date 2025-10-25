@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,7 +30,6 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || 'bg-gray-400';
-
 
 const KnowledgeBase = () => {
   const { currentWorkspace } = useWorkspace();
@@ -128,23 +127,22 @@ const KnowledgeBase = () => {
     );
   }, [graphData, filteredNodes]);
 
+  // --- Render States ---
+
   if (!currentWorkspace) {
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-semibold">Knowledge Base</h2>
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)] border rounded-lg p-8 bg-card">
-          <h3 className="text-2xl font-semibold mb-2">No Workspace Selected</h3>
-          <p className="text-muted-foreground">
-            Please select a workspace using the selector in the navigation bar.
-          </p>
-        </div>
+      <div className="flex flex-col items-center justify-center h-full p-8">
+        <h3 className="text-2xl font-semibold mb-2">No Workspace Selected</h3>
+        <p className="text-muted-foreground">
+          Please select a workspace using the selector in the navigation bar.
+        </p>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[70vh]">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
         <p className="text-lg text-muted-foreground">Loading Knowledge Graph for {currentWorkspace}...</p>
       </div>
@@ -153,7 +151,7 @@ const KnowledgeBase = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center p-4">
+      <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <X className="h-10 w-10 text-destructive mb-4" />
         <h3 className="text-xl font-semibold text-destructive">Error Loading Graph</h3>
         <p className="text-muted-foreground mt-2">{error}</p>
@@ -164,7 +162,7 @@ const KnowledgeBase = () => {
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center p-4">
+      <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <h3 className="text-xl font-semibold">No Knowledge Graph Data</h3>
         <p className="text-muted-foreground mt-2">
           No entities or relationships found for workspace "{currentWorkspace}". Ensure documents have been uploaded and processed.
@@ -173,110 +171,104 @@ const KnowledgeBase = () => {
     );
   }
 
+  // --- Main Visualization Layout ---
   return (
-    <div className="flex h-[calc(100vh-100px)]"> {/* Full height minus header/footer */}
+    <div className="flex h-full w-full relative">
       
-      {/* Main Visualization Area (Left/Center) */}
-      <div className="flex-grow flex flex-col space-y-4 pr-4">
-        <h2 className="text-3xl font-semibold">
-          Knowledge Base: <span className="text-primary">{currentWorkspace}</span>
-        </h2>
-        
-        <Card className="flex-grow flex flex-col">
-          <CardHeader className="p-4 border-b flex flex-row justify-between items-center">
+      {/* Left Sidebar: Filters (Fixed) */}
+      <Card className="w-64 flex-shrink-0 h-full flex flex-col rounded-none border-t-0 border-l-0">
+        <CardHeader className="p-4 border-b flex-shrink-0">
+          <CardTitle className="text-lg flex items-center">
+            <Filter className="h-4 w-4 mr-2" /> Filters
+          </CardTitle>
+        </CardHeader>
+        <ScrollArea className="flex-grow">
+          <CardContent className="p-4 space-y-6">
+            
+            {/* Node Type Filter */}
             <div>
-              <CardTitle className="text-lg">
-                Knowledge Graph Visualization
-              </CardTitle>
-              <div className="text-sm text-muted-foreground">
-                Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+              <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
+              <div className="space-y-2">
+                {uniqueTypes.map(type => (
+                  <div key={type} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`type-${type}`}
+                      checked={selectedTypes.has(type)}
+                      onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                    />
+                    <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
+                      <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
+                      {type}
+                    </Label>
+                  </div>
+                ))}
               </div>
             </div>
+
+            <Separator />
+
+            {/* Source Filter */}
+            <div>
+              <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
+              <div className="space-y-2">
+                {uniqueSources.map(source => (
+                  <div key={source} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`source-${source}`}
+                      checked={selectedSources.has(source)}
+                      onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
+                    />
+                    <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer max-w-[150px] truncate">
+                      {source}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </ScrollArea>
+      </Card>
+
+      {/* Center Area: Visualization */}
+      <div className="flex-grow flex flex-col h-full">
+        <div className="p-4 border-b flex justify-between items-center bg-background/90 z-10">
+          <h2 className="text-xl font-semibold">
+            Knowledge Graph: <span className="text-primary">{currentWorkspace}</span>
+          </h2>
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <span>
+              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
+            </span>
             <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
               <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
             </Button>
-          </CardHeader>
-          <CardContent className="p-4 flex-grow h-full">
-            {/* Visualization container takes up remaining space */}
-            <InteractiveGraphVisualization 
-              nodes={filteredNodes} 
-              edges={filteredEdges} 
-              onSelect={setSelectedItem}
-              selectedItem={selectedItem}
-            />
+          </div>
+        </div>
+        
+        {/* Visualization Container (Takes up remaining height) */}
+        <div className="flex-grow h-full">
+          <InteractiveGraphVisualization 
+            nodes={filteredNodes} 
+            edges={filteredEdges} 
+            onSelect={setSelectedItem}
+            selectedItem={selectedItem}
+          />
+        </div>
+      </div>
+
+      {/* Right Sidebar: Details (Fixed) */}
+      <Card className="w-80 flex-shrink-0 h-full flex flex-col rounded-none border-t-0 border-r-0">
+        <CardHeader className="p-4 border-b flex-shrink-0">
+          <CardTitle className="text-lg flex items-center">
+            <Info className="h-4 w-4 mr-2" /> Details
+          </CardTitle>
+        </CardHeader>
+        <ScrollArea className="flex-grow">
+          <CardContent className="p-0">
+            <DetailPanel item={selectedItem} />
           </CardContent>
-        </Card>
-      </div>
-
-      {/* Right Sidebar: Filters and Details */}
-      <div className="w-80 flex-shrink-0 space-y-4">
-        
-        {/* Filters Card */}
-        <Card className="h-[40%] max-h-[40vh] flex flex-col">
-          <CardHeader className="p-4 border-b flex-shrink-0">
-            <CardTitle className="text-lg flex items-center">
-              <Filter className="h-4 w-4 mr-2" /> Filters
-            </CardTitle>
-          </CardHeader>
-          <ScrollArea className="flex-grow">
-            <CardContent className="p-4 space-y-6">
-              
-              {/* Node Type Filter */}
-              <div>
-                <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
-                <div className="space-y-2">
-                  {uniqueTypes.map(type => (
-                    <div key={type} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`type-${type}`}
-                        checked={selectedTypes.has(type)}
-                        onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                      />
-                      <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
-                        <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
-                        {type}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Source Filter */}
-              <div>
-                <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
-                <div className="space-y-2">
-                  {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`source-${source}`}
-                        checked={selectedSources.has(source)}
-                        onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
-                      />
-                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer max-w-[150px] truncate">
-                        {source}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </ScrollArea>
-        </Card>
-        
-        {/* Detail Box Card */}
-        <Card className="flex-grow flex flex-col">
-          <CardHeader className="p-4 border-b flex-shrink-0">
-            <CardTitle className="text-lg">Details</CardTitle>
-          </CardHeader>
-          <ScrollArea className="flex-grow">
-            <CardContent className="p-0">
-              <DetailPanel item={selectedItem} />
-            </CardContent>
-          </ScrollArea>
-        </Card>
-      </div>
+        </ScrollArea>
+      </Card>
     </div>
   );
 };
