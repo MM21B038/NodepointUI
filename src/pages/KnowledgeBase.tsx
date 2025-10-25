@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, Info } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, Info, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,9 +39,9 @@ const KnowledgeBase = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
-  // Panel visibility state
-  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(true);
-  const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
+  // Panel visibility state (true means content is visible/maximized)
+  const [isFilterPanelContentVisible, setIsFilterPanelContentVisible] = useState(true);
+  const [isDetailsPanelContentVisible, setIsDetailsPanelContentVisible] = useState(true);
 
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -199,13 +199,15 @@ const KnowledgeBase = () => {
             <span>
               Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
             </span>
+            {/* Toggle Filter Panel Content Visibility */}
             <Button 
               variant="outline" 
               size="icon" 
-              onClick={() => setIsFilterPanelOpen(prev => !prev)} 
+              onClick={() => setIsFilterPanelContentVisible(prev => !prev)} 
               className="mr-2"
+              title={isFilterPanelContentVisible ? "Minimize Filters" : "Maximize Filters"}
             >
-              <Filter className="h-4 w-4" />
+              {isFilterPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
             <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
               <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
@@ -215,16 +217,27 @@ const KnowledgeBase = () => {
       </div>
 
       {/* 3. Left Panel: Filters (Floating) */}
-      {isFilterPanelOpen && (
-        <Card className="absolute top-20 bottom-4 left-4 w-40 flex flex-col z-20 shadow-xl">
-          <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center">
-              <Filter className="h-4 w-4 mr-2" /> Filters
-            </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setIsFilterPanelOpen(false)} className="h-6 w-6">
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
+      <Card 
+        className={cn(
+          "absolute top-20 left-4 w-40 flex flex-col z-20 shadow-xl transition-all duration-300",
+          isFilterPanelContentVisible ? "bottom-4" : "h-fit"
+        )}
+      >
+        <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
+          <CardTitle className="text-lg flex items-center">
+            <Filter className="h-4 w-4 mr-2" /> Filters
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsFilterPanelContentVisible(prev => !prev)} 
+            className="h-6 w-6"
+            title={isFilterPanelContentVisible ? "Minimize" : "Maximize"}
+          >
+            {isFilterPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </CardHeader>
+        {isFilterPanelContentVisible && (
           <ScrollArea className="flex-grow">
             <CardContent className="p-4 space-y-6">
               
@@ -270,27 +283,38 @@ const KnowledgeBase = () => {
               </div>
             </CardContent>
           </ScrollArea>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* 4. Right Panel: Details (Floating) */}
-      {isDetailsPanelOpen && (
-        <Card className="absolute top-20 bottom-4 right-4 w-80 flex flex-col z-20 shadow-xl">
-          <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center">
-              <Info className="h-4 w-4 mr-2" /> Details
-            </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setIsDetailsPanelOpen(false)} className="h-6 w-6">
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
+      <Card 
+        className={cn(
+          "absolute top-20 right-4 w-80 flex flex-col z-20 shadow-xl transition-all duration-300",
+          isDetailsPanelContentVisible ? "bottom-4" : "h-fit"
+        )}
+      >
+        <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
+          <CardTitle className="text-lg flex items-center">
+            <Info className="h-4 w-4 mr-2" /> Details
+          </CardTitle>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsDetailsPanelContentVisible(prev => !prev)} 
+            className="h-6 w-6"
+            title={isDetailsPanelContentVisible ? "Minimize" : "Maximize"}
+          >
+            {isDetailsPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </CardHeader>
+        {isDetailsPanelContentVisible && (
           <ScrollArea className="flex-grow">
             <CardContent className="p-0">
               <DetailPanel item={selectedItem} />
             </CardContent>
           </ScrollArea>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   );
 };
