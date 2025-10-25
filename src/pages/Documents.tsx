@@ -40,6 +40,7 @@ const Documents = () => {
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
+  const [wasPipelineRunning, setWasPipelineRunning] = useState(false); // State to track transition
 
   const { 
     isPipelineRunning, 
@@ -99,6 +100,7 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
+  // Effect 1: Initial load and workspace change
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
@@ -110,6 +112,24 @@ const Documents = () => {
       setFiles([]);
     }
   }, [currentWorkspace, fetchFiles]);
+
+  // Effect 2: Monitor pipeline status transition (Running -> Not Running)
+  useEffect(() => {
+    if (currentWorkspace) {
+      // Check if the pipeline just finished (was running, now is not running)
+      if (wasPipelineRunning && !isPipelineRunning) {
+        // Pipeline finished, refresh files and status view data
+        fetchFiles(currentWorkspace);
+        // Note: PreprocessStatusTable handles its own refresh on mount/workspace change, 
+        // but a manual refetch here ensures immediate update if the user is on the status tab.
+        // Since PreprocessStatusTable uses its own internal fetch, we rely on the user refreshing that component 
+        // or switching tabs, or we could pass a refetch prop, but for now, let's focus on the button state.
+        toast.success(`Preprocessing completed for workspace: ${currentWorkspace}`);
+      }
+      setWasPipelineRunning(isPipelineRunning);
+    }
+  }, [isPipelineRunning, wasPipelineRunning, currentWorkspace, fetchFiles]);
+
 
   const handleRefresh = async () => {
     // 1. Refresh workspaces and files
