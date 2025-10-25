@@ -1,179 +1,85 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, deleteWorkspace } from "@/database/workspaceStorage";
+import { getWorkspaces } from "@/database/workspaceStorage";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Trash2, Loader2, RefreshCw, ChevronDown } from "lucide-react";
+import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
-import OpenWorkspaceDialog from "./OpenWorkspaceDialog";
-import DeleteConfirmationDialog from "./DeleteConfirmationDialog";
 
-const WorkspaceSelector: React.FC = () => {
+const WorkspaceSelector = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
-  
-  const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
-  const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
-  const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
-
-  const fetchWorkspaces = useCallback(async () => {
-    setIsLoadingWorkspaces(true);
+  const fetchWorkspaces = async () => {
+    setIsLoading(true);
     try {
-      const loadedWorkspaces = await getWorkspaces();
-      setExistingWorkspaces(loadedWorkspaces);
-
-      let newCurrentWorkspace = currentWorkspace;
-
-      if (loadedWorkspaces.length > 0) {
-        // If current workspace is null or no longer exists, default to the first one
-        if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
-          newCurrentWorkspace = loadedWorkspaces[0];
-        }
-      } else {
-        newCurrentWorkspace = null;
+      const list = await getWorkspaces();
+      setWorkspaces(list);
+      
+      // If the current workspace is no longer in the list, clear it
+      if (currentWorkspace && !list.includes(currentWorkspace)) {
+        setCurrentWorkspace(null);
+      }
+      
+      // If no workspace is selected, default to the first one if available
+      if (!currentWorkspace && list.length > 0) {
+        setCurrentWorkspace(list[0]);
       }
 
-      setCurrentWorkspace(newCurrentWorkspace);
-      return true;
     } catch (error) {
-      toast.error("Failed to load workspaces from the API.");
-      console.error(error);
-      return false;
+      console.error("Failed to fetch workspaces:", error);
+      toast.error("Failed to load workspaces.");
     } finally {
-      setIsLoadingWorkspaces(false);
+      setIsLoading(false);
     }
-  }, [currentWorkspace, setCurrentWorkspace]);
+  };
 
   useEffect(() => {
     fetchWorkspaces();
-  }, [fetchWorkspaces]);
+  }, []);
 
-  const handleRefresh = async () => {
-    const success = await fetchWorkspaces();
-    if (success) {
-      toast.info("Workspaces refreshed from API.");
-    }
-  };
-
-  const handleCreateWorkspace = (name: string) => {
-    fetchWorkspaces();
-    setCurrentWorkspace(name);
-    toast.success(`Workspace "${name}" created and opened.`);
-  };
-
-  const handleSelectWorkspace = (workspaceName: string) => {
-    toast.success(`Selected workspace: ${workspaceName}`);
-    setCurrentWorkspace(workspaceName);
-    setIsOpenWorkspaceDialogOpen(false);
-  };
-
-  const handleDeleteWorkspace = async () => {
-    if (!currentWorkspace) return;
-
-    const workspaceToDelete = currentWorkspace;
-    const loadingToastId = toast.loading(`Deleting workspace ${workspaceToDelete}...`);
-
-    try {
-      await deleteWorkspace(workspaceToDelete);
-      toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-
-      setCurrentWorkspace(null);
-      fetchWorkspaces();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
-      toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
-    } finally {
-      setIsDeleteWorkspaceDialogOpen(false);
-    }
+  const handleSelectChange = (value: string) => {
+    setCurrentWorkspace(value);
   };
 
   return (
-    <>
+    <div className="flex items-center space-x-2">
+      <Select value={currentWorkspace || ""} onValueChange={handleSelectChange}>
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Select Workspace" />
+        </SelectTrigger>
+        <SelectContent>
+          {workspaces.length === 0 ? (
+            <SelectItem value="no-workspace" disabled>No Workspaces Found</SelectItem>
+          ) : (
+            workspaces.map(ws => (
+              <SelectItem key={ws} value={ws}>
+                {ws}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
       <div className="flex items-center space-x-2">
-        <Button
+        <Button 
           type="button"
           variant="outline"
           size="icon"
-          onClick={handleRefresh}
-          disabled={isLoadingWorkspaces}
+          onClick={fetchWorkspaces}
+          disabled={isLoading}
+          title="Refresh Workspaces"
         >
-          <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
         </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              type="button" 
-              variant="secondary" 
-              disabled={isLoadingWorkspaces}
-              className="flex items-center space-x-2"
-            >
-              <span className="font-medium">
-                {isLoadingWorkspaces ? "Loading..." : currentWorkspace || "Select Workspace"}
-              </span>
-              <ChevronDown className="h-4 w-4 opacity-50" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
-              + Create New
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
-              Open Existing
-            </DropdownMenuItem>
-
-            {currentWorkspace && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setIsDeleteWorkspaceDialogOpen(true)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Current Workspace
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
-
-      <CreateWorkspaceDialog
-        isOpen={isCreateWorkspaceDialogOpen}
-        onClose={() => setIsCreateWorkspaceDialogOpen(false)}
-        onCreate={handleCreateWorkspace}
-      />
-
-      <OpenWorkspaceDialog
-        isOpen={isOpenWorkspaceDialogOpen}
-        onClose={() => setIsOpenWorkspaceDialogOpen(false)}
-        existingWorkspaces={existingWorkspaces}
-        onSelect={handleSelectWorkspace}
-        currentWorkspace={currentWorkspace}
-      />
-
-      {currentWorkspace && (
-        <DeleteConfirmationDialog
-          isOpen={isDeleteWorkspaceDialogOpen}
-          onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
-          onConfirm={handleDeleteWorkspace}
-          title={`Delete Workspace: ${currentWorkspace}`}
-          description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
-          itemName={currentWorkspace}
-        />
-      )}
-    </>
+    </div>
   );
 };
 
