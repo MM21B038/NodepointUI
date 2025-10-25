@@ -212,12 +212,9 @@ const Documents = () => {
             variant="default"
             onClick={handleStartPreprocess}
             disabled={!currentWorkspace || isProcessing}
-            className={cn(
-              "flex items-center space-x-1",
-              isProcessing && "bg-yellow-500 hover:bg-yellow-600 text-black animate-yellow-blink"
-            )}
+            className="flex items-center space-x-1"
           >
-            {isProcessing ? (
+            {isStartingPreprocess ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Zap className="h-4 w-4" />
