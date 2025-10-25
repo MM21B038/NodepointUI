@@ -203,7 +203,7 @@ const KnowledgeBase = () => {
       </div>
 
       {/* 3. Left Panel: Filters (Floating) */}
-      <Card className="absolute top-[70px] left-4 w-64 max-h-[calc(100%-84px)] flex flex-col z-20 shadow-xl">
+      <Card className="absolute top-20 bottom-4 left-4 w-40 flex flex-col z-20 shadow-xl">
         <CardHeader className="p-4 border-b flex-shrink-0">
           <CardTitle className="text-lg flex items-center">
             <Filter className="h-4 w-4 mr-2" /> Filters
@@ -257,7 +257,7 @@ const KnowledgeBase = () => {
       </Card>
 
       {/* 4. Right Panel: Details (Floating) */}
-      <Card className="absolute top-[70px] right-4 w-80 max-h-[calc(100%-84px)] flex flex-col z-20 shadow-xl">
+      <Card className="absolute top-20 bottom-4 right-4 w-80 flex flex-col z-20 shadow-xl">
         <CardHeader className="p-4 border-b flex-shrink-0">
           <CardTitle className="text-lg flex items-center">
             <Info className="h-4 w-4 mr-2" /> Details
