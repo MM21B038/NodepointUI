@@ -42,9 +42,9 @@ const Documents = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('files');
 
   // Hook call is unconditional
-  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus, startPolling } = usePipelineStatus(currentWorkspace);
+  const { isPipelineRunning, pipelineData, refetch: refetchPipelineStatus } = usePipelineStatus(currentWorkspace);
   
-  // Determine if the button should be disabled and blinking
+  // Determine if the button should be disabled
   const isProcessing = isStartingPreprocess || isPipelineRunning;
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
@@ -105,10 +105,12 @@ const Documents = () => {
   useEffect(() => {
     if (currentWorkspace) {
       fetchFiles(currentWorkspace);
+      // Also refetch pipeline status when workspace changes to update the indicator/button state
+      refetchPipelineStatus(); 
     } else {
       setFiles([]);
     }
-  }, [currentWorkspace, fetchFiles]);
+  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
 
   // Refetch pipeline status when opening the dialog
   useEffect(() => {
@@ -180,15 +182,20 @@ const Documents = () => {
     try {
       const result = await startPreprocess(currentWorkspace);
       
-      // Backend now returns immediately, so we show success and immediately start polling
+      // Backend now returns immediately, so we show success and immediately check status
       toast.success(result.message, { id: loadingToastId });
-      startPolling(); // Start polling immediately to track progress
+      
+      // IMPORTANT: Refetch status immediately after starting the job
+      // This will update isPipelineRunning based on the current state of the backend queue.
+      await refetchPipelineStatus(); 
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
+      // If starting failed, ensure we refetch status to potentially re-enable the button
+      await refetchPipelineStatus(); 
     } finally {
       setIsStartingPreprocess(false);
-      // Note: isPipelineRunning will now control the button state via isProcessing
     }
   };
 
