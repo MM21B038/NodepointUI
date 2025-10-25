@@ -268,7 +268,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <p className="text-sm text-muted-foreground">Source Document: {item.source}</p>
         <Separator />
         <h5 className="font-medium text-sm">Attributes:</h5>
-        <ScrollArea className="h-24 pr-4">
+        <div className="border rounded-md p-3 bg-secondary/50">
           {Object.keys(item.attributes).length > 0 ? (
             <ul className="text-sm space-y-1">
               {Object.entries(item.attributes).map(([key, value]) => (
@@ -280,7 +280,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           ) : (
             <p className="text-xs text-muted-foreground">No specific attributes found.</p>
           )}
-        </ScrollArea>
+        </div>
       </div>
     );
   } else {
