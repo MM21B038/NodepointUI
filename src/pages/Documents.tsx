@@ -26,33 +26,33 @@ import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-type ViewMode = 'files' | 'status';
+type ViewMode = "files" | "status";
 
 const Documents = () => {
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
   const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
   const [isPipelineStatusDialogOpen, setIsPipelineStatusDialogOpen] = useState(false);
-  
+
   const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('files');
+  const [viewMode, setViewMode] = useState<ViewMode>("files");
 
-  // Hook call is unconditional
-  const { 
-    isPipelineRunning, 
-    pipelineData, 
-    isLoading: isLoadingPipelineStatus, 
+  // Hook: it will auto-check when currentWorkspace changes
+  const {
+    isPipelineRunning,
+    pipelineData,
+    isLoading: isLoadingPipelineStatus,
     refetch: refetchPipelineStatus,
-    forceReset // Destructure the new function
+    forceReset,
   } = usePipelineStatus(currentWorkspace);
-  
+
   // Determine if the button should be disabled
-  const isProcessing = isStartingPreprocess || isPipelineRunning;
+  const isProcessing = isStartingPreprocess || Boolean(isPipelineRunning);
 
   const fetchFiles = useCallback(async (workspaceName: string) => {
     setIsLoadingFiles(true);
@@ -72,10 +72,9 @@ const Documents = () => {
     try {
       const loadedWorkspaces = await getWorkspaces();
       setExistingWorkspaces(loadedWorkspaces);
-      
+
       let newCurrentWorkspace = currentWorkspace;
 
-      // Determine the new current workspace
       if (loadedWorkspaces.length > 0) {
         if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
           newCurrentWorkspace = loadedWorkspaces[0];
@@ -83,18 +82,18 @@ const Documents = () => {
       } else {
         newCurrentWorkspace = null;
       }
-      
+
+      // set the workspace - the hook will automatically call checkStatus when workspaceName changes
       setCurrentWorkspace(newCurrentWorkspace);
-      
-      // If a workspace is selected, fetch its files
+
       if (newCurrentWorkspace) {
         await fetchFiles(newCurrentWorkspace);
-        // *** Trigger initial status check after selecting a workspace ***
-        await refetchPipelineStatus(); 
+        // DO NOT call refetchPipelineStatus() here (it may run before the hook sees the new workspace).
+        // The hook's useEffect will run after currentWorkspace updates and fetch status.
       } else {
         setFiles([]);
       }
-      
+
       return true;
     } catch (error) {
       toast.error("Failed to load workspaces from the API.");
@@ -103,55 +102,54 @@ const Documents = () => {
     } finally {
       setIsLoadingWorkspaces(false);
     }
-  }, [currentWorkspace, fetchFiles, refetchPipelineStatus]);
+  }, [currentWorkspace, fetchFiles]);
 
   // Load existing workspaces on mount
   useEffect(() => {
-    fetchWorkspaces();
+    void fetchWorkspaces();
   }, [fetchWorkspaces]);
 
   // Refetch files whenever currentWorkspace changes
   useEffect(() => {
     if (currentWorkspace) {
-      fetchFiles(currentWorkspace);
+      void fetchFiles(currentWorkspace);
     } else {
       setFiles([]);
     }
   }, [currentWorkspace, fetchFiles]);
-
 
   const handleRefresh = async () => {
     const success = await fetchWorkspaces();
     if (success) {
       toast.info("Workspaces refreshed from API.");
     }
-    
-    // Manually refresh pipeline status to ensure button state is correct
+
+    // After user asks for refresh, explicitly refetch status for the current workspace (hook's refetch accepts an override)
     if (currentWorkspace) {
-      refetchPipelineStatus();
+      void refetchPipelineStatus(currentWorkspace);
     }
   };
 
   const handleCreateWorkspace = (name: string) => {
-    // We rely on fetchWorkspaces to set currentWorkspace and trigger the initial status check
-    fetchWorkspaces();
-    setCurrentWorkspace(name); 
+    // create logic elsewhere will persist workspace; re-fetch list and set selected
+    void fetchWorkspaces();
+    setCurrentWorkspace(name);
     toast.success(`Workspace "${name}" created and opened.`);
   };
 
   const handleSelectWorkspace = (workspaceName: string) => {
+    // simply set workspace: hook will fetch status automatically
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
-    fetchWorkspaces();
   };
 
   const handleUploadSuccess = () => {
     if (currentWorkspace) {
-      fetchFiles(currentWorkspace);
+      void fetchFiles(currentWorkspace);
     }
   };
-  
+
   const handleDeleteWorkspace = async () => {
     if (!currentWorkspace) return;
 
@@ -161,9 +159,9 @@ const Documents = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-      
+
       setCurrentWorkspace(null);
-      fetchWorkspaces();
+      void fetchWorkspaces();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
       toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
@@ -171,31 +169,30 @@ const Documents = () => {
       setIsDeleteWorkspaceDialogOpen(false);
     }
   };
-  
+
   const handleStartPreprocess = async () => {
     if (!currentWorkspace) {
       toast.error("Please select a workspace first.");
       return;
     }
-    
+
     setIsStartingPreprocess(true);
     const loadingToastId = toast.loading(`Starting preprocessing for ${currentWorkspace}...`);
 
     try {
       const result = await startPreprocess(currentWorkspace);
-      
-      // Backend now returns immediately, so we show success and immediately check status
+
       toast.success(result.message, { id: loadingToastId });
-      
-      // IMPORTANT: Refetch status immediately after starting the job
-      // This will update isPipelineRunning based on the current state of the backend queue.
-      await refetchPipelineStatus(); 
-      
+
+      // Immediately refetch to pick up queue/running status (pass override to avoid stale closure)
+      await refetchPipelineStatus(currentWorkspace);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
       toast.error(`Preprocessing failed: ${errorMessage}`, { id: loadingToastId });
-      // If starting failed, ensure we refetch status to potentially re-enable the button
-      await refetchPipelineStatus(); 
+
+      if (currentWorkspace) {
+        await refetchPipelineStatus(currentWorkspace);
+      }
     } finally {
       setIsStartingPreprocess(false);
     }
@@ -204,12 +201,9 @@ const Documents = () => {
   const handleOpenPipelineStatus = () => {
     setIsPipelineStatusDialogOpen(true);
   };
-  
+
   const handleClearPipelineStatus = () => {
     if (!currentWorkspace) return;
-    
-    // Use the exposed forceReset function to immediately clear the running state 
-    // and trigger a fresh API check.
     forceReset();
     toast.info("Pipeline status reset initiated. Checking API for current status...");
   };
@@ -229,19 +223,16 @@ const Documents = () => {
 
   const renderStartPreprocessButton = () => {
     const tooltipMessage = getDisabledTooltipMessage();
-    
+
     const button = (
       <Button
+        type="button"
         variant="default"
         onClick={handleStartPreprocess}
         disabled={!currentWorkspace || isProcessing}
         className="flex items-center space-x-1"
       >
-        {isStartingPreprocess ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Zap className="h-4 w-4" />
-        )}
+        {isStartingPreprocess ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
         <span>Start Preprocess</span>
       </Button>
     );
@@ -250,7 +241,7 @@ const Documents = () => {
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* We wrap the button in a div when disabled to ensure the tooltip works */}
+            {/* wrap to ensure tooltip works even when the button is disabled */}
             <div>{button}</div>
           </TooltipTrigger>
           <TooltipContent>
@@ -267,55 +258,39 @@ const Documents = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <h2 className="text-3xl font-semibold">
-            Workspace {currentWorkspace && `(${currentWorkspace})`}
-          </h2>
-          {/* Display the status indicator if a workspace is selected */}
+          <h2 className="text-3xl font-semibold">Workspace {currentWorkspace && `(${currentWorkspace})`}</h2>
           {currentWorkspace && (
-            <PipelineStatusIndicator
-              isPipelineRunning={isPipelineRunning}
-              onClick={handleOpenPipelineStatus}
-            />
+            <PipelineStatusIndicator isPipelineRunning={isPipelineRunning} onClick={handleOpenPipelineStatus} />
           )}
         </div>
-        
+
         <div className="flex items-center space-x-4">
-          <FileUpload 
-            workspaceName={currentWorkspace} 
-            onUploadSuccess={handleUploadSuccess} 
-          />
+          <FileUpload workspaceName={currentWorkspace} onUploadSuccess={handleUploadSuccess} />
           {renderStartPreprocessButton()}
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
+          <Button type="button" variant="outline" size="icon" onClick={handleRefresh} disabled={isLoadingWorkspaces}>
             <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={isLoadingWorkspaces}>Workspace</Button>
+              <Button type="button" variant="outline" disabled={isLoadingWorkspaces}>
+                Workspace
+              </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
-                + Create New
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
-                Open Existing
-              </DropdownMenuItem>
-              
+              <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>+ Create New</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>Open Existing</DropdownMenuItem>
+
               {currentWorkspace && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => setIsDeleteWorkspaceDialogOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Current Workspace
+                  <DropdownMenuItem onClick={() => setIsDeleteWorkspaceDialogOpen(true)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete Current Workspace
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={handleClearPipelineStatus}
-                    disabled={!isPipelineRunning}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Clear Pipeline Status
+
+                  <DropdownMenuItem onClick={handleClearPipelineStatus} disabled={!isPipelineRunning}>
+                    <XCircle className="h-4 w-4 mr-2" /> Clear Pipeline Status
                   </DropdownMenuItem>
                 </>
               )}
@@ -324,15 +299,10 @@ const Documents = () => {
         </div>
       </div>
 
-      {/* View Toggle */}
+      {/* View toggle & content... (unchanged) */}
       {currentWorkspace && (
         <div className="flex justify-end">
-          <ToggleGroup 
-            type="single" 
-            value={viewMode} 
-            onValueChange={(value: ViewMode) => value && setViewMode(value)}
-            className="border rounded-md"
-          >
+          <ToggleGroup type="single" value={viewMode} onValueChange={(value: ViewMode) => value && setViewMode(value)} className="border rounded-md">
             <ToggleGroupItem value="files" aria-label="Toggle files view">
               Files
             </ToggleGroupItem>
@@ -349,7 +319,7 @@ const Documents = () => {
             <p className="text-muted-foreground">Loading workspaces...</p>
           </div>
         ) : currentWorkspace ? (
-          viewMode === 'files' ? (
+          viewMode === "files" ? (
             <div className="space-y-4">
               <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
               {isLoadingFiles ? (
@@ -360,10 +330,10 @@ const Documents = () => {
                 <ScrollArea className="h-64">
                   <ul className="space-y-2">
                     {files.map((file) => (
-                      <FileListItem 
-                        key={file} 
-                        fileName={file} 
-                        workspaceName={currentWorkspace} 
+                      <FileListItem
+                        key={file}
+                        fileName={file}
+                        workspaceName={currentWorkspace}
                         onDeleteSuccess={() => fetchFiles(currentWorkspace)}
                       />
                     ))}
@@ -371,9 +341,7 @@ const Documents = () => {
                 </ScrollArea>
               ) : (
                 <div className="flex items-center justify-center h-48">
-                  <p className="text-muted-foreground">
-                    No documents found in this workspace. Upload one to get started!
-                  </p>
+                  <p className="text-muted-foreground">No documents found in this workspace. Upload one to get started!</p>
                 </div>
               )}
             </div>
@@ -382,49 +350,19 @@ const Documents = () => {
           )
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">
-              Please create or open a workspace to view documents.
-            </p>
+            <p className="text-muted-foreground">Please create or open a workspace to view documents.</p>
           </div>
         )}
       </div>
 
-      <CreateWorkspaceDialog
-        isOpen={isCreateWorkspaceDialogOpen}
-        onClose={() => setIsCreateWorkspaceDialogOpen(false)}
-        onCreate={handleCreateWorkspace}
-      />
-      
-      <OpenWorkspaceDialog
-        isOpen={isOpenWorkspaceDialogOpen}
-        onClose={() => setIsOpenWorkspaceDialogOpen(false)}
-        existingWorkspaces={existingWorkspaces}
-        onSelect={handleSelectWorkspace}
-        currentWorkspace={currentWorkspace}
-      />
-      
+      <CreateWorkspaceDialog isOpen={isCreateWorkspaceDialogOpen} onClose={() => setIsCreateWorkspaceDialogOpen(false)} onCreate={handleCreateWorkspace} />
+
+      <OpenWorkspaceDialog isOpen={isOpenWorkspaceDialogOpen} onClose={() => setIsOpenWorkspaceDialogOpen(false)} existingWorkspaces={existingWorkspaces} onSelect={handleSelectWorkspace} currentWorkspace={currentWorkspace} />
+
       {currentWorkspace && (
         <>
-          <DeleteConfirmationDialog
-            isOpen={isDeleteWorkspaceDialogOpen}
-            onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
-            onConfirm={handleDeleteWorkspace}
-            title={`Delete Workspace: ${currentWorkspace}`}
-            description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
-            itemName={currentWorkspace}
-          />
-          <PipelineStatusDialog
-            isOpen={isPipelineStatusDialogOpen}
-            onClose={() => {
-              setIsPipelineStatusDialogOpen(false);
-              // Manually refresh status when closing the dialog, as the user likely checked completion
-              if (currentWorkspace) {
-                refetchPipelineStatus();
-              }
-            }}
-            data={pipelineData}
-            isLoading={isLoadingPipelineStatus}
-          />
+          <DeleteConfirmationDialog isOpen={isDeleteWorkspaceDialogOpen} onClose={() => setIsDeleteWorkspaceDialogOpen(false)} onConfirm={handleDeleteWorkspace} title={`Delete Workspace: ${currentWorkspace}`} description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`} itemName={currentWorkspace} />
+          <PipelineStatusDialog isOpen={isPipelineStatusDialogOpen} onClose={() => { setIsPipelineStatusDialogOpen(false); if (currentWorkspace) void refetchPipelineStatus(currentWorkspace); }} data={pipelineData} isLoading={isLoadingPipelineStatus} />
         </>
       )}
     </div>
