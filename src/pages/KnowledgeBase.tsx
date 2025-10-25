@@ -39,6 +39,10 @@ const KnowledgeBase = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
+  // Panel visibility state
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(true);
+  const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(true);
+
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
@@ -195,6 +199,14 @@ const KnowledgeBase = () => {
             <span>
               Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
             </span>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => setIsFilterPanelOpen(prev => !prev)} 
+              className="mr-2"
+            >
+              <Filter className="h-4 w-4" />
+            </Button>
             <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
               <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
             </Button>
@@ -203,72 +215,82 @@ const KnowledgeBase = () => {
       </div>
 
       {/* 3. Left Panel: Filters (Floating) */}
-      <Card className="absolute top-20 bottom-4 left-4 w-40 flex flex-col z-20 shadow-xl">
-        <CardHeader className="p-4 border-b flex-shrink-0">
-          <CardTitle className="text-lg flex items-center">
-            <Filter className="h-4 w-4 mr-2" /> Filters
-          </CardTitle>
-        </CardHeader>
-        <ScrollArea className="flex-grow">
-          <CardContent className="p-4 space-y-6">
-            
-            {/* Node Type Filter */}
-            <div>
-              <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
-              <div className="space-y-2">
-                {uniqueTypes.map(type => (
-                  <div key={type} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`type-${type}`}
-                      checked={selectedTypes.has(type)}
-                      onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                    />
-                    <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
-                      <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
-                      {type}
-                    </Label>
-                  </div>
-                ))}
+      {isFilterPanelOpen && (
+        <Card className="absolute top-20 bottom-4 left-4 w-40 flex flex-col z-20 shadow-xl">
+          <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center">
+              <Filter className="h-4 w-4 mr-2" /> Filters
+            </CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setIsFilterPanelOpen(false)} className="h-6 w-6">
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <ScrollArea className="flex-grow">
+            <CardContent className="p-4 space-y-6">
+              
+              {/* Node Type Filter */}
+              <div>
+                <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
+                <div className="space-y-2">
+                  {uniqueTypes.map(type => (
+                    <div key={type} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`type-${type}`}
+                        checked={selectedTypes.has(type)}
+                        onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                      />
+                      <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
+                        <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
+                        {type}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <Separator />
+              <Separator />
 
-            {/* Source Filter */}
-            <div>
-              <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
-              <div className="space-y-2">
-                {uniqueSources.map(source => (
-                  <div key={source} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`source-${source}`}
-                      checked={selectedSources.has(source)}
-                      onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
-                    />
-                    <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer max-w-[150px] truncate">
-                      {source}
-                    </Label>
-                  </div>
-                ))}
+              {/* Source Filter */}
+              <div>
+                <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
+                <div className="space-y-2">
+                  {uniqueSources.map(source => (
+                    <div key={source} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`source-${source}`}
+                        checked={selectedSources.has(source)}
+                        onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
+                      />
+                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer max-w-[150px] truncate">
+                        {source}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </ScrollArea>
-      </Card>
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      )}
 
       {/* 4. Right Panel: Details (Floating) */}
-      <Card className="absolute top-20 bottom-4 right-4 w-80 flex flex-col z-20 shadow-xl">
-        <CardHeader className="p-4 border-b flex-shrink-0">
-          <CardTitle className="text-lg flex items-center">
-            <Info className="h-4 w-4 mr-2" /> Details
-          </CardTitle>
-        </CardHeader>
-        <ScrollArea className="flex-grow">
-          <CardContent className="p-0">
-            <DetailPanel item={selectedItem} />
-          </CardContent>
-        </ScrollArea>
-      </Card>
+      {isDetailsPanelOpen && (
+        <Card className="absolute top-20 bottom-4 right-4 w-80 flex flex-col z-20 shadow-xl">
+          <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center">
+              <Info className="h-4 w-4 mr-2" /> Details
+            </CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setIsDetailsPanelOpen(false)} className="h-6 w-6">
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <ScrollArea className="flex-grow">
+            <CardContent className="p-0">
+              <DetailPanel item={selectedItem} />
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      )}
     </div>
   );
 };
