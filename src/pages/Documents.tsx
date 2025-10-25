@@ -110,23 +110,8 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
-  // Polling effect for pipeline status when viewing the status page
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    if (currentWorkspace && viewMode === 'status') {
-      // Start polling every 5 seconds
-      intervalId = setInterval(() => {
-        refetchPipelineStatus();
-      }, 5000);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [currentWorkspace, viewMode, refetchPipelineStatus]);
+  // Removed Polling effect for pipeline status. Status is now only updated manually.
+  // useEffect(() => { ... }, [currentWorkspace, viewMode, refetchPipelineStatus]);
 
 
   const handleRefresh = async () => {
