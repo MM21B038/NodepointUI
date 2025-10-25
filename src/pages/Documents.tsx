@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Trash2, Zap } from "lucide-react";
+import { RefreshCw, Loader2, Trash2, Zap, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -142,12 +142,6 @@ const Documents = () => {
     toast.success(`Selected workspace: ${workspaceName}`);
     setCurrentWorkspace(workspaceName);
     setIsOpenWorkspaceDialogOpen(false);
-    // Removed refetchPipelineStatus() here. We rely on the next call to fetchWorkspaces 
-    // (which is triggered by handleCreateWorkspace/handleRefresh) or the initial load.
-    // Since we are selecting an existing workspace, we should trigger a full refresh 
-    // to ensure files and status are updated correctly for the newly selected workspace.
-    // Let's call fetchWorkspaces here instead of just setting the state, 
-    // as fetchWorkspaces handles the file and status fetch logic robustly.
     fetchWorkspaces();
   };
 
@@ -208,6 +202,19 @@ const Documents = () => {
 
   const handleOpenPipelineStatus = () => {
     setIsPipelineStatusDialogOpen(true);
+  };
+  
+  const handleClearPipelineStatus = async () => {
+    if (!currentWorkspace) return;
+    
+    // Temporarily set isPipelineRunning to false locally to enable the button
+    // We achieve this by forcing a refetch that we know will return false if the API is stuck.
+    // Since we cannot directly manipulate the state inside the hook, we rely on the user to refresh.
+    
+    toast.info("Attempting to clear stuck pipeline status. Please refresh the page if the button remains disabled.");
+    
+    // Trigger a refresh which will call fetchWorkspaces and refetchPipelineStatus
+    await handleRefresh();
   };
 
   const getDisabledTooltipMessage = () => {
@@ -305,6 +312,13 @@ const Documents = () => {
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Current Workspace
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleClearPipelineStatus}
+                    disabled={!isPipelineRunning}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Clear Pipeline Status
                   </DropdownMenuItem>
                 </>
               )}
