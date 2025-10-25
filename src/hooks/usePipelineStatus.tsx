@@ -49,9 +49,9 @@ export function usePipelineStatus(workspaceName: string | null) {
   // Effect 1: Initial check when workspace changes
   useEffect(() => {
     if (workspaceName) {
-      // Reset states when workspace changes and perform initial check
-      setIsPipelineRunning(false);
-      setForcePolling(false); // Ensure forcePolling is reset here
+      // Ensure forcePolling is reset on workspace change
+      setForcePolling(false); 
+      // Perform initial check to determine if pipeline is running
       checkStatus();
     } else {
       setIsPipelineRunning(false);
