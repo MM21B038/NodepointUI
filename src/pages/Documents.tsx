@@ -1,23 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Trash2, Zap } from "lucide-react";
+import { RefreshCw, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import CreateWorkspaceDialog from "@/components/CreateWorkspaceDialog";
-import OpenWorkspaceDialog from "@/components/OpenWorkspaceDialog";
 import FileUpload from "@/components/FileUpload";
 import FileListItem from "@/components/FileListItem";
-import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
-import { getWorkspaces, listFiles, deleteWorkspace, startPreprocess } from "@/database/workspaceStorage";
+import { listFiles, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -25,15 +15,9 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 type ViewMode = 'files' | 'status';
 
 const Documents = () => {
-  const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
+  const { currentWorkspace } = useWorkspace();
   
-  const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
-  const [isOpenWorkspaceDialogOpen, setIsOpenWorkspaceDialogOpen] = useState(false);
-  const [isDeleteWorkspaceDialogOpen, setIsDeleteWorkspaceDialogOpen] = useState(false);
-
-  const [existingWorkspaces, setExistingWorkspaces] = useState<string[]>([]);
   const [files, setFiles] = useState<string[]>([]);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isStartingPreprocess, setIsStartingPreprocess] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('files');
@@ -53,44 +37,6 @@ const Documents = () => {
     }
   }, []);
 
-  const fetchWorkspaces = useCallback(async () => {
-    setIsLoadingWorkspaces(true);
-    try {
-      const loadedWorkspaces = await getWorkspaces();
-      setExistingWorkspaces(loadedWorkspaces);
-
-      let newCurrentWorkspace = currentWorkspace;
-
-      if (loadedWorkspaces.length > 0) {
-        if (currentWorkspace === null || !loadedWorkspaces.includes(currentWorkspace)) {
-          newCurrentWorkspace = loadedWorkspaces[0];
-        }
-      } else {
-        newCurrentWorkspace = null;
-      }
-
-      setCurrentWorkspace(newCurrentWorkspace);
-
-      if (newCurrentWorkspace) {
-        await fetchFiles(newCurrentWorkspace);
-      } else {
-        setFiles([]);
-      }
-
-      return true;
-    } catch (error) {
-      toast.error("Failed to load workspaces from the API.");
-      console.error(error);
-      return false;
-    } finally {
-      setIsLoadingWorkspaces(false);
-    }
-  }, [currentWorkspace, fetchFiles, setCurrentWorkspace]);
-
-  useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
-
   useEffect(() => {
     if (currentWorkspace) {
       fetchFiles(currentWorkspace);
@@ -99,48 +45,9 @@ const Documents = () => {
     }
   }, [currentWorkspace, fetchFiles]);
 
-  const handleRefresh = async () => {
-    const success = await fetchWorkspaces();
-    if (success) {
-      toast.info("Workspaces refreshed from API.");
-    }
-  };
-
-  const handleCreateWorkspace = (name: string) => {
-    fetchWorkspaces();
-    setCurrentWorkspace(name);
-    toast.success(`Workspace "${name}" created and opened.`);
-  };
-
-  const handleSelectWorkspace = (workspaceName: string) => {
-    toast.success(`Selected workspace: ${workspaceName}`);
-    setCurrentWorkspace(workspaceName);
-    setIsOpenWorkspaceDialogOpen(false);
-  };
-
   const handleUploadSuccess = () => {
     if (currentWorkspace) {
       fetchFiles(currentWorkspace);
-    }
-  };
-
-  const handleDeleteWorkspace = async () => {
-    if (!currentWorkspace) return;
-
-    const workspaceToDelete = currentWorkspace;
-    const loadingToastId = toast.loading(`Deleting workspace ${workspaceToDelete}...`);
-
-    try {
-      await deleteWorkspace(workspaceToDelete);
-      toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-
-      setCurrentWorkspace(null);
-      fetchWorkspaces();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
-      toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
-    } finally {
-      setIsDeleteWorkspaceDialogOpen(false);
     }
   };
 
@@ -158,6 +65,7 @@ const Documents = () => {
 
       // Backend returns immediately; show success.
       toast.success(result.message, { id: loadingToastId });
+      setViewMode('status'); // Switch to status view after starting preprocess
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during preprocessing.";
@@ -167,14 +75,19 @@ const Documents = () => {
     }
   };
 
+  const handleRefreshFiles = () => {
+    if (currentWorkspace) {
+      fetchFiles(currentWorkspace);
+      toast.info("File list refreshed.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <h2 className="text-3xl font-semibold">
-            Workspace {currentWorkspace && `(${currentWorkspace})`}
-          </h2>
-        </div>
+        <h2 className="text-3xl font-semibold">
+          Documents {currentWorkspace && `(${currentWorkspace})`}
+        </h2>
 
         <div className="flex items-center space-x-4">
           <FileUpload
@@ -196,48 +109,11 @@ const Documents = () => {
             )}
             <span>Start Preprocess</span>
           </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={isLoadingWorkspaces}
-          >
-            <RefreshCw className={isLoadingWorkspaces ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" disabled={isLoadingWorkspaces}>Workspace</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsCreateWorkspaceDialogOpen(true)}>
-                + Create New
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsOpenWorkspaceDialogOpen(true)}>
-                Open Existing
-              </DropdownMenuItem>
-
-              {currentWorkspace && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setIsDeleteWorkspaceDialogOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Current Workspace
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
       {currentWorkspace && (
-        <div className="flex justify-end">
+        <div className="flex justify-between items-center">
           <ToggleGroup
             type="single"
             value={viewMode}
@@ -251,79 +127,60 @@ const Documents = () => {
               Status Page
             </ToggleGroupItem>
           </ToggleGroup>
+          
+          {viewMode === 'files' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleRefreshFiles}
+              disabled={isLoadingFiles}
+            >
+              <RefreshCw className={isLoadingFiles ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            </Button>
+          )}
         </div>
       )}
 
       <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px]">
-        {isLoadingWorkspaces ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Loading workspaces...</p>
-          </div>
-        ) : currentWorkspace ? (
-          viewMode === 'files' ? (
-            <div className="space-y-4">
-              <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
-              {isLoadingFiles ? (
-                <div className="flex items-center justify-center h-48">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : files.length > 0 ? (
-                <ScrollArea className="h-64">
-                  <ul className="space-y-2">
-                    {files.map((file) => (
-                      <FileListItem
-                        key={file}
-                        fileName={file}
-                        workspaceName={currentWorkspace}
-                        onDeleteSuccess={() => fetchFiles(currentWorkspace)}
-                      />
-                    ))}
-                  </ul>
-                </ScrollArea>
-              ) : (
-                <div className="flex items-center justify-center h-48">
-                  <p className="text-muted-foreground">
-                    No documents found in this workspace. Upload one to get started!
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <PreprocessStatusTable workspaceName={currentWorkspace} />
-          )
-        ) : (
+        {!currentWorkspace ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">
-              Please create or open a workspace to view documents.
+              Please select a workspace using the selector in the navigation bar.
             </p>
           </div>
+        ) : viewMode === 'files' ? (
+          <div className="space-y-4">
+            <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
+            {isLoadingFiles ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : files.length > 0 ? (
+              <ScrollArea className="h-64">
+                <ul className="space-y-2">
+                  {files.map((file) => (
+                    <FileListItem
+                      key={file}
+                      fileName={file}
+                      workspaceName={currentWorkspace}
+                      onDeleteSuccess={() => fetchFiles(currentWorkspace)}
+                    />
+                  ))}
+                </ul>
+              </ScrollArea>
+            ) : (
+              <div className="flex items-center justify-center h-48">
+                <p className="text-muted-foreground">
+                  No documents found in this workspace. Upload one to get started!
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <PreprocessStatusTable workspaceName={currentWorkspace} />
         )}
       </div>
-
-      <CreateWorkspaceDialog
-        isOpen={isCreateWorkspaceDialogOpen}
-        onClose={() => setIsCreateWorkspaceDialogOpen(false)}
-        onCreate={handleCreateWorkspace}
-      />
-
-      <OpenWorkspaceDialog
-        isOpen={isOpenWorkspaceDialogOpen}
-        onClose={() => setIsOpenWorkspaceDialogOpen(false)}
-        existingWorkspaces={existingWorkspaces}
-        onSelect={handleSelectWorkspace}
-        currentWorkspace={currentWorkspace}
-      />
-
-      {currentWorkspace && (
-        <DeleteConfirmationDialog
-          isOpen={isDeleteWorkspaceDialogOpen}
-          onClose={() => setIsDeleteWorkspaceDialogOpen(false)}
-          onConfirm={handleDeleteWorkspace}
-          title={`Delete Workspace: ${currentWorkspace}`}
-          description={`This action will permanently delete the entire workspace "${currentWorkspace}" and all its associated files. This action cannot be undone.`}
-          itemName={currentWorkspace}
-        />
-      )}
     </div>
   );
 };
