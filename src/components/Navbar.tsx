@@ -8,18 +8,19 @@ import ThemeSwitcher from "./ThemeSwitcher";
 
 const Navbar = () => {
   return (
-    <nav className="bg-primary text-primary-foreground p-4 shadow-md">
+    <nav className="bg-[--nav-background] text-[--nav-foreground] p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
         <h1 className="text-2xl font-bold">My App</h1>
         <div className="flex items-center space-x-6">
           <div className="space-x-4">
-            <Button asChild variant="ghost" className="text-primary-foreground hover:bg-primary/80">
+            {/* Buttons now use ghost variant with hover colors adjusted for the new nav background */}
+            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
               <Link to="/documents">Documents</Link>
             </Button>
-            <Button asChild variant="ghost" className="text-primary-foreground hover:bg-primary/80">
+            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
               <Link to="/knowledge-base">Knowledge Base</Link>
             </Button>
-            <Button asChild variant="ghost" className="text-primary-foreground hover:bg-primary/80">
+            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
               <Link to="/ask">Ask</Link>
             </Button>
           </div>
