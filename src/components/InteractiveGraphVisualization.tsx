@@ -8,7 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Simple color mapping for node types (Tailwind classes) - Used by React components (DetailPanel)
+// --- Color Mapping for React Components (DetailPanel) ---
+// This is kept simple for Tailwind classes in the React UI
 const TYPE_COLORS: Record<string, string> = {
   'Person': 'bg-blue-500',
   'Organization': 'bg-green-500',
@@ -20,18 +21,17 @@ const TYPE_COLORS: Record<string, string> = {
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
-// D3 specific colors (Hex codes) for SVG fill and stroke attributes (Vibrant RGB look)
-const D3_COLOR_GRADES: Record<string, { fill: string, stroke: string }> = {
-  // Fill is a vibrant color, stroke is a darker, contrasting shade for definition
-  'Person': { fill: '#3b82f6', stroke: '#1e40af' }, // Blue
-  'Organization': { fill: '#10b981', stroke: '#065f46' }, // Emerald Green
-  'Concept': { fill: '#a855f7', stroke: '#6b21a8' }, // Purple
-  'Date': { fill: '#f59e0b', stroke: '#b45309' }, // Amber/Orange
-  'Location': { fill: '#ef4444', stroke: '#991b1b' }, // Red
-  'default': { fill: '#9ca3af', stroke: '#4b5563' }, // Gray
-};
+// --- D3 Color Scale for Visualization ---
+// Use d3.scaleOrdinal with d3.schemeCategory10 for up to 10 distinct colors, cycling if needed.
+const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
-const getNodeD3Colors = (type: string) => D3_COLOR_GRADES[type] || D3_COLOR_GRADES['default'];
+// Function to get D3 colors based on node type
+const getNodeD3Colors = (type: string) => {
+  const fill = colorScale(type);
+  // Calculate a darker stroke color for contrast
+  const stroke = d3.color(fill)?.darker(1.5).toString() || '#000000';
+  return { fill, stroke };
+};
 
 
 interface InteractiveGraphVisualizationProps {
@@ -162,8 +162,8 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("fill", d => getNodeD3Colors(d.type).fill) // Use vibrant RGB fill color
-      .attr("stroke", d => getNodeD3Colors(d.type).stroke) // Use darker RGB stroke color
+      .attr("fill", d => getNodeD3Colors(d.type).fill) // Use dynamic fill color
+      .attr("stroke", d => getNodeD3Colors(d.type).stroke) // Use dynamic darker stroke color
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
@@ -295,6 +295,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
     return (
       <div className="p-4 space-y-3">
         <div className="flex items-center space-x-2">
+          {/* Note: DetailPanel still uses the simple Tailwind color mapping */}
           <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
           {/* Ensure node label wraps aggressively */}
           <h4 className="text-lg font-semibold break-words flex-1 min-w-0">{item.label}</h4>
