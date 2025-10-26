@@ -23,7 +23,7 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   return Array.from(new Set(values)).sort();
 };
 
-// Simple color mapping for node types (Tailwind classes)
+// Simple color mapping for node types (Tailwind classes) - KEPT FOR VISUALIZATION/DETAIL PANEL
 const TYPE_COLORS: Record<string, string> = {
   'Person': 'bg-blue-500',
   'Organization': 'bg-green-500',
@@ -32,6 +32,7 @@ const TYPE_COLORS: Record<string, string> = {
   'Location': 'bg-red-500',
 };
 
+// Utility function to get the color class (used by visualization and detail panel)
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || 'bg-gray-400';
 
 
@@ -130,7 +131,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
         <p className="text-lg text-muted-foreground">Loading Knowledge Graph...</p>
       </div>
@@ -139,7 +140,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 text-center p-4">
+      <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <X className="h-10 w-10 text-destructive mb-4" />
         <h3 className="text-xl font-semibold text-destructive">Error Loading Graph</h3>
         <p className="text-muted-foreground mt-2">{error}</p>
@@ -150,7 +151,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 text-center p-4">
+      <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <h3 className="text-xl font-semibold">No Knowledge Graph Data</h3>
         <p className="text-muted-foreground mt-2">
           No entities or relationships found for workspace "{workspaceName}". Ensure documents have been uploaded and processed.
@@ -160,9 +161,9 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   }
 
   return (
-    <div className="flex h-[70vh] space-x-4">
+    <div className="flex h-full space-x-4">
       {/* Left Sidebar: Filters */}
-      <Card className="w-64 flex-shrink-0 overflow-y-auto">
+      <Card className="w-64 flex-shrink-0 overflow-y-auto h-full">
         <CardHeader className="p-4 border-b">
           <CardTitle className="text-lg flex items-center">
             <Filter className="h-4 w-4 mr-2" /> Filters
@@ -181,8 +182,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                     checked={selectedTypes.has(type)}
                     onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
                   />
-                  <Label htmlFor={`type-${type}`} className="flex items-center text-sm font-normal cursor-pointer">
-                    <span className={cn("h-3 w-3 rounded-full mr-2", getNodeColorClass(type))}></span>
+                  <Label htmlFor={`type-${type}`} className="text-sm font-normal cursor-pointer">
                     {type}
                   </Label>
                 </div>
@@ -216,8 +216,20 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
       </Card>
 
       {/* Right Content: Visualization and Summary */}
-      <div className="flex-grow flex flex-col space-y-4">
-        <Card className="flex-grow flex flex-col">
+      <div className="flex-grow flex flex-col space-y-4 h-full">
+        
+        {/* Detail Box - Fixed height, top of the right column */}
+        <Card className="h-40 flex-shrink-0 relative z-10">
+          <CardHeader className="p-4 border-b">
+            <CardTitle className="text-lg">Details</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DetailPanel item={selectedItem} />
+          </CardContent>
+        </Card>
+
+        {/* Graph Visualization - Takes remaining height */}
+        <Card className="flex-grow flex flex-col min-h-0">
           <CardHeader className="p-4 border-b flex flex-row justify-between items-center">
             <div>
               <CardTitle className="text-lg">
@@ -231,23 +243,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
             </Button>
           </CardHeader>
-          <CardContent className="p-4 flex-grow h-[50vh]">
+          <CardContent className="p-4 flex-grow min-h-0">
             <InteractiveGraphVisualization 
               nodes={filteredNodes} 
               edges={filteredEdges} 
               onSelect={setSelectedItem}
               selectedItem={selectedItem}
             />
-          </CardContent>
-        </Card>
-        
-        {/* Detail Box */}
-        <Card className="h-40 flex-shrink-0">
-          <CardHeader className="p-4 border-b">
-            <CardTitle className="text-lg">Details</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <DetailPanel item={selectedItem} />
           </CardContent>
         </Card>
       </div>
