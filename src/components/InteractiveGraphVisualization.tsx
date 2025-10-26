@@ -20,14 +20,15 @@ const TYPE_COLORS: Record<string, string> = {
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
-// D3 specific colors (Hex codes) for SVG fill and stroke attributes (Graded look)
+// D3 specific colors (Hex codes) for SVG fill and stroke attributes (Vibrant RGB look)
 const D3_COLOR_GRADES: Record<string, { fill: string, stroke: string }> = {
-  'Person': { fill: '#60a5fa', stroke: '#1d4ed8' }, // Blue (400/700)
-  'Organization': { fill: '#34d399', stroke: '#047857' }, // Green (400/700)
-  'Concept': { fill: '#c084fc', stroke: '#7e22ce' }, // Purple (400/700)
-  'Date': { fill: '#fbbf24', stroke: '#b45309' }, // Amber/Yellow (400/700)
-  'Location': { fill: '#f87171', stroke: '#b91c1c' }, // Red (400/700)
-  'default': { fill: '#d1d5db', stroke: '#6b7280' }, // Gray (300/600)
+  // Fill is a vibrant color, stroke is a darker, contrasting shade for definition
+  'Person': { fill: '#3b82f6', stroke: '#1e40af' }, // Blue
+  'Organization': { fill: '#10b981', stroke: '#065f46' }, // Emerald Green
+  'Concept': { fill: '#a855f7', stroke: '#6b21a8' }, // Purple
+  'Date': { fill: '#f59e0b', stroke: '#b45309' }, // Amber/Orange
+  'Location': { fill: '#ef4444', stroke: '#991b1b' }, // Red
+  'default': { fill: '#9ca3af', stroke: '#4b5563' }, // Gray
 };
 
 const getNodeD3Colors = (type: string) => D3_COLOR_GRADES[type] || D3_COLOR_GRADES['default'];
@@ -161,8 +162,8 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("fill", d => getNodeD3Colors(d.type).fill) // Use graded fill color
-      .attr("stroke", d => getNodeD3Colors(d.type).stroke) // Use graded stroke color
+      .attr("fill", d => getNodeD3Colors(d.type).fill) // Use vibrant RGB fill color
+      .attr("stroke", d => getNodeD3Colors(d.type).stroke) // Use darker RGB stroke color
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
