@@ -22,14 +22,15 @@ const TYPE_COLORS: Record<string, string> = {
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
 // --- D3 Color Scale for Visualization ---
-// Use d3.scaleOrdinal with d3.schemeCategory10 for up to 10 distinct colors, cycling if needed.
-const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+// Using d3.schemeSet3 which provides 12 bright, distinct colors.
+const colorScale = d3.scaleOrdinal(d3.schemeSet3);
 
 // Function to get D3 colors based on node type
 const getNodeD3Colors = (type: string) => {
   const fill = colorScale(type);
   // Calculate a darker stroke color for contrast
-  const stroke = d3.color(fill)?.darker(1.5).toString() || '#000000';
+  // Using darker(1.8) to ensure a strong, defined boundary
+  const stroke = d3.color(fill)?.darker(1.8).toString() || '#000000';
   return { fill, stroke };
 };
 
