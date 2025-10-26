@@ -4,6 +4,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import WorkspaceSelector from "./WorkspaceSelector";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const Navbar = () => {
   return (
@@ -23,6 +24,7 @@ const Navbar = () => {
             </Button>
           </div>
           <WorkspaceSelector />
+          <ThemeSwitcher />
         </div>
       </div>
     </nav>
