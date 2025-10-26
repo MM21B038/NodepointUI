@@ -20,16 +20,17 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   return Array.from(new Set(values)).sort();
 };
 
-// Simple color mapping for node types (Tailwind classes)
-const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500',
-  'Organization': 'bg-green-500',
-  'Concept': 'bg-purple-500',
-  'Date': 'bg-yellow-500',
-  'Location': 'bg-red-500',
+// Color mapping for node types (Hex codes for dynamic styling)
+const TYPE_COLORS: Record<string, { class: string, hex: string }> = {
+  'Person': { class: 'bg-blue-500', hex: '#3b82f6' },
+  'Organization': { class: 'bg-green-500', hex: '#10b981' },
+  'Concept': { class: 'bg-purple-500', hex: '#a855f7' },
+  'Date': { class: 'bg-yellow-500', hex: '#f59e0b' },
+  'Location': { class: 'bg-red-500', hex: '#ef4444' },
 };
 
-const getNodeColorClass = (type: string) => TYPE_COLORS[type] || 'bg-gray-400';
+const getNodeColorClass = (type: string) => TYPE_COLORS[type]?.class || 'bg-gray-400';
+const getNodeColorHex = (type: string) => TYPE_COLORS[type]?.hex || '#9ca3af'; // Default gray
 
 const KnowledgeBase = () => {
   const { currentWorkspace } = useWorkspace();
@@ -41,7 +42,7 @@ const KnowledgeBase = () => {
   
   // Panel visibility state (true means content is visible/maximized)
   const [isFilterPanelContentVisible, setIsFilterPanelContentVisible] = useState(true);
-  const [isDetailsPanelContentVisible, setIsDetailsPanelContentVisible] = useState(true);
+  const [isDetailsPanelContentVisible, setIsDetailsPanelVisible] = useState(true);
 
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -235,22 +236,45 @@ const KnowledgeBase = () => {
               <div>
                 <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
                 <div className="space-y-2">
-                  {uniqueTypes.map(type => (
-                    <div key={type} className="flex items-center space-x-2"> {/* Removed overflow-hidden */}
-                      <Checkbox
-                        id={`type-${type}`}
-                        checked={selectedTypes.has(type)}
-                        onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                      />
-                      <Label 
-                        htmlFor={`type-${type}`} 
-                        className="flex items-center text-sm font-normal cursor-pointer flex-1 min-w-0" // Use flex-1 min-w-0
-                      >
-                        <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
-                        <span className="truncate">{type}</span>
-                      </Label>
-                    </div>
-                  ))}
+                  {uniqueTypes.map(type => {
+                    const colorHex = getNodeColorHex(type);
+                    const isChecked = selectedTypes.has(type);
+                    
+                    // Dynamic style for the checkbox when checked
+                    const checkboxStyle = isChecked 
+                      ? { 
+                          '--tw-ring-color': colorHex, // Use ring color for focus/ring
+                          '--tw-bg-opacity': '1',
+                          'backgroundColor': colorHex,
+                          'borderColor': colorHex,
+                        } 
+                      : {};
+
+                    return (
+                      <div key={type} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`type-${type}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                          // Apply dynamic styles to override shadcn's primary color when checked
+                          style={checkboxStyle}
+                          className={cn(
+                            // Ensure text color is white/light when background is colored
+                            isChecked ? "text-white border-transparent" : "",
+                            // Override default checked styles if necessary, though inline style should take precedence
+                            "data-[state=checked]:bg-transparent data-[state=checked]:text-white"
+                          )}
+                        />
+                        <Label 
+                          htmlFor={`type-${type}`} 
+                          className="flex items-center text-sm font-normal cursor-pointer flex-1 min-w-0"
+                        >
+                          <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
+                          <span className="truncate">{type}</span>
+                        </Label>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -261,7 +285,7 @@ const KnowledgeBase = () => {
                 <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
                 <div className="space-y-2">
                   {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2"> {/* Removed overflow-hidden */}
+                    <div key={source} className="flex items-center space-x-2">
                       <Checkbox
                         id={`source-${source}`}
                         checked={selectedSources.has(source)}
@@ -269,7 +293,7 @@ const KnowledgeBase = () => {
                       />
                       <Label 
                         htmlFor={`source-${source}`} 
-                        className="text-sm font-normal cursor-pointer flex-1 min-w-0 truncate" // Use flex-1 min-w-0 truncate
+                        className="text-sm font-normal cursor-pointer flex-1 min-w-0 truncate"
                       >
                         {source}
                       </Label>
@@ -296,7 +320,7 @@ const KnowledgeBase = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => setIsDetailsPanelContentVisible(prev => !prev)} 
+            onClick={() => setIsDetailsPanelVisible(prev => !prev)} 
             className="h-6 w-6"
             title={isDetailsPanelContentVisible ? "Minimize" : "Maximize"}
           >
