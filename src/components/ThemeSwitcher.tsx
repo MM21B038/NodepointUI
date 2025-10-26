@@ -19,9 +19,12 @@ const ThemeSwitcher: React.FC = () => {
     setMounted(true);
   }, []);
 
+  // Use the custom nav foreground color for visibility
+  const buttonClasses = "text-[--nav-foreground] hover:bg-[--nav-background]/80";
+
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className="text-primary-foreground">
+      <Button variant="ghost" size="icon" className={buttonClasses}>
         <Sun className="h-[1.2rem] w-[1.2rem]" />
       </Button>
     );
@@ -33,7 +36,7 @@ const ThemeSwitcher: React.FC = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary/80">
+        <Button variant="ghost" size="icon" className={buttonClasses}>
           <CurrentIconComponent className="h-[1.2rem] w-[1.2rem] transition-all" />
           <span className="sr-only">Toggle theme</span>
         </Button>
