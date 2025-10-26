@@ -4,12 +4,11 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import * as d3 from "d3";
 import { GraphNode, GraphEdge } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// Simple color mapping for node types (Tailwind classes)
+// Simple color mapping for node types (Tailwind classes) - Used by React components (DetailPanel)
 const TYPE_COLORS: Record<string, string> = {
   'Person': 'bg-blue-500',
   'Organization': 'bg-green-500',
@@ -20,6 +19,19 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
+
+// D3 specific colors (Hex codes) for SVG fill attribute
+const D3_COLORS: Record<string, string> = {
+  'Person': '#3b82f6', // blue-500
+  'Organization': '#10b981', // green-500
+  'Concept': '#a855f7', // purple-500
+  'Date': '#f59e0b', // yellow-500
+  'Location': '#ef4444', // red-500
+  'default': '#9ca3af', // gray-400
+};
+
+const getNodeD3Color = (type: string) => D3_COLORS[type] || D3_COLORS['default'];
+
 
 interface InteractiveGraphVisualizationProps {
   nodes: GraphNode[];
@@ -100,13 +112,13 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     const g = svg.append("g");
 
-    // Zoom functionality (optional but good practice for D3 graphs)
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 4])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-      });
-    svg.call(zoom as any);
+    // --- D3 Force Simulation ---
+    const simulation = d3.forceSimulation<D3Node, D3Edge>(graphData.nodes)
+      .force("link", d3.forceLink<D3Node, D3Edge>(graphData.edges).id(d => d.id).distance(100))
+      .force("charge", d3.forceManyBody().strength(-300))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("x", d3.forceX(width / 2).strength(0.05))
+      .force("y", d3.forceY(height / 2).strength(0.05));
 
     // Define marker for directed edges
     svg.append("defs").append("marker")
@@ -120,14 +132,6 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .append("path")
       .attr("d", "M0,-5L10,0L0,5")
       .attr("fill", "hsl(var(--foreground))");
-
-    // --- D3 Force Simulation ---
-    const simulation = d3.forceSimulation<D3Node, D3Edge>(graphData.nodes)
-      .force("link", d3.forceLink<D3Node, D3Edge>(graphData.edges).id(d => d.id).distance(100))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("x", d3.forceX(width / 2).strength(0.05))
-      .force("y", d3.forceY(height / 2).strength(0.05));
 
     // --- Render Elements ---
 
@@ -158,15 +162,9 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("fill", d => {
-        const colorClass = getNodeColorClass(d.type);
-        // Extract HSL values from Tailwind CSS variables (approximation for D3 fill)
-        // Since we can't easily read computed styles in D3, we use a fixed color for now
-        return colorClass.includes('blue') ? 'hsl(222.2 47.4% 11.2%)' : 'hsl(210 40% 96.1%)';
-      })
+      .attr("fill", d => getNodeD3Color(d.type)) // Use D3 color based on type
       .attr("class", d => cn(
         "cursor-pointer transition-all",
-        getNodeColorClass(d.type),
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
       ))
       .on("click", (event, d) => {
@@ -176,7 +174,38 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       })
       .call(drag(simulation) as any);
 
-    // 3. Tick function updates positions
+    // 3. Labels
+    const label = g.append("g")
+      .attr("class", "labels")
+      .selectAll("text")
+      .data(graphData.nodes)
+      .join("text")
+      .text(d => d.label)
+      .attr("pointer-events", "none") // Don't interfere with node clicks
+      .attr("text-anchor", "middle")
+      .attr("dy", "1.5em") // Position below the circle
+      .attr("fill", "hsl(var(--foreground))")
+      .attr("class", "select-none opacity-0"); // Initial opacity 0
+
+    // 4. Zoom functionality (Unlimited zoom and label scaling)
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 100]) // Virtually unlimited zoom
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+        
+        const k = event.transform.k;
+        const baseFontSize = 8;
+        
+        // Scale text inversely to maintain screen size appearance
+        label.attr("font-size", `${baseFontSize / k}px`);
+        
+        // Control visibility: show labels only when zoomed in past a threshold (k > 0.8)
+        label.attr("opacity", k > 0.8 ? 1 : 0);
+      });
+    svg.call(zoom as any);
+
+
+    // 5. Tick function updates positions
     simulation.on("tick", () => {
       link
         .attr("x1", d => (d.source as D3Node).x!)
@@ -187,6 +216,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       node
         .attr("cx", d => d.x!)
         .attr("cy", d => d.y!);
+        
+      label
+        .attr("x", d => d.x!)
+        .attr("y", d => d.y!);
     });
 
     // Handle click outside nodes/edges to deselect and restart simulation
@@ -206,7 +239,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     return () => {
       simulation.stop();
     };
-  }, [graphData, width, height, onSelect]); // Removed selectedItem from dependency array
+  }, [graphData, width, height, onSelect]); 
 
   // --- Drag Handlers ---
   const drag = (simulation: d3.Simulation<D3Node, D3Edge>) => {
