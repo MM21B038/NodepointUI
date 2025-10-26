@@ -157,7 +157,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     // 2. Nodes
     const node = g.append("g")
-      .attr("stroke-width", 2)
+      .attr("stroke-width", 3) // Increased stroke width for better visibility
       .selectAll("circle")
       .data(graphData.nodes)
       .join("circle")
