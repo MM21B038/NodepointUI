@@ -23,10 +23,14 @@ const TYPE_COLORS: Record<string, { class: string; hex: string }> = {
 
 // Utility function to get the Tailwind class for a node type
 const getNodeColorClass = (type: string) => {
-  return TYPE_COLORS[type]?.class || TYPE_COLORS.Default.class;
+  // Return null if the type is 'Default' or not explicitly defined, so the indicator is hidden.
+  if (type === 'Default' || !TYPE_COLORS[type]) {
+    return null;
+  }
+  return TYPE_COLORS[type].class;
 };
 
-// Utility function to get the hex code for a node type
+// Utility function to get the hex code for a node type (used for checkbox coloring)
 const getNodeColorHex = (type: string) => {
   return TYPE_COLORS[type]?.hex || TYPE_COLORS.Default.hex;
 };
@@ -139,6 +143,7 @@ const KnowledgeBase: React.FC = () => {
           {allNodeTypes.map((type) => {
             const isChecked = !!selectedTypes[type];
             const hexColor = getNodeColorHex(type);
+            const colorClass = getNodeColorClass(type);
 
             return (
               <div key={type} className="flex items-center space-x-2">
@@ -169,13 +174,15 @@ const KnowledgeBase: React.FC = () => {
                   htmlFor={`type-${type}`}
                   className="flex items-center text-sm font-normal cursor-pointer w-full"
                 >
-                  {/* This span already uses the correct color class */}
-                  <span
-                    className={cn(
-                      "h-3 w-3 rounded-full mr-2 flex-shrink-0",
-                      getNodeColorClass(type)
-                    )}
-                  ></span>
+                  {/* Conditionally render the color span only if a specific color class exists */}
+                  {colorClass && (
+                    <span
+                      className={cn(
+                        "h-3 w-3 rounded-full mr-2 flex-shrink-0",
+                        colorClass
+                      )}
+                    ></span>
+                  )}
                   <span className="truncate">{type}</span>
                 </Label>
               </div>
