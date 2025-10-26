@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -207,7 +207,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className="flex-shrink-0"
           >
-            {isFilterOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {/* Change 1: Up/Down arrows for filter */}
+            {isFilterOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </div>
         
@@ -263,21 +264,24 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 right-4 z-10 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          isDetailOpen ? "w-72 h-40" : "w-10 h-10"
+          // Change 2: Full height for both states
+          isDetailOpen ? "w-72 h-[calc(100%-2rem)]" : "w-10 h-[calc(100%-2rem)]"
         )}
       >
         <div className="flex items-center justify-between p-2 border-b">
-          <div className="flex-grow">
-            {isDetailOpen && <h3 className="text-lg font-semibold">Details</h3>}
-          </div>
+          {/* Change 3: Toggle button moved to the left of the header */}
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={() => setIsDetailOpen(!isDetailOpen)}
             className="flex-shrink-0"
           >
+            {/* ChevronRight when open (collapses right-to-left), ChevronLeft when closed (expands left-to-right) */}
             {isDetailOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
+          <div className="flex-grow text-right">
+            {isDetailOpen && <h3 className="text-lg font-semibold">Details</h3>}
+          </div>
         </div>
         
         {isDetailOpen && (
