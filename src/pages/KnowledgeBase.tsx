@@ -243,10 +243,11 @@ const KnowledgeBase = () => {
                     // Dynamic style for the checkbox when checked
                     const checkboxStyle = isChecked 
                       ? { 
-                          '--tw-ring-color': colorHex, // Use ring color for focus/ring
-                          '--tw-bg-opacity': '1',
+                          // Override background and border color
                           'backgroundColor': colorHex,
                           'borderColor': colorHex,
+                          // Force checkmark color to white (or light color)
+                          'color': '#ffffff', 
                         } 
                       : {};
 
@@ -259,9 +260,7 @@ const KnowledgeBase = () => {
                           // Apply dynamic styles to override shadcn's primary color when checked
                           style={checkboxStyle}
                           className={cn(
-                            // Ensure text color is white/light when background is colored
-                            isChecked ? "text-white border-transparent" : "",
-                            // Override default checked styles if necessary, though inline style should take precedence
+                            // Ensure the default checked classes are overridden by inline styles
                             "data-[state=checked]:bg-transparent data-[state=checked]:text-white"
                           )}
                         />
