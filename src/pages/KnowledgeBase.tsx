@@ -1,343 +1,255 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, Info, ChevronUp, ChevronDown } from "lucide-react";
-import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import React, { useState, useMemo, useCallback } from "react";
+import { Link, Loader2, Search, Filter, X, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { InteractiveGraphVisualization, DetailPanel } from "@/components/InteractiveGraphVisualization";
-import { useWorkspace } from "@/context/WorkspaceContext";
 
-// Helper function to get unique values for filtering
-const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
-  const values = data.map(item => String(item[key]));
-  return Array.from(new Set(values)).sort();
+// Define the color mapping for node types
+const TYPE_COLORS: Record<string, { class: string; hex: string }> = {
+  Person: { class: "bg-blue-500", hex: "#3b82f6" },
+  Organization: { class: "bg-green-500", hex: "#10b981" },
+  Location: { class: "bg-red-500", hex: "#ef4444" },
+  Concept: { class: "bg-yellow-500", hex: "#f59e0b" },
+  Event: { class: "bg-purple-500", hex: "#a855f7" },
+  Product: { class: "bg-pink-500", hex: "#ec4899" },
+  Document: { class: "bg-indigo-500", hex: "#6366f1" },
+  Default: { class: "bg-gray-400", hex: "#9ca3af" },
 };
 
-// Color mapping for node types (Hex codes for dynamic styling)
-const TYPE_COLORS: Record<string, { class: string, hex: string }> = {
-  'Person': { class: 'bg-blue-500', hex: '#3b82f6' },
-  'Organization': { class: 'bg-green-500', hex: '#10b981' },
-  'Concept': { class: 'bg-purple-500', hex: '#a855f7' },
-  'Date': { class: 'bg-yellow-500', hex: '#f59e0b' },
-  'Location': { class: 'bg-red-500', hex: '#ef4444' },
-  'Event': { class: 'bg-indigo-500', hex: '#6366f1' },
-  'Product': { class: 'bg-pink-500', hex: '#ec4899' },
-  'Document': { class: 'bg-cyan-500', hex: '#06b6d4' },
+// Utility function to get the Tailwind class for a node type
+const getNodeColorClass = (type: string) => {
+  return TYPE_COLORS[type]?.class || TYPE_COLORS.Default.class;
 };
 
-const getNodeColorClass = (type: string) => TYPE_COLORS[type]?.class || 'bg-gray-400';
-const getNodeColorHex = (type: string) => TYPE_COLORS[type]?.hex || '#9ca3af'; // Default gray
+// Utility function to get the hex code for a node type
+const getNodeColorHex = (type: string) => {
+  return TYPE_COLORS[type]?.hex || TYPE_COLORS.Default.hex;
+};
 
-const KnowledgeBase = () => {
-  const { currentWorkspace } = useWorkspace();
-  
-  const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
-  
-  // Panel visibility state (true means content is visible/maximized)
-  const [isFilterPanelContentVisible, setIsFilterPanelContentVisible] = useState(true);
-  const [isDetailsPanelContentVisible, setIsDetailsPanelVisible] = useState(true);
+// Mock data for demonstration
+const mockNodes = [
+  { id: "n1", label: "Alice Johnson", type: "Person" },
+  { id: "n2", label: "Acme Corp", type: "Organization" },
+  { id: "n3", label: "New York City", type: "Location" },
+  { id: "n4", label: "Quantum Physics", type: "Concept" },
+  { id: "n5", label: "Product Launch 2024", type: "Event" },
+  { id: "n6", label: "Project X Document", type: "Document" },
+  { id: "n7", label: "The Alpha Device", type: "Product" },
+  { id: "n8", label: "Unknown Entity", type: "Default" },
+];
 
-  // Filtering state
-  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
-  const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
+const mockEdges = [
+  { source: "n1", target: "n2", label: "Works At" },
+  { source: "n2", target: "n3", label: "Located In" },
+  { source: "n4", target: "n1", label: "Studied By" },
+];
 
-  const fetchData = useCallback(async () => {
-    if (!currentWorkspace) {
-      setIsLoading(false);
-      setGraphData(null);
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    setSelectedItem(null);
-    try {
-      const data = await getKnowledgeGraph(currentWorkspace);
-      setGraphData(data);
-      
-      // Initialize filters with all available types and sources upon first load
-      const initialTypes = getUniqueValues(data.nodes, 'type');
-      const initialSources = getUniqueValues(data.nodes, 'source'); 
-      
-      setSelectedTypes(new Set(initialTypes));
-      setSelectedSources(new Set(initialSources));
+const KnowledgeBase: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTypes, setSelectedTypes] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : "Failed to load knowledge graph.";
-      setError(errorMessage);
-      toast.error(errorMessage);
-      setGraphData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentWorkspace]);
+  const allNodeTypes = useMemo(() => {
+    const types = new Set(mockNodes.map((node) => node.type));
+    return Array.from(types).sort();
+  }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleTypeToggle = (type: string, checked: boolean) => {
-    setSelectedTypes(prev => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(type);
-      } else {
-        newSet.delete(type);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSourceToggle = (source: string, checked: boolean) => {
-    setSelectedSources(prev => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(source);
-      } else {
-        newSet.delete(source);
-      }
-      return newSet;
-    });
-  };
-
-  const uniqueTypes = useMemo(() => {
-    return graphData ? getUniqueValues(graphData.nodes, 'type') : [];
-  }, [graphData]);
-
-  const uniqueSources = useMemo(() => {
-    return graphData ? getUniqueValues(graphData.nodes, 'source') : [];
-  }, [graphData]);
+  const handleTypeToggle = useCallback((type: string, checked: boolean) => {
+    setSelectedTypes((prev) => ({
+      ...prev,
+      [type]: checked,
+    }));
+  }, []);
 
   const filteredNodes = useMemo(() => {
-    if (!graphData) return [];
-    return graphData.nodes.filter(node => 
-      selectedTypes.has(node.type) && selectedSources.has(node.source)
+    const activeFilters = Object.keys(selectedTypes).filter(
+      (type) => selectedTypes[type]
     );
-  }, [graphData, selectedTypes, selectedSources]);
 
-  const filteredEdges = useMemo(() => {
-    if (!graphData) return [];
-    const visibleNodeIds = new Set(filteredNodes.map(n => n.id));
-    
-    // Edges must connect two visible nodes
-    return graphData.edges.filter(edge => 
-      visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
-    );
-  }, [graphData, filteredNodes]);
+    let nodes = mockNodes;
 
-  // --- Render States ---
+    // 1. Filter by Type
+    if (activeFilters.length > 0) {
+      nodes = nodes.filter((node) => activeFilters.includes(node.type));
+    }
 
-  if (!currentWorkspace) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8">
-        <h3 className="text-2xl font-semibold mb-2">No Workspace Selected</h3>
-        <p className="text-muted-foreground">
-          Please select a workspace using the selector in the navigation bar.
-        </p>
-      </div>
-    );
-  }
+    // 2. Filter by Search Term
+    if (searchTerm) {
+      const lowerCaseSearch = searchTerm.toLowerCase();
+      nodes = nodes.filter((node) =>
+        node.label.toLowerCase().includes(lowerCaseSearch)
+      );
+    }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-        <p className="text-lg text-muted-foreground">Loading Knowledge Graph for {currentWorkspace}...</p>
-      </div>
-    );
-  }
+    return nodes;
+  }, [searchTerm, selectedTypes]);
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-4">
-        <X className="h-10 w-10 text-destructive mb-4" />
-        <h3 className="text-xl font-semibold text-destructive">Error Loading Graph</h3>
-        <p className="text-muted-foreground mt-2">{error}</p>
-        <Button onClick={fetchData} className="mt-4">Try Refreshing</Button>
-      </div>
-    );
-  }
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSelectedTypes({});
+  };
 
-  if (!graphData || graphData.nodes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-4">
-        <h3 className="text-xl font-semibold">No Knowledge Graph Data</h3>
-        <p className="text-muted-foreground mt-2">
-          No entities or relationships found for workspace "{currentWorkspace}". Ensure documents have been uploaded and processed.
-        </p>
-      </div>
-    );
-  }
+  const activeFilterCount =
+    Object.values(selectedTypes).filter(Boolean).length +
+    (searchTerm ? 1 : 0);
 
-  // --- Main Visualization Layout (Full Screen Canvas with Floating Panels) ---
   return (
-    <div className="relative h-full w-full">
-      
-      {/* 1. Visualization Canvas (Background) */}
-      <div className="absolute inset-0">
-        <InteractiveGraphVisualization 
-          nodes={filteredNodes} 
-          edges={filteredEdges} 
-          onSelect={setSelectedItem}
-          selectedItem={selectedItem}
-        />
-      </div>
+    <div className="flex h-full overflow-hidden bg-gray-50">
+      {/* Sidebar/Filter Panel */}
+      <div className="w-64 flex-shrink-0 border-r bg-white p-4 flex flex-col">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Filter className="w-5 h-5 mr-2 text-gray-600" />
+          Filters
+        </h2>
 
-      {/* 2. Top Bar (Floating) */}
-      <div className="absolute top-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm border-b z-20">
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-semibold">
-            Knowledge Graph: <span className="text-primary">{currentWorkspace}</span>
-          </h2>
-          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <span>
-              Showing {filteredNodes.length} nodes and {filteredEdges.length} edges (Total: {graphData.nodes.length} nodes, {graphData.edges.length} edges)
-            </span>
-            <Button variant="outline" size="icon" onClick={fetchData} disabled={isLoading}>
-              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+        {/* Search Input */}
+        <div className="relative mb-4">
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search nodes..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* Active Filters Summary */}
+        {activeFilterCount > 0 && (
+          <div className="mb-4 flex justify-between items-center text-sm text-gray-600">
+            <span>{activeFilterCount} active filter(s)</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearFilters}
+              className="h-auto p-1 text-xs text-blue-600 hover:bg-blue-50"
+            >
+              Clear All
             </Button>
           </div>
+        )}
+
+        {/* Node Type Filters */}
+        <div className="flex-grow overflow-y-auto pr-2 space-y-3">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Node Type</h3>
+          {allNodeTypes.map((type) => {
+            const isChecked = !!selectedTypes[type];
+            const hexColor = getNodeColorHex(type);
+
+            return (
+              <div key={type} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`type-${type}`}
+                  checked={isChecked}
+                  onCheckedChange={(checked) =>
+                    handleTypeToggle(type, !!checked)
+                  }
+                  // Custom styling for the checkbox when checked
+                  style={
+                    isChecked
+                      ? {
+                          '--tw-ring-offset-shadow': '0 0 #0000',
+                          '--tw-ring-shadow': '0 0 #0000',
+                          backgroundColor: hexColor,
+                          borderColor: hexColor,
+                        }
+                      : {}
+                  }
+                  className={cn(
+                    "h-4 w-4 rounded-sm border-gray-300 transition-colors",
+                    // Ensure the checkmark is white when checked
+                    isChecked ? "data-[state=checked]:text-white" : ""
+                  )}
+                />
+                <Label
+                  htmlFor={`type-${type}`}
+                  className="flex items-center text-sm font-normal cursor-pointer w-full"
+                >
+                  {/* This span already uses the correct color class */}
+                  <span
+                    className={cn(
+                      "h-3 w-3 rounded-full mr-2 flex-shrink-0",
+                      getNodeColorClass(type)
+                    )}
+                  ></span>
+                  <span className="truncate">{type}</span>
+                </Label>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Action Button */}
+        <div className="mt-4 pt-4 border-t">
+          <Button className="w-full">
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Node
+          </Button>
         </div>
       </div>
 
-      {/* 3. Left Panel: Filters (Floating) */}
-      <Card 
-        className={cn(
-          "absolute top-20 left-4 w-40 flex flex-col z-20 shadow-xl transition-all duration-300",
-          isFilterPanelContentVisible ? "bottom-4" : "h-fit"
-        )}
-      >
-        <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center">
-            <Filter className="h-4 w-4 mr-2" /> Filters
-          </CardTitle>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsFilterPanelContentVisible(prev => !prev)} 
-            className="h-6 w-6"
-            title={isFilterPanelContentVisible ? "Minimize" : "Maximize"}
-          >
-            {isFilterPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      {/* Main Content Area (Knowledge Graph View) */}
+      <div className="flex-1 flex flex-col overflow-hidden p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold text-gray-800">
+            Knowledge Base Explorer
+          </h1>
+          <Button variant="outline" disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Link className="mr-2 h-4 w-4" />
+            )}
+            View Graph
           </Button>
-        </CardHeader>
-        {isFilterPanelContentVisible && (
-          <ScrollArea className="flex-grow">
-            <CardContent className="p-4 space-y-6">
-              
-              {/* Node Type Filter */}
-              <div>
-                <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
-                <div className="space-y-2">
-                  {uniqueTypes.map(type => {
-                    const colorHex = getNodeColorHex(type);
-                    const isChecked = selectedTypes.has(type);
-                    
-                    // Dynamic style for the checkbox when checked
-                    const checkboxStyle = isChecked 
-                      ? { 
-                          // Override background and border color
-                          'backgroundColor': colorHex,
-                          'borderColor': colorHex,
-                          // Force checkmark color to white (or light color)
-                          'color': '#ffffff', 
-                        } 
-                      : {};
+        </div>
 
-                    return (
-                      <div key={type} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`type-${type}`}
-                          checked={isChecked}
-                          onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                          // Apply dynamic styles to override shadcn's primary color when checked
-                          style={checkboxStyle}
-                          className={cn(
-                            // Ensure the default checked classes are overridden by inline styles
-                            "data-[state=checked]:bg-transparent data-[state=checked]:text-white"
-                          )}
-                        />
-                        <Label 
-                          htmlFor={`type-${type}`} 
-                          className="flex items-center text-sm font-normal cursor-pointer flex-1 min-w-0"
-                        >
-                          {/* This span already uses the correct color class */}
-                          <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
-                          <span className="truncate">{type}</span>
-                        </Label>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Source Filter */}
-              <div>
-                <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
-                <div className="space-y-2">
-                  {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`source-${source}`}
-                        checked={selectedSources.has(source)}
-                        onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
-                      />
-                      <Label 
-                        htmlFor={`source-${source}`} 
-                        className="text-sm font-normal cursor-pointer flex-1 min-w-0 truncate"
-                      >
-                        {source}
-                      </Label>
+        {/* Results Display */}
+        <Card className="flex-1 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Filtered Nodes ({filteredNodes.length})
+            </CardTitle>
+            {activeFilterCount > 0 && (
+              <X
+                className="h-4 w-4 text-gray-500 cursor-pointer hover:text-gray-700"
+                onClick={handleClearFilters}
+              />
+            )}
+          </CardHeader>
+          <CardContent className="h-full overflow-y-auto">
+            {filteredNodes.length === 0 ? (
+              <p className="text-center text-gray-500 mt-8">
+                No nodes match your current filters.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {filteredNodes.map((node) => (
+                  <div
+                    key={node.id}
+                    className="flex items-center p-2 border rounded-md bg-gray-50 hover:bg-gray-100 transition-colors"
+                  >
+                    <span
+                      className={cn(
+                        "h-3 w-3 rounded-full mr-3 flex-shrink-0",
+                        getNodeColorClass(node.type)
+                      )}
+                    ></span>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{node.label}</p>
+                      <p className="text-xs text-gray-500">{node.type}</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            </CardContent>
-          </ScrollArea>
-        )}
-      </Card>
-
-      {/* 4. Right Panel: Details (Floating) */}
-      <Card 
-        className={cn(
-          "absolute top-20 right-4 w-80 flex flex-col z-20 shadow-xl transition-all duration-300",
-          isDetailsPanelContentVisible ? "bottom-4" : "h-fit"
-        )}
-      >
-        <CardHeader className="p-4 border-b flex-shrink-0 flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center">
-            <Info className="h-4 w-4 mr-2" /> Details
-          </CardTitle>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsDetailsPanelVisible(prev => !prev)} 
-            className="h-6 w-6"
-            title={isDetailsPanelContentVisible ? "Minimize" : "Maximize"}
-          >
-            {isDetailsPanelContentVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        {isDetailsPanelContentVisible && (
-          <ScrollArea className="flex-grow">
-            <CardContent className="p-0">
-              <DetailPanel item={selectedItem} />
-            </CardContent>
-          </ScrollArea>
-        )}
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
