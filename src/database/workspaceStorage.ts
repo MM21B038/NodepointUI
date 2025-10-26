@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://10.166.154.141:3366";
+const API_BASE_URL = "http://10.219.9.141:3366";
 
 interface WorkspaceListResponse {
   workspaces: string[];
