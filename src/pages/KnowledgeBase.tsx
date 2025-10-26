@@ -24,9 +24,9 @@ const KnowledgeBase: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h1 className="text-3xl font-bold mb-4">Knowledge Base: {currentWorkspace}</h1>
-      <div className="flex-grow min-h-0">
+    <div className="h-full flex flex-col">
+      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {currentWorkspace}</h1>
+      <div className="flex-grow min-h-0 p-4">
         <KnowledgeGraph workspaceName={currentWorkspace} />
       </div>
     </div>
