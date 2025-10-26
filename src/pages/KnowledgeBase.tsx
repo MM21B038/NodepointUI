@@ -243,8 +243,7 @@ const KnowledgeBase: React.FC = () => {
                       <p className="font-medium text-sm">{node.label}</p>
                       <p className="text-xs text-gray-500">{node.type}</p>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </CardContent>
