@@ -20,17 +20,17 @@ const TYPE_COLORS: Record<string, string> = {
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
-// D3 specific colors (Hex codes) for SVG fill attribute
-const D3_COLORS: Record<string, string> = {
-  'Person': '#3b82f6', // blue-500
-  'Organization': '#10b981', // green-500
-  'Concept': '#a855f7', // purple-500
-  'Date': '#f59e0b', // yellow-500
-  'Location': '#ef4444', // red-500
-  'default': '#9ca3af', // gray-400
+// D3 specific colors (Hex codes) for SVG fill and stroke attributes (Graded look)
+const D3_COLOR_GRADES: Record<string, { fill: string, stroke: string }> = {
+  'Person': { fill: '#60a5fa', stroke: '#1d4ed8' }, // Blue (400/700)
+  'Organization': { fill: '#34d399', stroke: '#047857' }, // Green (400/700)
+  'Concept': { fill: '#c084fc', stroke: '#7e22ce' }, // Purple (400/700)
+  'Date': { fill: '#fbbf24', stroke: '#b45309' }, // Amber/Yellow (400/700)
+  'Location': { fill: '#f87171', stroke: '#b91c1c' }, // Red (400/700)
+  'default': { fill: '#d1d5db', stroke: '#6b7280' }, // Gray (300/600)
 };
 
-const getNodeD3Color = (type: string) => D3_COLORS[type] || D3_COLORS['default'];
+const getNodeD3Colors = (type: string) => D3_COLOR_GRADES[type] || D3_COLOR_GRADES['default'];
 
 
 interface InteractiveGraphVisualizationProps {
@@ -156,13 +156,13 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     // 2. Nodes
     const node = g.append("g")
-      .attr("stroke", "hsl(var(--border))")
       .attr("stroke-width", 2)
       .selectAll("circle")
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("fill", d => getNodeD3Color(d.type)) // Use D3 color based on type
+      .attr("fill", d => getNodeD3Colors(d.type).fill) // Use graded fill color
+      .attr("stroke", d => getNodeD3Colors(d.type).stroke) // Use graded stroke color
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
