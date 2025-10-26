@@ -190,12 +190,13 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
       {/* Left Filter Panel (Overlay) */}
       <div 
         className={cn(
-          "absolute top-4 left-4 z-10 h-[calc(100%-2rem)] transition-all duration-300 overflow-hidden",
+          "absolute top-4 left-4 z-10 w-48 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          isFilterOpen ? "w-48" : "w-10"
+          // Vertical collapse: fixed width, height changes
+          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-10"
         )}
       >
-        <div className="flex items-center justify-between p-2 border-b">
+        <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
           {isFilterOpen && (
             <h3 className="text-lg font-semibold flex items-center">
               <Filter className="h-4 w-4 mr-2" /> Filters
@@ -207,11 +208,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className="flex-shrink-0"
           >
-            {/* Change 1: Up/Down arrows for filter */}
+            {/* ChevronUp/Down for vertical collapse */}
             {isFilterOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </div>
         
+        {/* Content area only visible when open */}
         {isFilterOpen && (
           <ScrollArea className="flex-grow p-4 space-y-6">
             {/* Node Type Filter */}
@@ -264,12 +266,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 right-4 z-10 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Change 2: Full height for both states
+          // Full height for both states, horizontal collapse
           isDetailOpen ? "w-72 h-[calc(100%-2rem)]" : "w-10 h-[calc(100%-2rem)]"
         )}
       >
-        <div className="flex items-center justify-between p-2 border-b">
-          {/* Change 3: Toggle button moved to the left of the header */}
+        <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
+          {/* Toggle button on the left */}
           <Button 
             variant="ghost" 
             size="icon" 
