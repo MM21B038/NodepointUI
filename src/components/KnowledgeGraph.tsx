@@ -193,15 +193,14 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
           "absolute top-4 left-4 z-10 w-48 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
           // Vertical collapse: fixed width, height changes
-          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-10"
+          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-10" // Collapsed height is 10 (40px)
         )}
       >
         <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
-          {isFilterOpen && (
-            <h3 className="text-lg font-semibold flex items-center">
-              <Filter className="h-4 w-4 mr-2" /> Filters
-            </h3>
-          )}
+          {/* Ensure title is always visible */}
+          <h3 className="text-lg font-semibold flex items-center">
+            <Filter className="h-4 w-4 mr-2" /> Filters
+          </h3>
           <Button 
             variant="ghost" 
             size="icon" 
