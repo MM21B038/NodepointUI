@@ -27,6 +27,9 @@ const TYPE_COLORS: Record<string, { class: string, hex: string }> = {
   'Concept': { class: 'bg-purple-500', hex: '#a855f7' },
   'Date': { class: 'bg-yellow-500', hex: '#f59e0b' },
   'Location': { class: 'bg-red-500', hex: '#ef4444' },
+  'Event': { class: 'bg-indigo-500', hex: '#6366f1' },
+  'Product': { class: 'bg-pink-500', hex: '#ec4899' },
+  'Document': { class: 'bg-cyan-500', hex: '#06b6d4' },
 };
 
 const getNodeColorClass = (type: string) => TYPE_COLORS[type]?.class || 'bg-gray-400';
@@ -268,6 +271,7 @@ const KnowledgeBase = () => {
                           htmlFor={`type-${type}`} 
                           className="flex items-center text-sm font-normal cursor-pointer flex-1 min-w-0"
                         >
+                          {/* This span already uses the correct color class */}
                           <span className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0", getNodeColorClass(type))}></span>
                           <span className="truncate">{type}</span>
                         </Label>
