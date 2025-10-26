@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// --- Color Mapping for React Components (DetailPanel) ---
+// --- Color Mapping for React Components (DetailPanel & Filters) ---
 // This is kept simple for Tailwind classes in the React UI
 const TYPE_COLORS: Record<string, string> = {
   'Person': 'bg-blue-500',
@@ -19,7 +19,7 @@ const TYPE_COLORS: Record<string, string> = {
   'default': 'bg-gray-400',
 };
 
-const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
+export const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
 
 // --- D3 Color Scale for Visualization ---
 // Using d3.schemeSet3 which provides 12 bright, distinct colors.

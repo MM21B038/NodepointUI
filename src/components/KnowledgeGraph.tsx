@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { InteractiveGraphVisualization, DetailPanel } from "./InteractiveGraphVisualization";
+import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "./InteractiveGraphVisualization";
 
 interface KnowledgeGraphProps {
   workspaceName: string;
@@ -22,19 +22,6 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   const values = data.map(item => String(item[key]));
   return Array.from(new Set(values)).sort();
 };
-
-// Simple color mapping for node types (Tailwind classes) - KEPT FOR VISUALIZATION/DETAIL PANEL
-const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500',
-  'Organization': 'bg-green-500',
-  'Concept': 'bg-purple-500',
-  'Date': 'bg-yellow-500',
-  'Location': 'bg-red-500',
-};
-
-// Utility function to get the color class (used by visualization and detail panel)
-const getNodeColorClass = (type: string) => TYPE_COLORS[type] || 'bg-gray-400';
-
 
 const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
@@ -226,6 +213,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                       checked={selectedTypes.has(type)}
                       onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
                     />
+                    <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
                     <Label htmlFor={`type-${type}`} className="text-sm font-normal cursor-pointer">
                       {type}
                     </Label>
