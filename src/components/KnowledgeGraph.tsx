@@ -192,8 +192,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 left-4 z-10 w-48 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Vertical collapse: fixed width, height changes
-          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-10" // Collapsed height is 10 (40px)
+          // Adjusted height calculation to leave 32px (2rem) margin at the bottom
+          isFilterOpen ? "h-[calc(100%-3rem)]" : "h-10" 
         )}
       >
         <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
@@ -265,8 +265,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 right-4 z-10 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Full height for both states, horizontal collapse
-          isDetailOpen ? "w-72 h-[calc(100%-2rem)]" : "w-10 h-[calc(100%-2rem)]"
+          // Adjusted height calculation to match the filter panel's new height
+          isDetailOpen ? "w-72 h-[calc(100%-3rem)]" : "w-10 h-[calc(100%-3rem)]"
         )}
       >
         <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
