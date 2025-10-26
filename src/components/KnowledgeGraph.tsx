@@ -192,11 +192,11 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 left-4 z-10 w-48 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Adjusted height calculation to leave 32px (2rem) margin at the bottom
-          isFilterOpen ? "h-[calc(100%-3rem)]" : "h-10" 
+          // Symmetric height: 100% - (16px top + 16px bottom) = 100% - 2rem
+          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-12" // Collapsed height increased to h-12 (48px)
         )}
       >
-        <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
+        <div className="flex items-center justify-between p-3 border-b flex-shrink-0"> {/* Increased padding to p-3 */}
           {/* Ensure title is always visible */}
           <h3 className="text-lg font-semibold flex items-center">
             <Filter className="h-4 w-4 mr-2" /> Filters
@@ -265,11 +265,11 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         className={cn(
           "absolute top-4 right-4 z-10 transition-all duration-300 overflow-hidden",
           "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Adjusted height calculation to match the filter panel's new height
-          isDetailOpen ? "w-72 h-[calc(100%-3rem)]" : "w-10 h-[calc(100%-3rem)]"
+          // Symmetric height: 100% - (16px top + 16px bottom) = 100% - 2rem
+          isDetailOpen ? "w-72 h-[calc(100%-2rem)]" : "w-10 h-[calc(100%-2rem)]"
         )}
       >
-        <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
+        <div className="flex items-center justify-between p-3 border-b flex-shrink-0"> {/* Increased padding to p-3 */}
           {/* Toggle button on the left */}
           <Button 
             variant="ghost" 
