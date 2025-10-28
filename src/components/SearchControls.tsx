@@ -15,6 +15,7 @@ import { SearchEngineType, listFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 interface SearchControlsProps {
   workspaceName: string;
@@ -87,13 +88,13 @@ const SearchControls: React.FC<SearchControlsProps> = ({
   ];
 
   return (
-    <div className="w-64 flex-shrink-0 bg-card border-r p-6 space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold flex items-center">
-          <Search className="h-4 w-4 mr-2" /> Search Engine
-        </h3>
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <Label htmlFor="search-engine" className="text-sm font-medium flex items-center">
+          <Search className="h-4 w-4 mr-2 text-muted-foreground" /> Search Engine
+        </Label>
         <Select value={selectedEngine} onValueChange={handleEngineChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger id="search-engine" className="w-full">
             <SelectValue placeholder="Select Search Engine" />
           </SelectTrigger>
           <SelectContent>
@@ -106,13 +107,15 @@ const SearchControls: React.FC<SearchControlsProps> = ({
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <h3 className="text-lg font-semibold flex items-center">
-          <FileSearch className="h-4 w-4 mr-2" /> Files to Search
-        </h3>
+      <Separator />
+
+      <div className="space-y-3">
+        <Label htmlFor="files-to-search" className="text-sm font-medium flex items-center">
+          <FileSearch className="h-4 w-4 mr-2 text-muted-foreground" /> Files to Search
+        </Label>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between">
+            <Button variant="outline" className="w-full justify-between" id="files-to-search">
               {selectedFiles === "all"
                 ? "All Files"
                 : Array.isArray(selectedFiles) && selectedFiles.length > 0
@@ -129,6 +132,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
               >
                 All Files
               </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
               {availableFiles.length === 0 ? (
                 <DropdownMenuCheckboxItem disabled>
                   No files available

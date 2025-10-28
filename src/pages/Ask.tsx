@@ -8,6 +8,13 @@ import ChatInterface from "@/components/ChatInterface";
 import SearchControls from "@/components/SearchControls";
 import { performSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage";
 import { toast } from "sonner";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 const Ask = () => {
   const { currentWorkspace } = useWorkspace();
@@ -52,8 +59,8 @@ const Ask = () => {
 
   if (!currentWorkspace) {
     return (
-      <div className="flex items-center justify-center h-full p-4">
-        <Alert className="max-w-lg">
+      <div className="flex items-center justify-center h-full p-4 bg-background">
+        <Alert className="max-w-lg shadow-lg">
           <Info className="h-4 w-4" />
           <AlertTitle>No Workspace Selected</AlertTitle>
           <AlertDescription>
@@ -65,22 +72,49 @@ const Ask = () => {
   }
 
   return (
-    <div className="flex h-full">
-      <SearchControls
-        workspaceName={currentWorkspace}
-        onSearchSettingsChange={handleSearchSettingsChange}
-      />
-      <div className="flex-grow flex flex-col h-full p-4">
-        <h2 className="text-3xl font-semibold mb-4">
-          Ask {currentWorkspace && `(${currentWorkspace})`}
-        </h2>
-        <ChatInterface
-          onSendMessage={handleSendMessage}
-          isLoadingSearch={isLoadingSearch}
-          isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow min-h-0"
-        />
-      </div>
+    <div className="flex-grow h-full p-4 bg-gradient-to-br from-background to-muted/20">
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="min-h-[calc(100vh-120px)] rounded-xl border shadow-lg bg-card"
+      >
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
+          <Card className="h-full border-none shadow-none rounded-none">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                <Info className="h-5 w-5 mr-2 text-primary" />
+                Search Settings
+              </CardTitle>
+              <Separator className="mt-2" />
+            </CardHeader>
+            <CardContent className="h-[calc(100%-80px)] overflow-y-auto">
+              <SearchControls
+                workspaceName={currentWorkspace}
+                onSearchSettingsChange={handleSearchSettingsChange}
+              />
+            </CardContent>
+          </Card>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={75}>
+          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-2xl font-bold flex items-center">
+                <Info className="h-5 w-5 mr-2 text-primary" />
+                Ask {currentWorkspace && `(${currentWorkspace})`}
+              </CardTitle>
+              <Separator className="mt-2" />
+            </CardHeader>
+            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
+              <ChatInterface
+                onSendMessage={handleSendMessage}
+                isLoadingSearch={isLoadingSearch}
+                isWorkspaceSelected={!!currentWorkspace}
+                className="h-full w-full border-none shadow-none rounded-none"
+              />
+            </CardContent>
+          </Card>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 };
