@@ -91,9 +91,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className={cn("flex flex-col bg-background border rounded-lg shadow-sm", className)}>
-      <div className="flex-grow flex flex-col"> {/* This div manages vertical alignment */}
+      <div className="flex-grow flex flex-col">
         {messages.length === 0 && (
-          <div className="flex-grow flex items-center justify-center"> {/* Centers content when no messages */}
+          <div className="flex-grow flex items-center justify-center">
             <p className="text-muted-foreground">Start a conversation!</p>
           </div>
         )}
@@ -146,7 +146,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         )}
       </div>
-      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0"> {/* Input area always at bottom */}
+      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0">
         <Input
           placeholder={isWorkspaceSelected ? "Type your message..." : "Select a workspace to chat"}
           value={currentInput}

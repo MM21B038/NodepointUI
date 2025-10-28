@@ -9,12 +9,12 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Re-import Select components
-import { ChevronDown, Search, FileSearch } from "lucide-react"; // Added FileSearch icon back
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronDown, Search, FileSearch } from "lucide-react";
 import { SearchEngineType, listFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils"; // Added cn import back
-import { ScrollArea } from "@/components/ui/scroll-area"; // Added ScrollArea import back
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SearchControlsProps {
   workspaceName: string;
