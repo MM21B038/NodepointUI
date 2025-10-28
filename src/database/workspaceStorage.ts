@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://10.219.9.141:3366";
+const API_BASE_URL = "http://163.164.165.141:3366";
 
 interface WorkspaceListResponse {
   workspaces: string[];
@@ -70,6 +70,24 @@ export interface KnowledgeGraphResponse {
   workspace: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  error?: string;
+}
+
+// --- Search Interfaces ---
+
+export type SearchEngineType = "agent_search" | "global_search" | "local_search" | "hybrid_search";
+
+export interface SearchFilter {
+  files: string[] | "all";
+}
+
+export interface SearchRequest {
+  query: string;
+  filter: SearchFilter;
+}
+
+export interface SearchResponse {
+  message: string;
   error?: string;
 }
 
@@ -308,6 +326,50 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
     return data;
   } catch (error) {
     console.error(`Error fetching knowledge graph for ${workspaceName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Performs a search query using the specified engine and file filters.
+ * @param workspaceName The name of the workspace.
+ * @param engine The search engine to use.
+ * @param query The search query string.
+ * @param filesFilter An array of file names or 'all' to filter the search.
+ * @returns A promise that resolves to the search response message.
+ */
+export async function performSearch(
+  workspaceName: string,
+  engine: SearchEngineType,
+  query: string,
+  filesFilter: string[] | "all"
+): Promise<string> {
+  try {
+    const body: SearchRequest = {
+      query: query,
+      filter: { files: filesFilter },
+    };
+
+    const response = await fetch(`${API_BASE_URL}/search/${workspaceName}/${engine}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Search failed: ${response.statusText}`);
+    }
+
+    const data: SearchResponse = await response.json();
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    return data.message;
+  } catch (error) {
+    console.error(`Error performing search in ${workspaceName} with ${engine}:`, error);
     throw error;
   }
 }
