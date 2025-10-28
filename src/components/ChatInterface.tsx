@@ -90,8 +90,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-background border rounded-lg shadow-sm">
-      <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
-        <div className="space-y-4">
+      <ScrollArea className="flex-grow" ref={scrollAreaRef}> {/* Removed p-4 from here */}
+        <div className="p-4 space-y-4"> {/* Added p-4 to the inner div */}
           {messages.length === 0 && !isLoadingSearch ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Start a conversation!
