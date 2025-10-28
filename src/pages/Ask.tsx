@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React from "react"; // Changed import to import React directly
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -11,11 +11,11 @@ import { toast } from "sonner";
 
 const Ask = () => {
   const { currentWorkspace } = useWorkspace();
-  const [selectedEngine, setSelectedEngine] = useState<SearchEngineType>("agent_search");
-  const [selectedFiles, setSelectedFiles] = useState<string[] | "all">("all");
-  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
+  const [selectedEngine, setSelectedEngine] = React.useState<SearchEngineType>("agent_search"); // Using React.useState
+  const [selectedFiles, setSelectedFiles] = React.useState<string[] | "all">("all"); // Using React.useState
+  const [isLoadingSearch, setIsLoadingSearch] = React.useState(false); // Using React.useState
 
-  const handleSearchSettingsChange = useCallback(
+  const handleSearchSettingsChange = React.useCallback( // Using React.useCallback
     (engine: SearchEngineType, files: string[] | "all") => {
       setSelectedEngine(engine);
       setSelectedFiles(files);
@@ -23,7 +23,7 @@ const Ask = () => {
     []
   );
 
-  const handleSendMessage = useCallback(
+  const handleSendMessage = React.useCallback( // Using React.useCallback
     async (query: string): Promise<{ answer: string; provenance: ProvenanceEntry[] }> => {
       if (!currentWorkspace) {
         toast.error("Please select a workspace before asking questions.");
@@ -70,15 +70,15 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col h-full p-4"> {/* Added p-4 here */}
-        <h2 className="text-3xl font-semibold mb-4"> {/* Removed px-4 pt-4 */}
+      <div className="flex-grow flex flex-col h-full p-4">
+        <h2 className="text-3xl font-semibold mb-4">
           Ask {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <ChatInterface
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow min-h-0" {/* Removed px-4 pb-4 */}
+          className="flex-grow min-h-0"
         />
       </div>
     </div>
