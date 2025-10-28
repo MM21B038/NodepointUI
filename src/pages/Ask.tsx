@@ -70,15 +70,15 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col">
-        <h2 className="text-3xl font-semibold mb-4 px-4 pt-4">
+      <div className="flex-grow flex flex-col h-full p-4"> {/* Added h-full and p-4 here */}
+        <h2 className="text-3xl font-semibold mb-4"> {/* Removed px-4 pt-4 from h2 */}
           Ask {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <ChatInterface
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow h-full px-4 pb-4" // Added h-full here
+          className="flex-grow h-full" {/* Removed px-4 pb-4 from here */}
         />
       </div>
     </div>
