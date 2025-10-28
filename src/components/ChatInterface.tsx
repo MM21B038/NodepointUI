@@ -184,7 +184,7 @@ const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => 
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full justify-start text-xs text-primary-foreground/80 hover:bg-primary-foreground/10 px-2 py-1 h-auto transition-all duration-200"
+        className="w-full justify-start text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground px-2 py-1 h-auto transition-all duration-200"
       >
         {isOpen ? (
           <ChevronUp className="h-3 w-3 mr-1" />
@@ -194,12 +194,12 @@ const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => 
         Thinking Process (Provenance)
       </Button>
       {isOpen && (
-        <div className="mt-3 space-y-3 text-xs bg-primary-foreground/5 p-3 rounded-lg border border-dashed border-primary-foreground/20 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="mt-3 space-y-3 text-xs bg-secondary p-3 rounded-lg border border-dashed border-secondary-foreground/20 animate-in fade-in slide-in-from-top-2 duration-300">
           {provenance.map((entry, index) => (
-            <div key={index} className="pb-2 border-b border-dashed border-primary-foreground/10 last:border-b-0">
-              <p className="font-semibold text-primary-foreground/90">Source ID: {entry.id}</p>
-              <p className="text-primary-foreground/70 italic mt-1">Reason: {entry.reason}</p>
-              <p className="text-primary-foreground/80 mt-1 line-clamp-3">{entry.snippet}</p>
+            <div key={index} className="pb-2 border-b border-dashed border-secondary-foreground/10 last:border-b-0">
+              <p className="font-semibold text-primary">Source ID: {entry.id}</p>
+              <p className="text-muted-foreground italic mt-1">Reason: {entry.reason}</p>
+              <p className="text-foreground mt-1 line-clamp-3">{entry.snippet}</p>
             </div>
           ))}
         </div>
