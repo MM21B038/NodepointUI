@@ -1,33 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import React, { useState, useEffect } from "react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Loader2, Files, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Search } from "lucide-react";
+import { SearchEngineType, getWorkspaceFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
-import { listFiles, SearchEngineType } from "@/database/workspaceStorage";
-import { cn } from "@/lib/utils";
 
 interface SearchControlsProps {
-  workspaceName: string | null;
+  workspaceName: string;
   onSearchSettingsChange: (engine: SearchEngineType, files: string[] | "all") => void;
 }
-
-const searchEngines: { value: SearchEngineType; label: string }[] = [
-  { value: "agent_search", label: "Agent Search" },
-  { value: "global_search", label: "Global Search" },
-  { value: "local_search", label: "Local Search" },
-  { value: "hybrid_search", label: "Hybrid Search" },
-];
 
 const SearchControls: React.FC<SearchControlsProps> = ({
   workspaceName,
@@ -35,163 +25,113 @@ const SearchControls: React.FC<SearchControlsProps> = ({
 }) => {
   const [selectedEngine, setSelectedEngine] = useState<SearchEngineType>("agent_search");
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [isAllFilesSelected, setIsAllFilesSelected] = useState(true);
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<string[] | "all">("all");
 
-  const fetchFiles = useCallback(async (name: string) => {
-    setIsLoadingFiles(true);
-    try {
-      const files = await listFiles(name);
-      setAvailableFiles(files);
-      // If "All files" was selected, re-select all new files
-      if (isAllFilesSelected) {
-        setSelectedFiles(new Set(files));
-      } else {
-        // Otherwise, ensure only previously selected files that still exist are kept
-        setSelectedFiles(prev => new Set(files.filter(file => prev.has(file))));
+  useEffect(() => {
+    const fetchFiles = async () => {
+      if (workspaceName) {
+        try {
+          const files = await getWorkspaceFiles(workspaceName);
+          setAvailableFiles(files);
+        } catch (error) {
+          console.error("Failed to fetch workspace files:", error);
+          toast.error("Failed to load workspace files.");
+        }
       }
-    } catch (error) {
-      toast.error("Failed to load files for workspace.");
-      setAvailableFiles([]);
-      setSelectedFiles(new Set());
-      setIsAllFilesSelected(true); // Reset to all selected on error
-    } finally {
-      setIsLoadingFiles(false);
-    }
-  }, [isAllFilesSelected]);
+    };
+    fetchFiles();
+  }, [workspaceName]);
 
   useEffect(() => {
-    if (workspaceName) {
-      fetchFiles(workspaceName);
-    } else {
-      setAvailableFiles([]);
-      setSelectedFiles(new Set());
-      setIsAllFilesSelected(true);
-    }
-  }, [workspaceName, fetchFiles]);
+    onSearchSettingsChange(selectedEngine, selectedFiles);
+  }, [selectedEngine, selectedFiles, onSearchSettingsChange]);
 
-  useEffect(() => {
-    // Notify parent component about changes
-    const filesToPass = isAllFilesSelected ? "all" : Array.from(selectedFiles);
-    onSearchSettingsChange(selectedEngine, filesToPass);
-  }, [selectedEngine, selectedFiles, isAllFilesSelected, onSearchSettingsChange]);
-
-  const handleEngineChange = (value: SearchEngineType) => {
-    setSelectedEngine(value);
+  const handleEngineChange = (value: string) => {
+    setSelectedEngine(value as SearchEngineType);
   };
 
-  const handleAllFilesToggle = (checked: boolean) => {
-    setIsAllFilesSelected(checked);
+  const handleFileSelectionChange = (fileName: string, checked: boolean) => {
     if (checked) {
-      setSelectedFiles(new Set(availableFiles));
-    } else {
-      setSelectedFiles(new Set());
-    }
-  };
-
-  const handleFileToggle = (fileName: string, checked: boolean) => {
-    setSelectedFiles((prev) => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(fileName);
+      if (selectedFiles === "all") {
+        setSelectedFiles([fileName]);
       } else {
-        newSet.delete(fileName);
+        setSelectedFiles([...selectedFiles, fileName]);
       }
-      return newSet;
-    });
-    setIsAllFilesSelected(false); // If individual file is toggled, "All" is no longer true
+    } else {
+      if (selectedFiles !== "all") {
+        const updatedFiles = selectedFiles.filter((file) => file !== fileName);
+        setSelectedFiles(updatedFiles.length === 0 ? "all" : updatedFiles);
+      }
+    }
   };
 
-  // Update "All files" checkbox state if all individual files are selected/deselected manually
-  useEffect(() => {
-    if (availableFiles.length > 0 && selectedFiles.size === availableFiles.length) {
-      setIsAllFilesSelected(true);
-    } else if (selectedFiles.size < availableFiles.length) {
-      setIsAllFilesSelected(false);
+  const handleSelectAllFiles = (checked: boolean) => {
+    if (checked) {
+      setSelectedFiles("all");
+    } else {
+      setSelectedFiles([]);
     }
-  }, [selectedFiles, availableFiles]);
+  };
 
-  const isDisabled = !workspaceName;
+  const isFileSelected = (fileName: string) => {
+    return selectedFiles === "all" || selectedFiles.includes(fileName);
+  };
 
   return (
-    <div className="w-64 flex-shrink-0 bg-card border-r p-4 space-y-6">
+    <div className="w-64 flex-shrink-0 bg-card border-r p-6 space-y-6"> {/* Changed p-4 to p-6 */}
       <div className="space-y-2">
         <h3 className="text-lg font-semibold flex items-center">
           <Search className="h-4 w-4 mr-2" /> Search Engine
         </h3>
-        <Select
+        <RadioGroup
           value={selectedEngine}
           onValueChange={handleEngineChange}
-          disabled={isDisabled}
+          className="grid gap-2"
         >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Engine" />
-          </SelectTrigger>
-          <SelectContent>
-            {searchEngines.map((engine) => (
-              <SelectItem key={engine.value} value={engine.value}>
-                {engine.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="agent_search" id="agent_search" />
+            <Label htmlFor="agent_search">Agent Search</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="keyword_search" id="keyword_search" />
+            <Label htmlFor="keyword_search">Keyword Search</Label>
+          </div>
+        </RadioGroup>
       </div>
-
-      <Separator />
 
       <div className="space-y-2">
         <h3 className="text-lg font-semibold flex items-center">
-          <Files className="h-4 w-4 mr-2" /> Filter Files
+          <Search className="h-4 w-4 mr-2" /> Files to Search
         </h3>
-        {isDisabled ? (
-          <p className="text-muted-foreground text-sm">Select a workspace to filter files.</p>
-        ) : isLoadingFiles ? (
-          <div className="flex items-center justify-center h-24">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          </div>
-        ) : availableFiles.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No files found in this workspace.</p>
-        ) : (
-          <>
-            <div className="flex items-center space-x-2 mb-2">
-              <Checkbox
-                id="all-files"
-                checked={isAllFilesSelected}
-                onCheckedChange={(checked) => handleAllFilesToggle(Boolean(checked))}
-                disabled={isDisabled}
-              />
-              <Label htmlFor="all-files" className="text-sm font-medium cursor-pointer">
-                All Files ({availableFiles.length})
-              </Label>
-            </div>
-            <Separator />
-            <ScrollArea className="h-48 pr-4">
-              <div className="space-y-2">
-                {availableFiles.map((file) => (
-                  <div key={file} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`file-${file}`}
-                      checked={selectedFiles.has(file)}
-                      onCheckedChange={(checked) => handleFileToggle(file, Boolean(checked))}
-                      disabled={isDisabled}
-                    />
-                    <Label
-                      htmlFor={`file-${file}`}
-                      className={cn(
-                        "text-sm font-normal cursor-pointer max-w-[180px] truncate",
-                        isDisabled && "text-muted-foreground"
-                      )}
-                      title={file}
-                    >
-                      {file}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </>
-        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              {selectedFiles === "all"
+                ? "All Files"
+                : selectedFiles.length > 0
+                ? `${selectedFiles.length} File(s) Selected`
+                : "No Files Selected"}
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56">
+            <DropdownMenuCheckboxItem
+              checked={selectedFiles === "all"}
+              onCheckedChange={handleSelectAllFiles}
+            >
+              All Files
+            </DropdownMenuCheckboxItem>
+            {availableFiles.map((file) => (
+              <DropdownMenuCheckboxItem
+                key={file}
+                checked={isFileSelected(file)}
+                onCheckedChange={(checked) => handleFileSelectionChange(file, checked)}
+              >
+                {file}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
