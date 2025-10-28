@@ -91,59 +91,62 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className={cn("flex flex-col bg-background border rounded-lg shadow-sm", className)}>
-      <ScrollArea className="flex-grow min-h-0" ref={scrollAreaRef}>
-        <div className="p-4 space-y-6"> {/* Increased space-y for better message separation */}
-          {messages.length === 0 && !isLoadingSearch ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Start a conversation!
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex items-start gap-3",
-                  message.type === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                {message.type === "bot" && (
-                  <div className="flex-shrink-0 p-2 rounded-full bg-secondary text-secondary-foreground">
-                    <Bot className="h-4 w-4" />
-                  </div>
-                )}
+      <div className="flex-grow flex flex-col"> {/* This div manages vertical alignment */}
+        {messages.length === 0 && (
+          <div className="flex-grow flex items-center justify-center"> {/* Centers content when no messages */}
+            <p className="text-muted-foreground">Start a conversation!</p>
+          </div>
+        )}
+        {messages.length > 0 && (
+          <ScrollArea className="flex-grow min-h-0" ref={scrollAreaRef}>
+            <div className="p-4 space-y-6">
+              {messages.map((message) => (
                 <div
+                  key={message.id}
                   className={cn(
-                    "max-w-[75%] p-3 rounded-xl border", // Adjusted max-w and added border, rounded-xl
-                    message.type === "user"
-                      ? "bg-primary text-primary-foreground border-primary/50" // User message styling
-                      : "bg-muted text-muted-foreground border-muted-foreground/20" // Bot message styling
+                    "flex items-start gap-3",
+                    message.type === "user" ? "justify-end" : "justify-start"
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                  {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
-                    <ProvenanceDisplay provenance={message.provenance} />
+                  {message.type === "bot" && (
+                    <div className="flex-shrink-0 p-2 rounded-full bg-secondary text-secondary-foreground">
+                      <Bot className="h-4 w-4" />
+                    </div>
                   )}
-                  <span className="block text-xs opacity-70 mt-2 text-right"> {/* Timestamp aligned right */}
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                {message.type === "user" && (
-                  <div className="flex-shrink-0 p-2 rounded-full bg-primary text-primary-foreground">
-                    <User className="h-4 w-4" />
+                  <div
+                    className={cn(
+                      "max-w-[75%] p-3 rounded-xl border",
+                      message.type === "user"
+                        ? "bg-primary text-primary-foreground border-primary/50"
+                        : "bg-muted text-muted-foreground border-muted-foreground/20"
+                    )}
+                  >
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                    {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
+                      <ProvenanceDisplay provenance={message.provenance} />
+                    )}
+                    <span className="block text-xs opacity-70 mt-2 text-right">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))
-          )}
-          {isLoadingSearch && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
-              <span className="text-muted-foreground">Searching...</span>
+                  {message.type === "user" && (
+                    <div className="flex-shrink-0 p-2 rounded-full bg-primary text-primary-foreground">
+                      <User className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      </ScrollArea>
-      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0">
+          </ScrollArea>
+        )}
+        {isLoadingSearch && (
+          <div className="flex items-center justify-center py-4 flex-shrink-0">
+            <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+            <span className="text-muted-foreground">Searching...</span>
+          </div>
+        )}
+      </div>
+      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0"> {/* Input area always at bottom */}
         <Input
           placeholder={isWorkspaceSelected ? "Type your message..." : "Select a workspace to chat"}
           value={currentInput}
@@ -176,12 +179,12 @@ const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => 
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="mt-3 pt-3 border-t border-muted-foreground/30"> {/* Adjusted spacing */}
+    <div className="mt-3 pt-3 border-t border-muted-foreground/30">
       <Button
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full justify-start text-xs text-muted-foreground hover:bg-muted-foreground/10 px-2 py-1 h-auto" // More compact button
+        className="w-full justify-start text-xs text-muted-foreground hover:bg-muted-foreground/10 px-2 py-1 h-auto"
       >
         {isOpen ? (
           <ChevronUp className="h-3 w-3 mr-1" />
@@ -191,9 +194,9 @@ const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => 
         Thinking Process (Provenance)
       </Button>
       {isOpen && (
-        <div className="mt-2 space-y-3 text-xs bg-background/70 p-3 rounded-lg border border-dashed"> {/* Enhanced styling */}
+        <div className="mt-2 space-y-3 text-xs bg-background/70 p-3 rounded-lg border border-dashed">
           {provenance.map((entry, index) => (
-            <div key={index} className="pb-1 border-b border-dashed last:border-b-0"> {/* Separator for entries */}
+            <div key={index} className="pb-1 border-b border-dashed last:border-b-0">
               <p className="font-semibold text-primary/80">Source ID: {entry.id}</p>
               <p className="text-muted-foreground italic mt-1">Reason: {entry.reason}</p>
               <p className="text-foreground/80 mt-1 line-clamp-3">{entry.snippet}</p>
