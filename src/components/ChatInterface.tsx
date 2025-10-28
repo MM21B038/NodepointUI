@@ -93,13 +93,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
       <ScrollArea className="flex-grow min-h-0" ref={scrollAreaRef}>
-        <div className={cn("space-y-6 p-4", messages.length === 0 && "flex flex-col items-center justify-center min-h-full")}>
-          {messages.length === 0 ? (
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-4">
             <div className="text-muted-foreground text-lg">
               Start a conversation!
             </div>
-          ) : (
-            messages.map((message) => (
+          </div>
+        ) : (
+          <div className="space-y-6 p-4">
+            {messages.map((message) => (
               <div
                 key={message.id}
                 className={cn(
@@ -134,9 +136,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   </div>
                 )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </ScrollArea>
       {isLoadingSearch && (
         <div className="flex items-center justify-center py-4 flex-shrink-0 border-t bg-background/50">
