@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,11 +9,12 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Search, Bot, FileSearch } from "lucide-react"; // Added Bot, FileSearch
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
+import { ChevronDown, Search, FileSearch } from "lucide-react";
 import { SearchEngineType, listFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils"; // Import cn for conditional classNames
-import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SearchControlsProps {
   workspaceName: string;
@@ -80,18 +80,10 @@ const SearchControls: React.FC<SearchControlsProps> = ({
   };
 
   const searchEngineOptions = [
-    {
-      value: "agent_search",
-      label: "Agent Search",
-      description: "Leverages an AI agent to perform multi-step reasoning and synthesis.",
-      icon: Bot,
-    },
-    {
-      value: "keyword_search",
-      label: "Keyword Search",
-      description: "Performs a direct keyword match across documents for quick retrieval.",
-      icon: FileSearch,
-    },
+    { value: "agent_search", label: "Agent Search" },
+    { value: "global_search", label: "Global Search" },
+    { value: "local_search", label: "Local Search" },
+    { value: "hybrid_search", label: "Hybrid Search" },
   ];
 
   return (
@@ -100,30 +92,18 @@ const SearchControls: React.FC<SearchControlsProps> = ({
         <h3 className="text-lg font-semibold flex items-center">
           <Search className="h-4 w-4 mr-2" /> Search Engine
         </h3>
-        <RadioGroup
-          value={selectedEngine}
-          onValueChange={handleEngineChange}
-          className="grid gap-3"
-        >
-          {searchEngineOptions.map((option) => (
-            <Label
-              key={option.value}
-              htmlFor={option.value}
-              className={cn(
-                "flex flex-col items-start space-y-1 rounded-md border p-3 cursor-pointer",
-                "hover:bg-accent hover:text-accent-foreground",
-                selectedEngine === option.value && "border-primary ring-2 ring-primary/50 bg-primary/5"
-              )}
-            >
-              <div className="flex items-center w-full">
-                <RadioGroupItem value={option.value} id={option.value} className="mr-2" />
-                <option.icon className="h-4 w-4 mr-2 text-primary" />
-                <span className="font-medium">{option.label}</span>
-              </div>
-              <p className="text-xs text-muted-foreground ml-7">{option.description}</p>
-            </Label>
-          ))}
-        </RadioGroup>
+        <Select value={selectedEngine} onValueChange={handleEngineChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select Search Engine" />
+          </SelectTrigger>
+          <SelectContent>
+            {searchEngineOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">
@@ -142,7 +122,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56">
-            <ScrollArea className="max-h-[200px]"> {/* Added ScrollArea */}
+            <ScrollArea className="max-h-[200px]">
               <DropdownMenuCheckboxItem
                 checked={selectedFiles === "all"}
                 onCheckedChange={handleSelectAllFiles}
