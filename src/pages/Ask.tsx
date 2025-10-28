@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react"; // Added React import
+import React, { useState, useCallback } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -78,7 +78,7 @@ const Ask = () => {
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow px-4 pb-4"
+          className="flex-grow h-full px-4 pb-4" // Added h-full here
         />
       </div>
     </div>

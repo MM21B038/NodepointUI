@@ -20,14 +20,14 @@ interface ChatInterfaceProps {
   onSendMessage: (query: string) => Promise<{ answer: string; provenance: ProvenanceEntry[] }>;
   isLoadingSearch: boolean;
   isWorkspaceSelected: boolean;
-  className?: string; // Added className prop
+  className?: string;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   isLoadingSearch,
   isWorkspaceSelected,
-  className, // Destructure className
+  className,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentInput, setCurrentInput] = useState("");
@@ -90,8 +90,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <div className={cn("flex flex-col bg-background border rounded-lg shadow-sm", className)}> {/* Removed h-full, added className */}
-      <ScrollArea className="flex-grow" ref={scrollAreaRef}>
+    <div className={cn("flex flex-col bg-background border rounded-lg shadow-sm", className)}>
+      <ScrollArea className="flex-grow min-h-0" ref={scrollAreaRef}> {/* Added min-h-0 here */}
         <div className="p-4 space-y-4">
           {messages.length === 0 && !isLoadingSearch ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
