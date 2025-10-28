@@ -10,9 +10,11 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Search } from "lucide-react";
-import { SearchEngineType, listFiles } from "@/database/workspaceStorage"; // Corrected import to listFiles
+import { ChevronDown, Search, Bot, FileSearch } from "lucide-react"; // Added Bot, FileSearch
+import { SearchEngineType, listFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils"; // Import cn for conditional classNames
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 
 interface SearchControlsProps {
   workspaceName: string;
@@ -31,7 +33,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
     const fetchFiles = async () => {
       if (workspaceName) {
         try {
-          const files = await listFiles(workspaceName); // Corrected usage to listFiles
+          const files = await listFiles(workspaceName);
           setAvailableFiles(files);
         } catch (error) {
           console.error("Failed to fetch workspace files:", error);
@@ -74,62 +76,95 @@ const SearchControls: React.FC<SearchControlsProps> = ({
   };
 
   const isFileSelected = (fileName: string) => {
-    return selectedFiles === "all" || selectedFiles.includes(fileName);
+    return selectedFiles === "all" || (Array.isArray(selectedFiles) && selectedFiles.includes(fileName));
   };
+
+  const searchEngineOptions = [
+    {
+      value: "agent_search",
+      label: "Agent Search",
+      description: "Leverages an AI agent to perform multi-step reasoning and synthesis.",
+      icon: Bot,
+    },
+    {
+      value: "keyword_search",
+      label: "Keyword Search",
+      description: "Performs a direct keyword match across documents for quick retrieval.",
+      icon: FileSearch,
+    },
+  ];
 
   return (
     <div className="w-64 flex-shrink-0 bg-card border-r p-6 space-y-6">
-      <div className="space-y-2">
+      <div className="space-y-4">
         <h3 className="text-lg font-semibold flex items-center">
           <Search className="h-4 w-4 mr-2" /> Search Engine
         </h3>
         <RadioGroup
           value={selectedEngine}
           onValueChange={handleEngineChange}
-          className="grid gap-2"
+          className="grid gap-3"
         >
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="agent_search" id="agent_search" />
-            <Label htmlFor="agent_search">Agent Search</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="keyword_search" id="keyword_search" />
-            <Label htmlFor="keyword_search">Keyword Search</Label>
-          </div>
+          {searchEngineOptions.map((option) => (
+            <Label
+              key={option.value}
+              htmlFor={option.value}
+              className={cn(
+                "flex flex-col items-start space-y-1 rounded-md border p-3 cursor-pointer",
+                "hover:bg-accent hover:text-accent-foreground",
+                selectedEngine === option.value && "border-primary ring-2 ring-primary/50 bg-primary/5"
+              )}
+            >
+              <div className="flex items-center w-full">
+                <RadioGroupItem value={option.value} id={option.value} className="mr-2" />
+                <option.icon className="h-4 w-4 mr-2 text-primary" />
+                <span className="font-medium">{option.label}</span>
+              </div>
+              <p className="text-xs text-muted-foreground ml-7">{option.description}</p>
+            </Label>
+          ))}
         </RadioGroup>
       </div>
 
       <div className="space-y-2">
         <h3 className="text-lg font-semibold flex items-center">
-          <Search className="h-4 w-4 mr-2" /> Files to Search
+          <FileSearch className="h-4 w-4 mr-2" /> Files to Search
         </h3>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-full justify-between">
               {selectedFiles === "all"
                 ? "All Files"
-                : selectedFiles.length > 0
+                : Array.isArray(selectedFiles) && selectedFiles.length > 0
                 ? `${selectedFiles.length} File(s) Selected`
                 : "No Files Selected"}
               <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56">
-            <DropdownMenuCheckboxItem
-              checked={selectedFiles === "all"}
-              onCheckedChange={handleSelectAllFiles}
-            >
-              All Files
-            </DropdownMenuCheckboxItem>
-            {availableFiles.map((file) => (
+            <ScrollArea className="max-h-[200px]"> {/* Added ScrollArea */}
               <DropdownMenuCheckboxItem
-                key={file}
-                checked={isFileSelected(file)}
-                onCheckedChange={(checked) => handleFileSelectionChange(file, checked)}
+                checked={selectedFiles === "all"}
+                onCheckedChange={handleSelectAllFiles}
               >
-                {file}
+                All Files
               </DropdownMenuCheckboxItem>
-            ))}
+              {availableFiles.length === 0 ? (
+                <DropdownMenuCheckboxItem disabled>
+                  No files available
+                </DropdownMenuCheckboxItem>
+              ) : (
+                availableFiles.map((file) => (
+                  <DropdownMenuCheckboxItem
+                    key={file}
+                    checked={isFileSelected(file)}
+                    onCheckedChange={(checked) => handleFileSelectionChange(file, checked)}
+                  >
+                    {file}
+                  </DropdownMenuCheckboxItem>
+                ))
+              )}
+            </ScrollArea>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
