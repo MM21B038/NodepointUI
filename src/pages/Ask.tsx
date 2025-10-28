@@ -70,7 +70,7 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col h-full"> {/* Added h-full here */}
+      <div className="flex-grow flex flex-col h-full">
         <h2 className="text-3xl font-semibold mb-4 px-4 pt-4">
           Ask {currentWorkspace && `(${currentWorkspace})`}
         </h2>
@@ -78,7 +78,7 @@ const Ask = () => {
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow px-4 pb-4 min-h-0" {/* Added min-h-0 here */}
+          className="flex-grow px-4 pb-4 min-h-0"
         />
       </div>
     </div>
