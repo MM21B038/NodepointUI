@@ -40,7 +40,7 @@ const Ask = () => {
         );
         return response;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during search.";
         toast.error(`Search failed: ${errorMessage}`);
         return { answer: `Error: ${errorMessage}`, provenance: [] };
       } finally {
@@ -70,7 +70,7 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col h-full">
+      <div className="flex-grow flex flex-col">
         <h2 className="text-3xl font-semibold mb-4 px-4 pt-4">
           Ask {currentWorkspace && `(${currentWorkspace})`}
         </h2>
@@ -78,7 +78,7 @@ const Ask = () => {
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow h-full px-4 pb-4"
+          className="flex-grow px-4 pb-4" // Removed h-full here
         />
       </div>
     </div>
