@@ -20,16 +20,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       
       <main 
         className={cn(
-          "flex-grow",
-          // Default padding for other pages
-          !isKnowledgeBase && "p-4",
-          // Full height/width for Knowledge Base
-          isKnowledgeBase && "h-[calc(100vh-64px)] flex flex-col" // Assuming Navbar is ~64px tall
+          "flex-grow flex flex-col", // Ensure main takes full height and is a flex container
+          // Removed the conditional "p-4" from here, children will manage their own padding
+          isKnowledgeBase && "h-[calc(100vh-64px)]" // Keep specific height for Knowledge Base if needed
         )}
       >
         <div className={cn(
-          "h-full",
-          !isKnowledgeBase && "container mx-auto"
+          "h-full w-full", // Ensure this div takes full height and width of main
+          !isKnowledgeBase && "container mx-auto" // Apply container for non-KB pages
         )}>
           {children}
         </div>
