@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Search } from "lucide-react";
-import { SearchEngineType, listFiles } from "@/database/workspaceStorage"; // Corrected import to listFiles
+import { SearchEngineType, getWorkspaceFiles } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 
 interface SearchControlsProps {
@@ -31,7 +31,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
     const fetchFiles = async () => {
       if (workspaceName) {
         try {
-          const files = await listFiles(workspaceName); // Corrected function call to listFiles
+          const files = await getWorkspaceFiles(workspaceName);
           setAvailableFiles(files);
         } catch (error) {
           console.error("Failed to fetch workspace files:", error);
@@ -78,7 +78,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({
   };
 
   return (
-    <div className="w-64 flex-shrink-0 bg-card border-r p-6 space-y-6">
+    <div className="w-64 flex-shrink-0 bg-card border-r p-6 space-y-6"> {/* Changed p-4 to p-6 */}
       <div className="space-y-2">
         <h3 className="text-lg font-semibold flex items-center">
           <Search className="h-4 w-4 mr-2" /> Search Engine
