@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react"; // Added React import
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -70,15 +70,15 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col"> {/* Removed p-4 from here */}
-        <h2 className="text-3xl font-semibold mb-4 px-4 pt-4"> {/* Added px-4 pt-4 for title padding */}
+      <div className="flex-grow flex flex-col">
+        <h2 className="text-3xl font-semibold mb-4 px-4 pt-4">
           Ask {currentWorkspace && `(${currentWorkspace})`}
         </h2>
         <ChatInterface
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
-          className="flex-grow px-4 pb-4" {/* Added flex-grow and padding for the chat interface */}
+          className="flex-grow px-4 pb-4"
         />
       </div>
     </div>
