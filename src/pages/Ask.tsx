@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import SearchControls from "@/components/SearchControls";
-import { performSearch, SearchEngineType } from "@/database/workspaceStorage";
+import { performSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
 import { toast } from "sonner";
 
 const Ask = () => {
@@ -24,10 +24,10 @@ const Ask = () => {
   );
 
   const handleSendMessage = useCallback(
-    async (query: string): Promise<string> => {
+    async (query: string): Promise<{ answer: string; provenance: ProvenanceEntry[] }> => {
       if (!currentWorkspace) {
         toast.error("Please select a workspace before asking questions.");
-        return "Error: No workspace selected.";
+        return { answer: "Error: No workspace selected.", provenance: [] };
       }
 
       setIsLoadingSearch(true);
@@ -42,7 +42,7 @@ const Ask = () => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during search.";
         toast.error(`Search failed: ${errorMessage}`);
-        return `Error: ${errorMessage}`;
+        return { answer: `Error: ${errorMessage}`, provenance: [] };
       } finally {
         setIsLoadingSearch(false);
       }

@@ -3,19 +3,21 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send, Loader2, Bot, User } from "lucide-react";
+import { Send, Loader2, Bot, User, ChevronDown, ChevronUp } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
 
 export interface ChatMessage {
   id: string;
   type: "user" | "bot";
   text: string;
   timestamp: Date;
+  provenance?: ProvenanceEntry[]; // Add provenance to chat message
 }
 
 interface ChatInterfaceProps {
-  onSendMessage: (query: string) => Promise<string>;
+  onSendMessage: (query: string) => Promise<{ answer: string; provenance: ProvenanceEntry[] }>;
   isLoadingSearch: boolean;
   isWorkspaceSelected: boolean;
 }
@@ -30,7 +32,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isSending, setIsSending] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom on new message
+  // Scroll to bottom on new message or loading state change
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
@@ -38,7 +40,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         behavior: "smooth",
       });
     }
-  }, [messages]);
+  }, [messages, isLoadingSearch]);
 
   const handleSend = async () => {
     const query = currentInput.trim();
@@ -56,12 +58,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsSending(true);
 
     try {
-      const botResponseText = await onSendMessage(query);
+      const { answer, provenance } = await onSendMessage(query);
       const botMessage: ChatMessage = {
         id: `bot-${Date.now()}`,
         type: "bot",
-        text: botResponseText,
+        text: answer,
         timestamp: new Date(),
+        provenance: provenance,
       };
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
@@ -89,7 +92,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <div className="flex flex-col h-full bg-background border rounded-lg shadow-sm">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
-          {messages.length === 0 ? (
+          {messages.length === 0 && !isLoadingSearch ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Start a conversation!
             </div>
@@ -116,6 +119,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   )}
                 >
                   <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                  {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
+                    <ProvenanceDisplay provenance={message.provenance} />
+                  )}
                   <span className="block text-xs opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -128,9 +134,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             ))
           )}
+          {isLoadingSearch && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+              <span className="text-muted-foreground">Searching...</span>
+            </div>
+          )}
         </div>
       </ScrollArea>
-      <div className="border-t p-4 flex items-center gap-2">
+      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0"> {/* Added flex-shrink-0 */}
         <Input
           placeholder={isWorkspaceSelected ? "Type your message..." : "Select a workspace to chat"}
           value={currentInput}
@@ -151,6 +163,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <span className="sr-only">Send message</span>
         </Button>
       </div>
+    </div>
+  );
+};
+
+interface ProvenanceDisplayProps {
+  provenance: ProvenanceEntry[];
+}
+
+const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mt-2 border-t border-muted-foreground/30 pt-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full justify-start text-xs text-muted-foreground hover:bg-muted-foreground/10"
+      >
+        {isOpen ? (
+          <ChevronUp className="h-3 w-3 mr-1" />
+        ) : (
+          <ChevronDown className="h-3 w-3 mr-1" />
+        )}
+        Thinking Process (Provenance)
+      </Button>
+      {isOpen && (
+        <div className="mt-2 space-y-2 text-xs bg-background/50 p-2 rounded-md border border-dashed">
+          {provenance.map((entry, index) => (
+            <div key={index} className="pb-1">
+              <p className="font-semibold text-primary/80">Source ID: {entry.id}</p>
+              <p className="text-muted-foreground italic">Reason: {entry.reason}</p>
+              <p className="text-foreground/80 mt-1 line-clamp-3">{entry.snippet}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

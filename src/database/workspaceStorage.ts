@@ -86,18 +86,23 @@ export interface SearchRequest {
   filter: SearchFilter;
 }
 
-// Updated SearchResponse to match the new structure
+export interface ProvenanceEntry {
+  id: string;
+  snippet: string;
+  reason: string;
+}
+
 export interface SearchResponse {
   message: {
     query: string;
     seed_ids: string[];
     steps_executed: number;
-    history: any[]; // You might want to define a more specific type for history
+    history: any[]; 
     subgraph_nodes_count: number;
     subgraph_edges_count: number;
     synthesis: {
       answer: string;
-      provenance: any[]; // You might want to define a more specific type for provenance
+      provenance: ProvenanceEntry[]; 
       recommended_next_steps: string[];
     };
   };
@@ -349,14 +354,14 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
  * @param engine The search engine to use.
  * @param query The search query string.
  * @param filesFilter An array of file names or 'all' to filter the search.
- * @returns A promise that resolves to the search response message.
+ * @returns A promise that resolves to an object containing the answer and provenance.
  */
 export async function performSearch(
   workspaceName: string,
   engine: SearchEngineType,
   query: string,
   filesFilter: string[] | "all"
-): Promise<string> {
+): Promise<{ answer: string; provenance: ProvenanceEntry[] }> {
   try {
     const body: SearchRequest = {
       query: query,
@@ -380,8 +385,11 @@ export async function performSearch(
     if (data.error) {
       throw new Error(data.error);
     }
-    // Extract the answer from the nested message structure
-    return data.message.synthesis.answer;
+    // Extract the answer and provenance from the nested message structure
+    return {
+      answer: data.message.synthesis.answer,
+      provenance: data.message.synthesis.provenance,
+    };
   } catch (error) {
     console.error(`Error performing search in ${workspaceName} with ${engine}:`, error);
     throw error;
