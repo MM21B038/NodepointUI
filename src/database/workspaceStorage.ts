@@ -86,8 +86,21 @@ export interface SearchRequest {
   filter: SearchFilter;
 }
 
+// Updated SearchResponse to match the new structure
 export interface SearchResponse {
-  message: string;
+  message: {
+    query: string;
+    seed_ids: string[];
+    steps_executed: number;
+    history: any[]; // You might want to define a more specific type for history
+    subgraph_nodes_count: number;
+    subgraph_edges_count: number;
+    synthesis: {
+      answer: string;
+      provenance: any[]; // You might want to define a more specific type for provenance
+      recommended_next_steps: string[];
+    };
+  };
   error?: string;
 }
 
@@ -367,7 +380,8 @@ export async function performSearch(
     if (data.error) {
       throw new Error(data.error);
     }
-    return data.message;
+    // Extract the answer from the nested message structure
+    return data.message.synthesis.answer;
   } catch (error) {
     console.error(`Error performing search in ${workspaceName} with ${engine}:`, error);
     throw error;
