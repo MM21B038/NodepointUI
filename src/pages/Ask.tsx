@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import SearchControls from "@/components/SearchControls";
-import { performSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
+import { performSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 
 const Ask = () => {
@@ -70,12 +70,15 @@ const Ask = () => {
         workspaceName={currentWorkspace}
         onSearchSettingsChange={handleSearchSettingsChange}
       />
-      <div className="flex-grow flex flex-col p-4">
-        <h2 className="text-3xl font-semibold mb-4">Ask {currentWorkspace && `(${currentWorkspace})`}</h2>
+      <div className="flex-grow flex flex-col"> {/* Removed p-4 from here */}
+        <h2 className="text-3xl font-semibold mb-4 px-4 pt-4"> {/* Added px-4 pt-4 for title padding */}
+          Ask {currentWorkspace && `(${currentWorkspace})`}
+        </h2>
         <ChatInterface
           onSendMessage={handleSendMessage}
           isLoadingSearch={isLoadingSearch}
           isWorkspaceSelected={!!currentWorkspace}
+          className="flex-grow px-4 pb-4" {/* Added flex-grow and padding for the chat interface */}
         />
       </div>
     </div>

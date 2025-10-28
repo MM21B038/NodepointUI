@@ -6,33 +6,34 @@ import { Button } from "@/components/ui/button";
 import { Send, Loader2, Bot, User, ChevronDown, ChevronUp } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
+import { ProvenanceEntry } from "@/database/workspaceStorage";
 
 export interface ChatMessage {
   id: string;
   type: "user" | "bot";
   text: string;
   timestamp: Date;
-  provenance?: ProvenanceEntry[]; // Add provenance to chat message
+  provenance?: ProvenanceEntry[];
 }
 
 interface ChatInterfaceProps {
   onSendMessage: (query: string) => Promise<{ answer: string; provenance: ProvenanceEntry[] }>;
   isLoadingSearch: boolean;
   isWorkspaceSelected: boolean;
+  className?: string; // Added className prop
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   isLoadingSearch,
   isWorkspaceSelected,
+  className, // Destructure className
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentInput, setCurrentInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom on new message or loading state change
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
@@ -89,9 +90,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background border rounded-lg shadow-sm">
-      <ScrollArea className="flex-grow" ref={scrollAreaRef}> {/* Removed p-4 from here */}
-        <div className="p-4 space-y-4"> {/* Added p-4 to the inner div */}
+    <div className={cn("flex flex-col bg-background border rounded-lg shadow-sm", className)}> {/* Removed h-full, added className */}
+      <ScrollArea className="flex-grow" ref={scrollAreaRef}>
+        <div className="p-4 space-y-4">
           {messages.length === 0 && !isLoadingSearch ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Start a conversation!
@@ -142,7 +143,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
         </div>
       </ScrollArea>
-      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0"> {/* Added flex-shrink-0 */}
+      <div className="border-t p-4 flex items-center gap-2 flex-shrink-0">
         <Input
           placeholder={isWorkspaceSelected ? "Type your message..." : "Select a workspace to chat"}
           value={currentInput}
