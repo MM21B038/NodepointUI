@@ -37,10 +37,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      // The ScrollArea component from shadcn/ui wraps the actual viewport.
+      // We need to find the viewport element to scroll it.
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      }
     }
   }, [messages, isLoadingSearch]);
 
@@ -92,7 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
-      <ScrollArea className="flex-grow min-h-0" ref={scrollAreaRef}>
+      <ScrollArea className="flex-grow h-0" ref={scrollAreaRef}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-grow p-4">
             <div className="text-muted-foreground text-lg">
