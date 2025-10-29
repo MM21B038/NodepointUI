@@ -227,6 +227,24 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
           {/* Node Type Filter Section */}
           <div>
             <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
+            <div className="flex space-x-2 mb-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setSelectedTypes(new Set(uniqueTypes))}
+                disabled={selectedTypes.size === uniqueTypes.length}
+              >
+                Select All
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setSelectedTypes(new Set())}
+                disabled={selectedTypes.size === 0}
+              >
+                Clear All
+              </Button>
+            </div>
             <Popover> {/* Nested Popover for Node Types */}
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-between">
@@ -268,6 +286,24 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
           {/* Source Document Filter Section */}
           <div>
             <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
+            <div className="flex space-x-2 mb-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setSelectedSources(new Set(uniqueSources))}
+                disabled={selectedSources.size === uniqueSources.length}
+              >
+                Select All
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setSelectedSources(new Set())}
+                disabled={selectedSources.size === 0}
+              >
+                Clear All
+              </Button>
+            </div>
             <Input
               placeholder="Search source documents..."
               value={sourceSearchTerm}

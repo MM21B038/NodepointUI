@@ -324,14 +324,14 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             </h5>
             <div className="border rounded-md p-3 bg-secondary/50">
               {Object.keys(item.attributes).length > 0 ? (
-                <ul className="text-sm space-y-2">
+                <div className="grid grid-cols-1 gap-y-2"> {/* Using grid for better alignment */}
                   {Object.entries(item.attributes).map(([key, value]) => (
-                    <li key={key} className="flex flex-col sm:flex-row sm:items-baseline break-words">
-                      <span className="font-mono text-xs text-primary/80 sm:w-1/3 flex-shrink-0">{key}:</span> 
-                      <span className="text-foreground sm:w-2/3">{String(value)}</span>
-                    </li>
+                    <div key={key} className="flex flex-col">
+                      <span className="font-semibold text-sm text-muted-foreground">{key}:</span> 
+                      <span className="text-foreground text-sm break-words">{String(value)}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground">No specific attributes found.</p>
               )}
