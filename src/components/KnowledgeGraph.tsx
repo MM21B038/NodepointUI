@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, Info, ChevronDown } from "lucide-react"; // Removed ChevronLeft, ChevronRight
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,8 +32,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
-  // Overlay state
-  const [isDetailOpen, setIsDetailOpen] = useState(true);
+  // State to control the detail popover's open/close status
+  const [isDetailPopoverOpen, setIsDetailPopoverOpen] = useState(false);
 
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -48,7 +48,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     
     setIsLoading(true);
     setError(null);
-    setSelectedItem(null);
+    setSelectedItem(null); // Clear selected item on refresh
     try {
       const data = await getKnowledgeGraph(workspaceName);
       setGraphData(data);
@@ -73,6 +73,11 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Effect to manage popover open state based on selectedItem
+  useEffect(() => {
+    setIsDetailPopoverOpen(selectedItem !== null);
+  }, [selectedItem]);
 
   const handleTypeToggle = (type: string, checked: boolean) => {
     setSelectedTypes(prev => {
@@ -333,37 +338,35 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         </PopoverContent>
       </Popover>
 
-      {/* Right Detail Panel (Overlay) */}
-      <div 
-        className={cn(
-          "absolute top-4 right-4 z-10 transition-all duration-300 overflow-hidden",
-          "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Symmetric height: 100% - (16px top + 16px bottom) = 100% - 2rem
-          isDetailOpen ? "w-72 h-[calc(100%-2rem)]" : "w-10 h-[calc(100%-2rem)]"
-        )}
-      >
-        <div className="flex items-center justify-between p-3 border-b flex-shrink-0"> {/* Increased padding to p-3 */}
-          {/* Toggle button on the left */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsDetailOpen(!isDetailOpen)}
-            className="flex-shrink-0"
+      {/* Right Detail Popover (Overlay) */}
+      {selectedItem && ( // Only render the trigger if an item is selected
+        <Popover open={isDetailPopoverOpen} onOpenChange={(open) => {
+          setIsDetailPopoverOpen(open);
+          if (!open) {
+            setSelectedItem(null); // Deselect item if popover is closed
+          }
+        }}>
+          <PopoverTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="absolute top-4 right-4 z-10 shadow-lg"
+              aria-label="View Details"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-72 p-0 max-h-[calc(100vh-4rem)] overflow-y-auto" // Fixed width, max height, scrollable
+            align="end" // Align to the right of the trigger
+            sideOffset={10} // Offset from the trigger
           >
-            {/* ChevronRight when open (collapses right-to-left), ChevronLeft when closed (expands left-to-right) */}
-            {isDetailOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
-          <div className="flex-grow text-right">
-            {isDetailOpen && <h3 className="text-lg font-semibold">Details</h3>}
-          </div>
-        </div>
-        
-        {isDetailOpen && (
-          <ScrollArea className="overflow-y-auto flex-grow">
-            <DetailPanel item={selectedItem} />
-          </ScrollArea>
-        )}
-      </div>
+            <ScrollArea className="h-full"> {/* Ensure scroll area takes full height */}
+              <DetailPanel item={selectedItem} />
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 };

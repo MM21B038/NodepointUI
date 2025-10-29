@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // Added Card imports
-import { CircleDot, Link, FileText, Hash, Info } from "lucide-react"; // Added icons
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { CircleDot, Link, FileText, Hash, Info } from "lucide-react";
 
 // --- Color Mapping for React Components (DetailPanel & Filters) ---
 // This is kept simple for Tailwind classes in the React UI
@@ -297,8 +297,8 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if ('type' in item) {
     // Node details
     return (
-      <Card className="border-none shadow-none rounded-none">
-        <CardHeader className="pb-2">
+      <div className="p-4"> {/* Removed outer Card, added padding */}
+        <CardHeader className="pb-2 px-0 pt-0"> {/* Adjusted padding */}
           <CardTitle className="flex items-center text-xl">
             <CircleDot className="h-5 w-5 mr-2 text-primary" />
             <span className="break-words flex-1 min-w-0">{item.label}</span>
@@ -308,7 +308,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             <Badge variant="secondary" className="text-sm font-medium">{item.type}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-0 pb-0"> {/* Adjusted padding */}
           <div>
             <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
               <FileText className="h-4 w-4 mr-1" /> Source Document
@@ -324,7 +324,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             </h5>
             <div className="border rounded-md p-3 bg-secondary/50">
               {Object.keys(item.attributes).length > 0 ? (
-                <div className="grid grid-cols-1 gap-y-2"> {/* Using grid for better alignment */}
+                <div className="grid grid-cols-1 gap-y-2">
                   {Object.entries(item.attributes).map(([key, value]) => (
                     <div key={key} className="flex flex-col">
                       <span className="font-semibold text-sm text-muted-foreground">{key}:</span> 
@@ -338,19 +338,19 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </div>
     );
   } else {
     // Edge details
     return (
-      <Card className="border-none shadow-none rounded-none">
-        <CardHeader className="pb-2">
+      <div className="p-4"> {/* Removed outer Card, added padding */}
+        <CardHeader className="pb-2 px-0 pt-0"> {/* Adjusted padding */}
           <CardTitle className="flex items-center text-xl">
             <Link className="h-5 w-5 mr-2 text-primary" />
             Relationship
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-0 pb-0"> {/* Adjusted padding */}
           <div>
             <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
               <Info className="h-4 w-4 mr-1" /> Relationship Path
@@ -383,7 +383,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </div>
     );
   }
 };
