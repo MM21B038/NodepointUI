@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"; // Added ChevronDown
+import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,7 +12,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "./InteractiveGraphVisualization";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup } from "@/components/ui/command";
@@ -130,6 +129,29 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     );
   }, [uniqueSources, sourceSearchTerm]);
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedTypes.size > 0 && selectedTypes.size < uniqueTypes.length) {
+      count++;
+    }
+    if (selectedSources.size > 0 && selectedSources.size < uniqueSources.length) {
+      count++;
+    }
+    return count;
+  }, [selectedTypes, uniqueTypes, selectedSources, uniqueSources]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedTypes.size > 0 && selectedTypes.size < uniqueTypes.length) {
+      parts.push(`${selectedTypes.size} type${selectedTypes.size > 1 ? 's' : ''}`);
+    }
+    if (selectedSources.size > 0 && selectedSources.size < uniqueSources.length) {
+      parts.push(`${selectedSources.size} source${selectedSources.size > 1 ? 's' : ''}`);
+    }
+    return parts.join(', ');
+  }, [selectedTypes, uniqueTypes, selectedSources, uniqueSources]);
+
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -184,64 +206,65 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
       </Button>
 
-      {/* Left Filter Panel Trigger (Overlay) */}
-      <Sheet>
-        <SheetTrigger asChild>
+      {/* Main Filter Popover (Overlay) */}
+      <Popover>
+        <PopoverTrigger asChild>
           <Button 
             variant="outline" 
             className="absolute top-4 left-4 z-10 shadow-lg flex items-center gap-2"
           >
             <Filter className="h-4 w-4" />
             Filter
+            {filterSummary && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                ({filterSummary})
+              </span>
+            )}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-[300px] sm:w-[400px] flex flex-col">
-          <SheetHeader>
-            <SheetTitle>Filter Graph</SheetTitle>
-          </SheetHeader>
-          <ScrollArea className="flex-grow p-4 space-y-6">
-            {/* Node Type Filter */}
-            <div>
-              <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between">
-                    Select Node Types
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search types..." />
-                    <CommandList>
-                      <CommandEmpty>No types found.</CommandEmpty>
-                      <CommandGroup>
-                        {uniqueTypes.map(type => (
-                          <CommandItem key={type} className="p-0">
-                            <Label 
-                              htmlFor={`type-${type}`} 
-                              className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
-                            >
-                              <Checkbox
-                                id={`type-${type}`}
-                                checked={selectedTypes.has(type)}
-                                onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                              />
-                              <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
-                              <span className="text-sm font-normal flex-1">{type}</span>
-                            </Label>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
+        </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-4 space-y-6"> {/* Adjusted width for better layout */}
+          {/* Node Type Filter Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
+            <Popover> {/* Nested Popover for Node Types */}
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedTypes.size === uniqueTypes.length ? "All Types" : `${selectedTypes.size} Type(s) Selected`}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search types..." />
+                  <CommandList>
+                    <CommandEmpty>No types found.</CommandEmpty>
+                    <CommandGroup>
+                      {uniqueTypes.map(type => (
+                        <CommandItem key={type} className="p-0">
+                          <Label 
+                            htmlFor={`type-${type}`} 
+                            className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
+                          >
+                            <Checkbox
+                              id={`type-${type}`}
+                              checked={selectedTypes.has(type)}
+                              onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                            />
+                            <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
+                            <span className="text-sm font-normal flex-1">{type}</span>
+                          </Label>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
                 </PopoverContent>
               </Popover>
             </div>
 
             <Separator />
 
-            {/* Source Document Filter */}
+            {/* Source Document Filter Section */}
             <div>
               <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
               <Input
@@ -250,7 +273,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                 onChange={(e) => setSourceSearchTerm(e.target.value)}
                 className="mb-3"
               />
-              <ScrollArea className="h-64 border rounded-md p-2">
+              <ScrollArea className="h-48 border rounded-md p-2"> {/* Fixed height for vertical scrolling */}
                 <div className="space-y-2">
                   {filteredUniqueSources.length === 0 && (
                     <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
@@ -270,9 +293,9 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                 </div>
               </ScrollArea>
             </div>
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
+          </PopoverContent>
+        </Popover>
+      </Popover>
 
       {/* Right Detail Panel (Overlay) */}
       <div 
