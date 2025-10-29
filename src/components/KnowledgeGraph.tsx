@@ -297,7 +297,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
             </div>
           </PopoverContent>
         </Popover>
-      </Popover>
 
       {/* Right Detail Panel (Overlay) */}
       <div 
