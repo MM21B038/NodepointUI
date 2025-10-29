@@ -184,82 +184,80 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   }
 
   return (
-    <>
-      <div className="relative h-full w-full">
-        {/* Graph Visualization (Z-index lower) */}
-        <div className="absolute inset-0 z-0">
-          <InteractiveGraphVisualization 
-            nodes={filteredNodes} 
-            edges={filteredEdges} 
-            onSelect={setSelectedItem}
-            selectedItem={selectedItem}
-          />
-        </div>
-        
-        {/* Refresh Button (Top Center Overlay) */}
-        <Button 
-          variant="outline" 
-          size="icon" 
-          onClick={fetchData} 
-          disabled={isLoading}
-          className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 shadow-lg"
-        >
-          <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-        </Button>
+    <div className="relative h-full w-full">
+      {/* Graph Visualization (Z-index lower) */}
+      <div className="absolute inset-0 z-0">
+        <InteractiveGraphVisualization 
+          nodes={filteredNodes} 
+          edges={filteredEdges} 
+          onSelect={setSelectedItem}
+          selectedItem={selectedItem}
+        />
+      </div>
+      
+      {/* Refresh Button (Top Center Overlay) */}
+      <Button 
+        variant="outline" 
+        size="icon" 
+        onClick={fetchData} 
+        disabled={isLoading}
+        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 shadow-lg"
+      >
+        <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+      </Button>
 
-        {/* Main Filter Popover (Overlay) */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
-              className="absolute top-4 left-4 z-10 shadow-lg flex items-center gap-2"
-            >
-              <Filter className="h-4 w-4" />
-              Filter
-              {filterSummary && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  ({filterSummary})
-                </span>
-              )}
-              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[400px] p-4 space-y-6"> {/* Adjusted width for better layout */}
-            {/* Node Type Filter Section */}
-            <div>
-              <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
-              <Popover> {/* Nested Popover for Node Types */}
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between">
-                    {selectedTypes.size === uniqueTypes.length ? "All Types" : `${selectedTypes.size} Type(s) Selected`}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search types..." />
-                    <CommandList>
-                      <CommandEmpty>No types found.</CommandEmpty>
-                      <CommandGroup>
-                        {uniqueTypes.map(type => (
-                          <CommandItem key={type} className="p-0">
-                            <Label 
-                              htmlFor={`type-${type}`} 
-                              className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
-                            >
-                              <Checkbox
-                                id={`type-${type}`}
-                                checked={selectedTypes.has(type)}
-                                onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                              />
-                              <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
-                              <span className="text-sm font-normal flex-1">{type}</span>
-                            </Label>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
+      {/* Main Filter Popover (Overlay) */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="outline" 
+            className="absolute top-4 left-4 z-10 shadow-lg flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filter
+            {filterSummary && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                ({filterSummary})
+              </span>
+            )}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-4 space-y-6"> {/* Adjusted width for better layout */}
+          {/* Node Type Filter Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
+            <Popover> {/* Nested Popover for Node Types */}
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedTypes.size === uniqueTypes.length ? "All Types" : `${selectedTypes.size} Type(s) Selected`}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search types..." />
+                  <CommandList>
+                    <CommandEmpty>No types found.</CommandEmpty>
+                    <CommandGroup>
+                      {uniqueTypes.map(type => (
+                        <CommandItem key={type} className="p-0">
+                          <Label 
+                            htmlFor={`type-${type}`} 
+                            className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
+                          >
+                            <Checkbox
+                              id={`type-${type}`}
+                              checked={selectedTypes.has(type)}
+                              onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                            />
+                            <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
+                            <span className="text-sm font-normal flex-1">{type}</span>
+                          </Label>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
                 </PopoverContent>
               </Popover>
             </div>
@@ -329,7 +327,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
           </ScrollArea>
         )}
       </div>
-    </>
+    </div>
   );
 };
 
