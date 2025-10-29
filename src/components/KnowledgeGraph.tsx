@@ -258,43 +258,44 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
                       ))}
                     </CommandGroup>
                   </CommandList>
-                </PopoverContent>
-              </Popover>
-            </div>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-            <Separator />
+          <Separator />
 
-            {/* Source Document Filter Section */}
-            <div>
-              <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
-              <Input
-                placeholder="Search source documents..."
-                value={sourceSearchTerm}
-                onChange={(e) => setSourceSearchTerm(e.target.value)}
-                className="mb-3"
-              />
-              <ScrollArea className="h-48 border rounded-md p-2"> {/* Fixed height for vertical scrolling */}
-                <div className="space-y-2">
-                  {filteredUniqueSources.length === 0 && (
-                    <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
-                  )}
-                  {filteredUniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
-                      <Checkbox
-                        id={`source-${source}`}
-                        checked={selectedSources.has(source)}
-                        onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
-                      />
-                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[calc(100%-2rem)] truncate">
-                        {source}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          </PopoverContent>
-        </Popover>
+          {/* Source Document Filter Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
+            <Input
+              placeholder="Search source documents..."
+              value={sourceSearchTerm}
+              onChange={(e) => setSourceSearchTerm(e.target.value)}
+              className="mb-3"
+            />
+            <ScrollArea className="h-48 border rounded-md p-2"> {/* Fixed height for vertical scrolling */}
+              <div className="space-y-2">
+                {filteredUniqueSources.length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
+                )}
+                {filteredUniqueSources.map(source => (
+                  <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
+                    <Checkbox
+                      id={`source-${source}`}
+                      checked={selectedSources.has(source)}
+                      onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
+                    />
+                    <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[calc(100%-2rem)] truncate">
+                      {source}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Right Detail Panel (Overlay) */}
       <div 
