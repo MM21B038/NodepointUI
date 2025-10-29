@@ -184,7 +184,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   }
 
   return (
-    <React.Fragment>
+    <>
       <div className="relative h-full w-full">
         {/* Graph Visualization (Z-index lower) */}
         <div className="absolute inset-0 z-0">
@@ -330,7 +330,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
           </ScrollArea>
         )}
       </div>
-    </React.Fragment>
+    </>
   );
 };
 
