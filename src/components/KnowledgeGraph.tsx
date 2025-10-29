@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, Info, ChevronDown } from "lucide-react"; // Removed ChevronLeft, ChevronRight
+import { Loader2, Filter, X, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"; // Added ChevronLeft, ChevronRight
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,8 +32,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
-  // State to control the detail popover's open/close status
-  const [isDetailPopoverOpen, setIsDetailPopoverOpen] = useState(false);
+  // State to control the detail sidebar's open/close status
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true); // Start open by default
 
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
@@ -74,10 +74,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     fetchData();
   }, [fetchData]);
 
-  // Effect to manage popover open state based on selectedItem
+  // When an item is selected, ensure the detail panel is open
   useEffect(() => {
-    setIsDetailPopoverOpen(selectedItem !== null);
-  }, [selectedItem]);
+    if (selectedItem && !isDetailPanelOpen) {
+      setIsDetailPanelOpen(true);
+    }
+  }, [selectedItem, isDetailPanelOpen]);
 
   const handleTypeToggle = (type: string, checked: boolean) => {
     setSelectedTypes(prev => {
@@ -189,9 +191,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   }
 
   return (
-    <div className="relative h-full w-full">
-      {/* Graph Visualization (Z-index lower) */}
-      <div className="absolute inset-0 z-0">
+    <div className="relative h-full w-full flex"> {/* Changed to flex container */}
+      {/* Graph Visualization (Main content area) */}
+      <div className={cn(
+        "flex-grow relative",
+        isDetailPanelOpen ? "mr-72" : "mr-10" // Adjust margin based on panel state
+      )}>
         <InteractiveGraphVisualization 
           nodes={filteredNodes} 
           edges={filteredEdges} 
@@ -338,35 +343,32 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         </PopoverContent>
       </Popover>
 
-      {/* Right Detail Popover (Overlay) */}
-      {selectedItem && ( // Only render the trigger if an item is selected
-        <Popover open={isDetailPopoverOpen} onOpenChange={(open) => {
-          setIsDetailPopoverOpen(open);
-          if (!open) {
-            setSelectedItem(null); // Deselect item if popover is closed
-          }
-        }}>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="absolute top-4 right-4 z-10 shadow-lg"
-              aria-label="View Details"
-            >
-              <Info className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent 
-            className="w-72 p-0 max-h-[calc(100vh-4rem)] overflow-y-auto" // Fixed width, max height, scrollable
-            align="end" // Align to the right of the trigger
-            sideOffset={10} // Offset from the trigger
+      {/* Right Detail Sidebar Panel */}
+      <div 
+        className={cn(
+          "absolute top-0 right-0 z-10 transition-all duration-300",
+          "bg-card border-l shadow-xl flex flex-col h-full", // Full height
+          isDetailPanelOpen ? "w-72" : "w-10" // Width based on open state
+        )}
+      >
+        <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
+          {isDetailPanelOpen && <h3 className="text-lg font-semibold">Details</h3>}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsDetailPanelOpen(!isDetailPanelOpen)}
+            className="ml-auto" // Push to the right
           >
-            <ScrollArea className="h-full"> {/* Ensure scroll area takes full height */}
-              <DetailPanel item={selectedItem} />
-            </ScrollArea>
-          </PopoverContent>
-        </Popover>
-      )}
+            {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        </div>
+        
+        {isDetailPanelOpen && (
+          <ScrollArea className="overflow-y-auto flex-grow">
+            <DetailPanel item={selectedItem} />
+          </ScrollArea>
+        )}
+      </div>
     </div>
   );
 };
