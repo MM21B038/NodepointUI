@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, Bot, User } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"; // Added ChevronDown
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
