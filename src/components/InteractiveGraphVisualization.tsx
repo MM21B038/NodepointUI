@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // Added Card imports
+import { CircleDot, Link, FileText, Hash, Info } from "lucide-react"; // Added icons
 
 // --- Color Mapping for React Components (DetailPanel & Filters) ---
 // This is kept simple for Tailwind classes in the React UI
@@ -285,8 +287,9 @@ interface DetailPanelProps {
 const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if (!item) {
     return (
-      <div className="text-muted-foreground p-4">
-        Click on a node or edge in the graph to see details.
+      <div className="text-muted-foreground p-4 text-center">
+        <Info className="h-6 w-6 mx-auto mb-2 text-muted" />
+        <p>Click on a node or edge in the graph to see its details here.</p>
       </div>
     );
   }
@@ -294,51 +297,93 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if ('type' in item) {
     // Node details
     return (
-      <div className="p-4 space-y-3">
-        <div className="flex items-center space-x-2">
-          {/* Note: DetailPanel still uses the simple Tailwind color mapping */}
-          <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
-          {/* Ensure node label wraps aggressively */}
-          <h4 className="text-lg font-semibold break-words flex-1 min-w-0">{item.label}</h4>
-          <Badge variant="secondary" className="flex-shrink-0">{item.type}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground break-words"> {/* Removed overflow-hidden, added break-words */}
-          Source Document: <span className="font-medium text-foreground break-all">{item.source}</span>
-        </p>
-        <Separator />
-        <h5 className="font-medium text-sm">Attributes:</h5>
-        <div className="border rounded-md p-3 bg-secondary/50">
-          {Object.keys(item.attributes).length > 0 ? (
-            <ul className="text-sm space-y-1">
-              {Object.entries(item.attributes).map(([key, value]) => (
-                <li key={key} className="break-words">
-                  <span className="font-mono text-xs text-primary/80">{key}:</span> {String(value)}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">No specific attributes found.</p>
-          )}
-        </div>
-      </div>
+      <Card className="border-none shadow-none rounded-none">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center text-xl">
+            <CircleDot className="h-5 w-5 mr-2 text-primary" />
+            <span className="break-words flex-1 min-w-0">{item.label}</span>
+          </CardTitle>
+          <div className="flex items-center space-x-2 mt-2">
+            <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
+            <Badge variant="secondary" className="text-sm font-medium">{item.type}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+              <FileText className="h-4 w-4 mr-1" /> Source Document
+            </h5>
+            <p className="text-sm text-foreground break-all bg-secondary/50 p-2 rounded-md">
+              {item.source}
+            </p>
+          </div>
+          <Separator />
+          <div>
+            <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+              <Hash className="h-4 w-4 mr-1" /> Attributes
+            </h5>
+            <div className="border rounded-md p-3 bg-secondary/50">
+              {Object.keys(item.attributes).length > 0 ? (
+                <ul className="text-sm space-y-2">
+                  {Object.entries(item.attributes).map(([key, value]) => (
+                    <li key={key} className="flex flex-col sm:flex-row sm:items-baseline break-words">
+                      <span className="font-mono text-xs text-primary/80 sm:w-1/3 flex-shrink-0">{key}:</span> 
+                      <span className="text-foreground sm:w-2/3">{String(value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">No specific attributes found.</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     );
   } else {
     // Edge details
     return (
-      <div className="p-4 space-y-3">
-        <h4 className="text-lg font-semibold">Relationship</h4>
-        <p className="text-sm break-words">
-          <span className="font-medium text-primary">{item.source}</span> 
-          <span className="text-muted-foreground mx-2">--({item.label})--&gt;</span> 
-          <span className="font-medium text-primary">{item.target}</span>
-        </p>
-        <Separator />
-        <div className="text-sm space-y-1">
-          <p className="break-words"><strong>Relationship Type:</strong> {item.label}</p>
-          <p><strong>Score/Weight:</strong> {item.score.toFixed(2)}</p>
-          <p className="break-words"><strong>Source Document:</strong> <span className="break-all">{item.source_file}</span></p>
-        </div>
-      </div>
+      <Card className="border-none shadow-none rounded-none">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center text-xl">
+            <Link className="h-5 w-5 mr-2 text-primary" />
+            Relationship
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+              <Info className="h-4 w-4 mr-1" /> Relationship Path
+            </h5>
+            <p className="text-sm break-words bg-secondary/50 p-2 rounded-md">
+              <span className="font-medium text-primary">{item.source}</span> 
+              <span className="text-muted-foreground mx-2">--({item.label})--&gt;</span> 
+              <span className="font-medium text-primary">{item.target}</span>
+            </p>
+          </div>
+          <Separator />
+          <div className="space-y-2 text-sm">
+            <div>
+              <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+                <Hash className="h-4 w-4 mr-1" /> Type
+              </h5>
+              <p className="bg-secondary/50 p-2 rounded-md break-words">{item.label}</p>
+            </div>
+            <div>
+              <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+                <Info className="h-4 w-4 mr-1" /> Score/Weight
+              </h5>
+              <p className="bg-secondary/50 p-2 rounded-md">{item.score.toFixed(2)}</p>
+            </div>
+            <div>
+              <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+                <FileText className="h-4 w-4 mr-1" /> Source Document
+              </h5>
+              <p className="bg-secondary/50 p-2 rounded-md break-all">{item.source_file}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 };
