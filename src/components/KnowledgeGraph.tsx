@@ -186,7 +186,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         <div className="flex items-center justify-between p-3 border-b flex-shrink-0"> {/* Increased padding to p-3 */}
           {/* Ensure title is always visible */}
           <h3 className="text-lg font-semibold flex items-center">
-            <Filter className="h-4 w-4 mr-2" /> Filters
+            <Filter className="h-4 w-4 mr-2 text-primary" /> Filters
           </h3>
           <Button 
             variant="ghost" 
@@ -207,14 +207,14 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
               <div className="space-y-2">
                 {uniqueTypes.map(type => (
-                  <div key={type} className="flex items-center space-x-2">
+                  <div key={type} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
                     <Checkbox
                       id={`type-${type}`}
                       checked={selectedTypes.has(type)}
                       onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
                     />
                     <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
-                    <Label htmlFor={`type-${type}`} className="text-sm font-normal cursor-pointer">
+                    <Label htmlFor={`type-${type}`} className="text-sm font-normal cursor-pointer flex-1">
                       {type}
                     </Label>
                   </div>
@@ -227,16 +227,16 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
             {/* Source Filter */}
             <div>
               <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
-              <ScrollArea className="h-32 pr-4">
+              <ScrollArea className="h-32 border rounded-md p-2">
                 <div className="space-y-2">
                   {uniqueSources.map(source => (
-                    <div key={source} className="flex items-center space-x-2">
+                    <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
                       <Checkbox
                         id={`source-${source}`}
                         checked={selectedSources.has(source)}
                         onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
                       />
-                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer max-w-[150px] truncate">
+                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[150px] truncate">
                         {source}
                       </Label>
                     </div>
