@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, ChevronLeft, ChevronRight, Bot, User } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,6 +12,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "./InteractiveGraphVisualization";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup } from "@/components/ui/command";
 
 interface KnowledgeGraphProps {
   workspaceName: string;
@@ -30,12 +34,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
   // Overlay state
-  const [isFilterOpen, setIsFilterOpen] = useState(true);
   const [isDetailOpen, setIsDetailOpen] = useState(true);
 
   // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
+  const [sourceSearchTerm, setSourceSearchTerm] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!workspaceName) {
@@ -120,6 +124,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     );
   }, [graphData, filteredNodes]);
 
+  const filteredUniqueSources = useMemo(() => {
+    return uniqueSources.filter(source => 
+      source.toLowerCase().includes(sourceSearchTerm.toLowerCase())
+    );
+  }, [uniqueSources, sourceSearchTerm]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -174,69 +184,85 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
       </Button>
 
-      {/* Left Filter Panel (Overlay) */}
-      <div 
-        className={cn(
-          "absolute top-4 left-4 z-10 w-48 transition-all duration-300 overflow-hidden",
-          "bg-card border rounded-lg shadow-xl flex flex-col",
-          // Symmetric height: 100% - (16px top + 16px bottom) = 100% - 2rem
-          isFilterOpen ? "h-[calc(100%-2rem)]" : "h-12" // Collapsed height increased to h-12 (48px)
-        )}
-      >
-        <div className="flex items-center justify-between p-3 border-b flex-shrink-0"> {/* Increased padding to p-3 */}
-          {/* Ensure title is always visible */}
-          <h3 className="text-lg font-semibold flex items-center">
-            <Filter className="h-4 w-4 mr-2 text-primary" /> Filters
-          </h3>
+      {/* Left Filter Panel Trigger (Overlay) */}
+      <Sheet>
+        <SheetTrigger asChild>
           <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className="flex-shrink-0"
+            variant="outline" 
+            className="absolute top-4 left-4 z-10 shadow-lg flex items-center gap-2"
           >
-            {/* ChevronUp/Down for vertical collapse */}
-            {isFilterOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <Filter className="h-4 w-4" />
+            Filter
           </Button>
-        </div>
-        
-        {/* Content area only visible when open */}
-        {isFilterOpen && (
+        </SheetTrigger>
+        <SheetContent side="left" className="w-[300px] sm:w-[400px] flex flex-col">
+          <SheetHeader>
+            <SheetTitle>Filter Graph</SheetTitle>
+          </SheetHeader>
           <ScrollArea className="flex-grow p-4 space-y-6">
             {/* Node Type Filter */}
             <div>
-              <h4 className="font-semibold mb-2 text-sm">Node Type ({uniqueTypes.length})</h4>
-              <div className="space-y-2">
-                {uniqueTypes.map(type => (
-                  <div key={type} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
-                    <Checkbox
-                      id={`type-${type}`}
-                      checked={selectedTypes.has(type)}
-                      onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
-                    />
-                    <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
-                    <Label htmlFor={`type-${type}`} className="text-sm font-normal cursor-pointer flex-1">
-                      {type}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+              <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    Select Node Types
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search types..." />
+                    <CommandList>
+                      <CommandEmpty>No types found.</CommandEmpty>
+                      <CommandGroup>
+                        {uniqueTypes.map(type => (
+                          <CommandItem key={type} className="p-0">
+                            <Label 
+                              htmlFor={`type-${type}`} 
+                              className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
+                            >
+                              <Checkbox
+                                id={`type-${type}`}
+                                checked={selectedTypes.has(type)}
+                                onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                              />
+                              <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
+                              <span className="text-sm font-normal flex-1">{type}</span>
+                            </Label>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <Separator />
 
-            {/* Source Filter */}
+            {/* Source Document Filter */}
             <div>
-              <h4 className="font-semibold mb-2 text-sm">Source Document ({uniqueSources.length})</h4>
-              <ScrollArea className="h-32 border rounded-md p-2">
+              <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
+              <Input
+                placeholder="Search source documents..."
+                value={sourceSearchTerm}
+                onChange={(e) => setSourceSearchTerm(e.target.value)}
+                className="mb-3"
+              />
+              <ScrollArea className="h-64 border rounded-md p-2">
                 <div className="space-y-2">
-                  {uniqueSources.map(source => (
+                  {filteredUniqueSources.length === 0 && (
+                    <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
+                  )}
+                  {filteredUniqueSources.map(source => (
                     <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
                       <Checkbox
                         id={`source-${source}`}
                         checked={selectedSources.has(source)}
                         onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
                       />
-                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[150px] truncate">
+                      <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[calc(100%-2rem)] truncate">
                         {source}
                       </Label>
                     </div>
@@ -245,8 +271,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               </ScrollArea>
             </div>
           </ScrollArea>
-        )}
-      </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Right Detail Panel (Overlay) */}
       <div 
