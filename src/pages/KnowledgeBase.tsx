@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight, BookOpenText } from "lucide-react"; // Import BookOpenText
+import { Loader2, Filter, X, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight, BookOpenText } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +21,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useWorkspace } from "@/context/WorkspaceContext";
+
+// Removed KnowledgeGraphProps interface as it's no longer used.
 
 const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   const values = data.map(item => String(item[key]));
@@ -194,8 +196,8 @@ const KnowledgeGraph: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <h1 className="text-3xl font-bold p-4 pb-0 flex items-center"> {/* Added flex and items-center */}
-        <BookOpenText className="h-7 w-7 mr-3 text-primary" /> {/* Added BookOpenText icon */}
+      <h1 className="text-3xl font-bold p-4 pb-0 flex items-center">
+        <BookOpenText className="h-7 w-7 mr-3 text-primary" />
         Knowledge Base: {currentWorkspace}
       </h1>
       <div className="flex-grow min-h-0 px-4 pb-4">
@@ -356,7 +358,7 @@ const KnowledgeGraph: React.FC = () => {
             defaultSize={25} 
             minSize={15} 
             collapsed={!isDetailPanelOpen} 
-            onCollapse={(collapsed) => setIsDetailPanelOpen(!isDetailPanelOpen)}
+            onCollapse={(collapsed) => setIsDetailPanelOpen(!collapsed)}
             className="transition-all duration-300 ease-in-out"
           >
             <Card className="h-full border-none shadow-none rounded-none flex flex-col">
