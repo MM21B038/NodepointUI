@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator"; // Removed Separator import
 
 type ViewMode = 'files' | 'status';
 
@@ -88,15 +88,15 @@ const Documents = () => {
     <div className="flex flex-col h-full py-6">
       <div className="flex justify-between items-center px-4">
         <div className="flex flex-col gap-2">
-          <div className="flex items-center space-x-2"> {/* Changed items-baseline to items-center */}
-            <FolderKanban className="h-10 w-10" /> {/* Removed h2 wrapper */}
+          <div className="flex items-center space-x-2">
+            <FolderKanban className="h-10 w-10" />
             {currentWorkspace && (
               <Badge variant="secondary" className="text-lg px-3 py-1">
                 {currentWorkspace}
               </Badge>
             )}
           </div>
-          <Separator className="w-full" />
+          {/* <Separator className="w-full" /> Removed this line */}
         </div>
 
         <div className="flex items-center space-x-4">
