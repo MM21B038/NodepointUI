@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import DetailPanel from "../components/DetailPanel"; // Updated import to the new file
+import DetailPanel from "../components/DetailPanel";
 import { 
   ResizableHandle,
   ResizablePanel,
@@ -92,57 +92,11 @@ const KnowledgeGraphPage: React.FC = () => {
     );
   }
 
+  // Simplified return statement to test the parser
   return (
-    <div className="h-full flex flex-col">
-      <h1 className="text-3xl font-bold p-4 pb-0 flex items-center">
-        <BookOpenText className="h-7 w-7 mr-3 text-primary" />
-        Knowledge Base: {currentWorkspace}
-      </h1>
-      <div className="flex-grow min-h-0 px-4 pb-4">
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="min-h-[calc(100vh-120px)] rounded-xl border shadow-lg bg-card"
-        >
-          <ResizablePanel defaultSize={75} minSize={50}>
-            <GraphView
-              graphData={graphData}
-              isLoading={isLoading}
-              fetchData={fetchData}
-              selectedItem={selectedItem}
-              onSelect={setSelectedItem}
-            />
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel 
-            defaultSize={25} 
-            minSize={15} 
-            collapsed={!isDetailPanelOpen} 
-            onCollapse={(collapsed) => setIsDetailPanelOpen(!isDetailPanelOpen)}
-            className="transition-all duration-300 ease-in-out"
-          >
-            <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-              <CardHeader className="pb-2 px-4 pt-4 flex flex-row items-center justify-between">
-                {isDetailPanelOpen && <CardTitle className="text-lg font-semibold">Details</CardTitle>}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsDetailPanelOpen(!isDetailPanelOpen)}
-                  className={cn("ml-auto", !isDetailPanelOpen && "mx-auto")}
-                >
-                  {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4"} />}
-                </Button>
-              </CardHeader>
-              {isDetailPanelOpen && (
-                <CardContent className="flex-grow p-0 h-[calc(100%-60px)]">
-                  <ScrollArea className="h-full">
-                    <DetailPanel item={selectedItem} />
-                  </ScrollArea>
-                </CardContent>
-              )}
-            </Card>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+    <div className="h-full flex flex-col p-4">
+      <h1 className="text-2xl font-bold mb-4">Knowledge Graph Page (Simplified)</h1>
+      <p className="text-muted-foreground">If you see this, the parser is working! We can then gradually reintroduce the full component structure.</p>
     </div>
   );
 };
