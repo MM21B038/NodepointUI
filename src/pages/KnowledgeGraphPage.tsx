@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { DetailPanel } from "../components/InteractiveGraphVisualization";
+import DetailPanel from "../components/DetailPanel"; // Updated import to the new file
 import { 
   ResizableHandle,
   ResizablePanel,
@@ -18,7 +18,6 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import GraphView from "@/components/GraphView";
 
 const KnowledgeGraphPage: React.FC = () => {
-  console.log("KnowledgeGraphPage component rendering..."); // Added this line to force re-evaluation
   const { currentWorkspace } = useWorkspace();
   
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
@@ -113,7 +112,7 @@ const KnowledgeGraphPage: React.FC = () => {
               onSelect={setSelectedItem}
             />
           </ResizablePanel>
-          <ResizableHandle />
+          <ResizableHandle withHandle />
           <ResizablePanel 
             defaultSize={25} 
             minSize={15} 
