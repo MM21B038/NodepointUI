@@ -15,7 +15,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import GraphView from "@/components/GraphView"; // Import the new GraphView component
+import GraphView from "@/components/GraphView";
 
 const KnowledgeGraphPage: React.FC = () => {
   const { currentWorkspace } = useWorkspace();
