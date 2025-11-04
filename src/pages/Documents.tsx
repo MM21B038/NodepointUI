@@ -11,6 +11,8 @@ import { listFiles, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { Badge } from "@/components/ui/badge"; // Import Badge
+import { Separator } from "@/components/ui/separator"; // Import Separator
 
 type ViewMode = 'files' | 'status';
 
@@ -85,9 +87,17 @@ const Documents = () => {
   return (
     <div className="flex flex-col h-full py-6">
       <div className="flex justify-between items-center px-4">
-        <h2 className="text-3xl font-semibold">
-          Documents {currentWorkspace && `(${currentWorkspace})`}
-        </h2>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline space-x-2">
+            <h2 className="text-4xl font-extrabold tracking-tight">Documents</h2>
+            {currentWorkspace && (
+              <Badge variant="secondary" className="text-lg px-3 py-1">
+                {currentWorkspace}
+              </Badge>
+            )}
+          </div>
+          <Separator className="w-full" />
+        </div>
 
         <div className="flex items-center space-x-4">
           <FileUpload
