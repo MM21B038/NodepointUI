@@ -120,8 +120,6 @@ const Documents = () => {
         </div>
       </div>
 
-      {/* Removed the old div for ToggleGroup and Refresh button */}
-
       <div className="border rounded-lg bg-card text-card-foreground min-h-[600px] flex-grow flex flex-col overflow-hidden mt-6 mx-4">
         {!currentWorkspace ? (
           <div className="flex items-center justify-center flex-grow">
@@ -131,9 +129,9 @@ const Documents = () => {
           </div>
         ) : (
           <div className="flex flex-col flex-grow">
-            <div className="flex items-center justify-between border-b pb-2 p-4"> {/* Changed to justify-between */}
-              <FileText className="h-6 w-6 text-primary" /> {/* Kept FileText icon */}
-              <div className="flex items-center space-x-2"> {/* New div to hold toggle and refresh */}
+            <div className="flex items-center justify-between border-b pt-2 pb-2 px-4"> {/* Adjusted padding here */}
+              <FileText className="h-6 w-6 text-primary" />
+              <div className="flex items-center space-x-2">
                 <ToggleGroup
                   type="single"
                   value={viewMode}
