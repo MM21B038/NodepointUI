@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Zap, FolderKanban, FileText } from "lucide-react"; // Added FileText
+import { RefreshCw, Loader2, Zap, FolderKanban, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import FileUpload from "@/components/FileUpload";
@@ -10,7 +10,7 @@ import PreprocessStatusTable from "@/components/PreprocessStatusTable";
 import { listFiles, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useWorkspace } from "@/context/Workspace/WorkspaceContext"; // Corrected import path
+import { useWorkspace } from "@/context/WorkspaceContext"; // Corrected import path
 import { Badge } from "@/components/ui/badge";
 
 type ViewMode = 'files' | 'status';
@@ -159,7 +159,7 @@ const Documents = () => {
           </div>
         ) : viewMode === 'files' ? (
           <div className="flex flex-col flex-grow">
-            <div className="flex items-center justify-center border-b pb-2 p-4"> {/* Replaced h3 with div and added styling */}
+            <div className="flex items-center justify-center border-b pb-2 p-4">
               <FileText className="h-6 w-6 text-primary" />
             </div>
             {isLoadingFiles ? (
