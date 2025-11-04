@@ -18,6 +18,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import GraphView from "@/components/GraphView";
 
 const KnowledgeGraphPage: React.FC = () => {
+  console.log("KnowledgeGraphPage component rendering..."); // Added this line to force re-evaluation
   const { currentWorkspace } = useWorkspace();
   
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
@@ -112,7 +113,7 @@ const KnowledgeGraphPage: React.FC = () => {
               onSelect={setSelectedItem}
             />
           </ResizablePanel>
-          <ResizableHandle withHandle />
+          <ResizableHandle />
           <ResizablePanel 
             defaultSize={25} 
             minSize={15} 
