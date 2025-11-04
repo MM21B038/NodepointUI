@@ -83,8 +83,8 @@ const Documents = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="flex flex-col h-full py-6"> {/* Changed to flex column, full height, with vertical padding */}
+      <div className="flex justify-between items-center px-4"> {/* Added horizontal padding */}
         <h2 className="text-3xl font-semibold">
           Documents {currentWorkspace && `(${currentWorkspace})`}
         </h2>
@@ -113,7 +113,7 @@ const Documents = () => {
       </div>
 
       {currentWorkspace && (
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mt-6 px-4"> {/* Added horizontal padding and top margin */}
           <ToggleGroup
             type="single"
             value={viewMode}
@@ -142,22 +142,22 @@ const Documents = () => {
         </div>
       )}
 
-      <div className="border rounded-lg p-6 bg-card text-card-foreground min-h-[300px]">
+      <div className="border rounded-lg bg-card text-card-foreground flex-grow flex flex-col overflow-hidden mt-6 mx-4"> {/* Made flex-grow, flex column, overflow hidden, with margin */}
         {!currentWorkspace ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center flex-grow"> {/* Made flex-grow */}
             <p className="text-muted-foreground">
               Please select a workspace using the selector in the navigation bar.
             </p>
           </div>
         ) : viewMode === 'files' ? (
-          <div className="space-y-4">
-            <h3 className="text-xl font-medium border-b pb-2">Files in {currentWorkspace}</h3>
+          <div className="flex flex-col flex-grow"> {/* Made flex column, flex-grow */}
+            <h3 className="text-xl font-medium border-b pb-2 p-4">Files in {currentWorkspace}</h3> {/* Added padding */}
             {isLoadingFiles ? (
-              <div className="flex items-center justify-center h-48">
+              <div className="flex items-center justify-center flex-grow"> {/* Made flex-grow */}
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : files.length > 0 ? (
-              <ScrollArea className="h-64">
+              <ScrollArea className="flex-grow p-4"> {/* Made flex-grow, added padding */}
                 <ul className="space-y-2">
                   {files.map((file) => (
                     <FileListItem
@@ -170,7 +170,7 @@ const Documents = () => {
                 </ul>
               </ScrollArea>
             ) : (
-              <div className="flex items-center justify-center h-48">
+              <div className="flex items-center justify-center flex-grow"> {/* Made flex-grow */}
                 <p className="text-muted-foreground">
                   No documents found in this workspace. Upload one to get started!
                 </p>

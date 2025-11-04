@@ -8,7 +8,7 @@ import ThemeSwitcher from "./ThemeSwitcher";
 
 const Navbar = () => {
   return (
-    <nav className="bg-[--nav-background] text-[--nav-foreground] p-4 shadow-md">
+    <nav className="bg-[--nav-background] text-[--nav-foreground] p-4 shadow-md border-b border-border">
       <div className="container mx-auto flex justify-between items-center">
         <h1 className="text-2xl font-bold">My App</h1>
         <div className="flex items-center space-x-6">
