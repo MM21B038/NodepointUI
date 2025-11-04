@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { getKnowledgeGraph, KnowledgeGraphResponse, GraphNode, GraphEdge } from "@/database/workspaceStorage";
-import { Loader2, Filter, X, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Filter, X, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight, BookOpenText } from "lucide-react"; // Import BookOpenText
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,15 +20,15 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { useWorkspace } from "@/context/WorkspaceContext"; // Import useWorkspace
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   const values = data.map(item => String(item[key]));
   return Array.from(new Set(values)).sort();
 };
 
-const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
-  const { currentWorkspace } = useWorkspace(); // Use the hook to get currentWorkspace
+const KnowledgeGraph: React.FC = () => {
+  const { currentWorkspace } = useWorkspace();
   
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,10 +42,10 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
   const [sourceSearchTerm, setSourceSearchTerm] = useState("");
 
   const fetchData = useCallback(async () => {
-    console.log("Fetching knowledge graph for workspace:", currentWorkspace); // Debug log
+    console.log("Fetching knowledge graph for workspace:", currentWorkspace);
     if (!currentWorkspace) {
       setIsLoading(false);
-      setGraphData(null); // Ensure graphData is cleared if no workspace
+      setGraphData(null);
       setError("No workspace selected.");
       return;
     }
@@ -55,7 +55,7 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
     setSelectedItem(null);
     try {
       const data = await getKnowledgeGraph(currentWorkspace);
-      console.log("Knowledge graph data received:", data); // Debug log
+      console.log("Knowledge graph data received:", data);
       setGraphData(data);
       
       const initialTypes = getUniqueValues(data.nodes, 'type');
@@ -72,7 +72,7 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
     } finally {
       setIsLoading(false);
     }
-  }, [currentWorkspace]); // Depend on currentWorkspace
+  }, [currentWorkspace]);
 
   useEffect(() => {
     fetchData();
@@ -194,7 +194,10 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
 
   return (
     <div className="h-full flex flex-col">
-      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {currentWorkspace}</h1>
+      <h1 className="text-3xl font-bold p-4 pb-0 flex items-center"> {/* Added flex and items-center */}
+        <BookOpenText className="h-7 w-7 mr-3 text-primary" /> {/* Added BookOpenText icon */}
+        Knowledge Base: {currentWorkspace}
+      </h1>
       <div className="flex-grow min-h-0 px-4 pb-4">
         <ResizablePanelGroup
           direction="horizontal"
@@ -353,7 +356,7 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
             defaultSize={25} 
             minSize={15} 
             collapsed={!isDetailPanelOpen} 
-            onCollapse={(collapsed) => setIsDetailPanelOpen(!collapsed)}
+            onCollapse={(collapsed) => setIsDetailPanelOpen(!isDetailPanelOpen)}
             className="transition-all duration-300 ease-in-out"
           >
             <Card className="h-full border-none shadow-none rounded-none flex flex-col">
@@ -365,7 +368,7 @@ const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
                   onClick={() => setIsDetailPanelOpen(!isDetailPanelOpen)}
                   className={cn("ml-auto", !isDetailPanelOpen && "mx-auto")}
                 >
-                  {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                  {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4"} />}
                 </Button>
               </CardHeader>
               {isDetailPanelOpen && (
