@@ -150,3 +150,4 @@ const KnowledgeGraphPage: React.FC = () => {
 };
 
 export default KnowledgeGraphPage;
+// Added a comment to force re-evaluation.
