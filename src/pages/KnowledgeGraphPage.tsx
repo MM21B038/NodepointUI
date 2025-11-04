@@ -28,7 +28,6 @@ const KnowledgeGraphPage: React.FC = () => {
   const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true);
 
   const fetchData = useCallback(async () => {
-    console.log("Fetching knowledge graph for workspace:", currentWorkspace);
     if (!currentWorkspace) {
       setIsLoading(false);
       setGraphData(null);
@@ -41,7 +40,6 @@ const KnowledgeGraphPage: React.FC = () => {
     setSelectedItem(null);
     try {
       const data = await getKnowledgeGraph(currentWorkspace);
-      console.log("Knowledge graph data received:", data);
       setGraphData(data);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Failed to load knowledge graph.";
@@ -150,4 +148,3 @@ const KnowledgeGraphPage: React.FC = () => {
 };
 
 export default KnowledgeGraphPage;
-// Added a comment to force re-evaluation.

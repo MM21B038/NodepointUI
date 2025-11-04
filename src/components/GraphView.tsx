@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Loader2, Filter, RefreshCw, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -40,7 +40,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const [sourceSearchTerm, setSourceSearchTerm] = useState("");
 
   // Initialize filters with all available types and sources when graphData changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (graphData) {
       const initialTypes = getUniqueValues(graphData.nodes, 'type');
       const initialSources = getUniqueValues(graphData.nodes, 'source'); 
