@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "./InteractiveGraphVisualization";
+import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "../components/InteractiveGraphVisualization"; // Corrected import path
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup } from "@/components/ui/command";
@@ -197,7 +197,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   return (
     <div className="h-full flex flex-col">
-      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {currentWorkspace}</h1>
+      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {workspaceName}</h1>
       <div className="flex-grow min-h-0 px-4 pb-4">
         <ResizablePanelGroup
           direction="horizontal"
