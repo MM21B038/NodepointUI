@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "../components/InteractiveGraphVisualization"; // Corrected import path
+import { InteractiveGraphVisualization, DetailPanel, getNodeColorClass } from "../components/InteractiveGraphVisualization";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup } from "@/components/ui/command";
@@ -20,45 +20,44 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useWorkspace } from "@/context/WorkspaceContext"; // Import useWorkspace
 
-interface KnowledgeGraphProps {
-  workspaceName: string;
-}
-
-// Helper function to get unique values for filtering
 const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   const values = data.map(item => String(item[key]));
   return Array.from(new Set(values)).sort();
 };
 
-const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
+const KnowledgeGraph: React.FC = () => { // Removed workspaceName prop
+  const { currentWorkspace } = useWorkspace(); // Use the hook to get currentWorkspace
+  
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   
-  // State to control the detail sidebar's open/close status
-  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true); // Start open by default
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true);
 
-  // Filtering state
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [sourceSearchTerm, setSourceSearchTerm] = useState("");
 
   const fetchData = useCallback(async () => {
-    if (!workspaceName) {
+    console.log("Fetching knowledge graph for workspace:", currentWorkspace); // Debug log
+    if (!currentWorkspace) {
       setIsLoading(false);
+      setGraphData(null); // Ensure graphData is cleared if no workspace
+      setError("No workspace selected.");
       return;
     }
     
     setIsLoading(true);
     setError(null);
-    setSelectedItem(null); // Clear selected item on refresh
+    setSelectedItem(null);
     try {
-      const data = await getKnowledgeGraph(workspaceName);
+      const data = await getKnowledgeGraph(currentWorkspace);
+      console.log("Knowledge graph data received:", data); // Debug log
       setGraphData(data);
       
-      // Initialize filters with all available types and sources upon first load
       const initialTypes = getUniqueValues(data.nodes, 'type');
       const initialSources = getUniqueValues(data.nodes, 'source'); 
       
@@ -73,13 +72,12 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceName]);
+  }, [currentWorkspace]); // Depend on currentWorkspace
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // When an item is selected, ensure the detail panel is open
   useEffect(() => {
     if (selectedItem && !isDetailPanelOpen) {
       setIsDetailPanelOpen(true);
@@ -129,7 +127,6 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
     if (!graphData) return [];
     const visibleNodeIds = new Set(filteredNodes.map(n => n.id));
     
-    // Edges must connect two visible nodes
     return graphData.edges.filter(edge => 
       visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
     );
@@ -189,7 +186,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <h3 className="text-xl font-semibold">No Knowledge Graph Data</h3>
         <p className="text-muted-foreground mt-2">
-          No entities or relationships found for workspace "{workspaceName}". Ensure documents have been uploaded and processed.
+          No entities or relationships found for workspace "{currentWorkspace}". Ensure documents have been uploaded and processed.
         </p>
       </div>
     );
@@ -197,7 +194,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
 
   return (
     <div className="h-full flex flex-col">
-      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {workspaceName}</h1>
+      <h1 className="text-3xl font-bold p-4 pb-0">Knowledge Base: {currentWorkspace}</h1>
       <div className="flex-grow min-h-0 px-4 pb-4">
         <ResizablePanelGroup
           direction="horizontal"
