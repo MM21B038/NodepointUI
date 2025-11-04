@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Zap, FolderKanban } from "lucide-react";
+import { RefreshCw, Loader2, Zap, FolderKanban, FileText } from "lucide-react"; // Added FileText
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import FileUpload from "@/components/FileUpload";
@@ -10,9 +10,8 @@ import PreprocessStatusTable from "@/components/PreprocessStatusTable";
 import { listFiles, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useWorkspace } from "@/context/WorkspaceContext";
+import { useWorkspace } from "@/context/Workspace/WorkspaceContext"; // Corrected import path
 import { Badge } from "@/components/ui/badge";
-// import { Separator } from "@/components/ui/separator"; // Removed Separator import
 
 type ViewMode = 'files' | 'status';
 
@@ -96,7 +95,6 @@ const Documents = () => {
               </Badge>
             )}
           </div>
-          {/* <Separator className="w-full" /> Removed this line */}
         </div>
 
         <div className="flex items-center space-x-4">
@@ -161,7 +159,9 @@ const Documents = () => {
           </div>
         ) : viewMode === 'files' ? (
           <div className="flex flex-col flex-grow">
-            <h3 className="text-xl font-medium border-b pb-2 p-4">Files in {currentWorkspace}</h3>
+            <div className="flex items-center justify-center border-b pb-2 p-4"> {/* Replaced h3 with div and added styling */}
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
             {isLoadingFiles ? (
               <div className="flex items-center justify-center flex-grow">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
