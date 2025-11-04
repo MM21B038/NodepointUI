@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Zap, FolderKanban, FileText, LayoutDashboard } from "lucide-react"; // Added LayoutDashboard
+import { RefreshCw, Loader2, Zap, FolderKanban, FileText, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import FileUpload from "@/components/FileUpload";
@@ -88,7 +88,7 @@ const Documents = () => {
       <div className="flex justify-between items-center px-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center space-x-2">
-            <LayoutDashboard className="h-10 w-10" /> {/* Changed icon to LayoutDashboard */}
+            <LayoutDashboard className="h-10 w-10" /> {/* This remains LayoutDashboard for the overall workspace */}
             {currentWorkspace && (
               <Badge variant="secondary" className="text-lg px-3 py-1">
                 {currentWorkspace}
@@ -130,7 +130,7 @@ const Documents = () => {
         ) : (
           <div className="flex flex-col flex-grow">
             <div className="flex items-center justify-between border-b pt-2 pb-2 px-4">
-              <LayoutDashboard className="h-6 w-6 text-primary" /> {/* Changed icon to LayoutDashboard */}
+              <FolderKanban className="h-6 w-6 text-primary" /> {/* Changed this icon back to FolderKanban */}
               <div className="flex items-center space-x-2">
                 <ToggleGroup
                   type="single"
