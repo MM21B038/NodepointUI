@@ -129,8 +129,8 @@ const Documents = () => {
           </div>
         ) : (
           <div className="flex flex-col flex-grow">
-            <div className="flex items-center justify-between border-b pt-2 pb-2 px-4"> {/* Adjusted padding here */}
-              <FileText className="h-6 w-6 text-primary" />
+            <div className="flex items-center justify-between border-b pt-2 pb-2 px-4">
+              <FolderKanban className="h-6 w-6 text-primary" /> {/* Changed icon to FolderKanban */}
               <div className="flex items-center space-x-2">
                 <ToggleGroup
                   type="single"
