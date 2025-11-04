@@ -8,7 +8,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import Layout from "./components/Layout";
 import Index from "./pages/Index";
 import Documents from "./pages/Documents";
-import KnowledgeBase from "./pages/KnowledgeBase";
+import KnowledgeGraphPage from "./pages/KnowledgeGraphPage"; // Updated import
 import Ask from "./pages/Ask";
 import NotFound from "./pages/NotFound";
 
@@ -16,7 +16,7 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider> {/* Added ThemeProvider */}
+    <ThemeProvider>
       <TooltipProvider>
         <WorkspaceProvider>
           <>
@@ -27,7 +27,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 {/* Using Layout to wrap page components */}
                 <Route path="/documents" element={<Layout><Documents /></Layout>} />
-                <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
+                <Route path="/knowledge-base" element={<Layout><KnowledgeGraphPage /></Layout>} /> {/* Updated component name */}
                 <Route path="/ask" element={<Layout><Ask /></Layout>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
