@@ -193,13 +193,194 @@ const KnowledgeGraph: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
-      <h1 className="text-3xl font-bold pb-4 flex items-center">
+    <div className="h-full flex flex-col">
+      <h1 className="text-3xl font-bold p-4 pb-0 flex items-center">
         <BookOpenText className="h-7 w-7 mr-3 text-primary" />
         Knowledge Base: {currentWorkspace}
       </h1>
-      <div className="flex-grow min-h-0 border rounded-xl shadow-lg bg-card flex items-center justify-center">
-        <p className="text-muted-foreground">Graph visualization will go here.</p>
+      <div className="flex-grow min-h-0 px-4 pb-4">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="min-h-[calc(100vh-120px)] rounded-xl border shadow-lg bg-card"
+        >
+          <ResizablePanel defaultSize={75} minSize={50}>
+            <div className="relative h-full w-full">
+              <InteractiveGraphVisualization 
+                nodes={filteredNodes} 
+                edges={filteredEdges} 
+                onSelect={setSelectedItem}
+                selectedItem={selectedItem}
+              />
+              
+              {/* Refresh Button (Top Center Overlay) */}
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={fetchData} 
+                disabled={isLoading}
+                className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 shadow-lg"
+              >
+                <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              </Button>
+
+              {/* Main Filter Popover (Overlay) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="absolute top-4 left-4 z-10 shadow-lg flex items-center gap-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Filter
+                    {filterSummary && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        ({filterSummary})
+                      </span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-4 space-y-6">
+                  {/* Node Type Filter Section */}
+                  <div>
+                    <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedTypes.size}/{uniqueTypes.length})</h4>
+                    <div className="flex space-x-2 mb-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedTypes(new Set(uniqueTypes))}
+                        disabled={selectedTypes.size === uniqueTypes.length}
+                      >
+                        Select All
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedTypes(new Set())}
+                        disabled={selectedTypes.size === 0}
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                    <Popover> {/* Nested Popover for Node Types */}
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between">
+                          {selectedTypes.size === uniqueTypes.length ? "All Types" : `${selectedTypes.size} Type(s) Selected`}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search types..." />
+                          <CommandList>
+                            <CommandEmpty>No types found.</CommandEmpty>
+                            <CommandGroup>
+                              {uniqueTypes.map(type => (
+                                <CommandItem key={type} className="p-0">
+                                  <Label 
+                                    htmlFor={`type-${type}`} 
+                                    className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
+                                  >
+                                    <Checkbox
+                                      id={`type-${type}`}
+                                      checked={selectedTypes.has(type)}
+                                      onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                                    />
+                                    <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
+                                    <span className="text-sm font-normal flex-1">{type}</span>
+                                  </Label>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <Separator />
+
+                  {/* Source Document Filter Section */}
+                  <div>
+                    <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSources.size}/{uniqueSources.length})</h4>
+                    <div className="flex space-x-2 mb-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedSources(new Set(uniqueSources))}
+                        disabled={selectedSources.size === uniqueSources.length}
+                      >
+                        Select All
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedSources(new Set())}
+                        disabled={selectedSources.size === 0}
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder="Search source documents..."
+                      value={sourceSearchTerm}
+                      onChange={(e) => setSourceSearchTerm(e.target.value)}
+                      className="mb-3"
+                    />
+                    <ScrollArea className="h-48 border rounded-md p-2">
+                      <div className="space-y-2">
+                        {filteredUniqueSources.length === 0 && (
+                          <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
+                        )}
+                        {filteredUniqueSources.map(source => (
+                          <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
+                            <Checkbox
+                              id={`source-${source}`}
+                              checked={selectedSources.has(source)}
+                              onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
+                            />
+                            <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[calc(100%-2rem)] truncate">
+                              {source}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel 
+            defaultSize={25} 
+            minSize={15} 
+            collapsed={!isDetailPanelOpen} 
+            onCollapse={(collapsed) => setIsDetailPanelOpen(!isDetailPanelOpen)}
+            className="transition-all duration-300 ease-in-out"
+          >
+            <Card className="h-full border-none shadow-none rounded-none flex flex-col">
+              <CardHeader className="pb-2 px-4 pt-4 flex flex-row items-center justify-between">
+                {isDetailPanelOpen && <CardTitle className="text-lg font-semibold">Details</CardTitle>}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsDetailPanelOpen(!isDetailPanelOpen)}
+                  className={cn("ml-auto", !isDetailPanelOpen && "mx-auto")}
+                >
+                  {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4"} />}
+                </Button>
+              </CardHeader>
+              {isDetailPanelOpen && (
+                <CardContent className="flex-grow p-0 h-[calc(100%-60px)]">
+                  <ScrollArea className="h-full">
+                    <DetailPanel item={selectedItem} />
+                  </ScrollArea>
+                </CardContent>
+              )}
+            </Card>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     </div>
   );
