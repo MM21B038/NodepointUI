@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Zap, FileText } from "lucide-react";
+import { RefreshCw, Loader2, Zap, FolderKanban } from "lucide-react"; // Changed FileText to FolderKanban
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import FileUpload from "@/components/FileUpload";
@@ -90,7 +90,7 @@ const Documents = () => {
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline space-x-2">
             <h2 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight">
-              <FileText className="h-10 w-10" /> 
+              <FolderKanban className="h-10 w-10" /> 
             </h2>
             {currentWorkspace && (
               <Badge variant="secondary" className="text-lg px-3 py-1">
