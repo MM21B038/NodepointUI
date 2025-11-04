@@ -8,7 +8,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import Layout from "./components/Layout";
 import Index from "./pages/Index";
 import Documents from "./pages/Documents";
-import KnowledgeGraphTest from "./pages/KnowledgeGraphTest"; // Updated import to use the test component
+import KnowledgeGraphPage from "./pages/KnowledgeGraphPage"; // Updated import to use the full component
 import Ask from "./pages/Ask";
 import NotFound from "./pages/NotFound";
 
@@ -27,7 +27,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 {/* Using Layout to wrap page components */}
                 <Route path="/documents" element={<Layout><Documents /></Layout>} />
-                <Route path="/knowledge-base" element={<Layout><KnowledgeGraphTest /></Layout>} /> {/* Using the test component */}
+                <Route path="/knowledge-base" element={<Layout><KnowledgeGraphPage /></Layout>} /> {/* Using the full component */}
                 <Route path="/ask" element={<Layout><Ask /></Layout>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

@@ -27,7 +27,7 @@ const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   return Array.from(new Set(values)).sort();
 };
 
-const KnowledgeGraphPage: React.FC = () => { // Renamed component here
+const KnowledgeGraphPage: React.FC = () => {
   const { currentWorkspace } = useWorkspace();
   
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
