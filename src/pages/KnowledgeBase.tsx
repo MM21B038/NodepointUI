@@ -22,8 +22,6 @@ import {
 } from "@/components/ui/resizable";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
-// Removed KnowledgeGraphProps interface as it's no longer used.
-
 const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
   const values = data.map(item => String(item[key]));
   return Array.from(new Set(values)).sort();
@@ -358,7 +356,7 @@ const KnowledgeGraph: React.FC = () => {
             defaultSize={25} 
             minSize={15} 
             collapsed={!isDetailPanelOpen} 
-            onCollapse={(collapsed) => setIsDetailPanelOpen(!collapsed)}
+            onCollapse={(collapsed) => setIsDetailPanelOpen(!isDetailPanelOpen)}
             className="transition-all duration-300 ease-in-out"
           >
             <Card className="h-full border-none shadow-none rounded-none flex flex-col">
