@@ -10,7 +10,7 @@ import PreprocessStatusTable from "@/components/PreprocessStatusTable";
 import { listFiles, startPreprocess } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useWorkspace } from "@/context/WorkspaceContext"; // Corrected import path
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { Badge } from "@/components/ui/badge";
 
 type ViewMode = 'files' | 'status';
@@ -120,35 +120,7 @@ const Documents = () => {
         </div>
       </div>
 
-      {currentWorkspace && (
-        <div className="flex justify-between items-center mt-6 px-4">
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(value: ViewMode) => value && setViewMode(value)}
-            className="border rounded-md"
-          >
-            <ToggleGroupItem value="files" aria-label="Toggle files view">
-              Files
-            </ToggleGroupItem>
-            <ToggleGroupItem value="status" aria-label="Toggle status view">
-              Status Page
-            </ToggleGroupItem>
-          </ToggleGroup>
-          
-          {viewMode === 'files' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleRefreshFiles}
-              disabled={isLoadingFiles}
-            >
-              <RefreshCw className={isLoadingFiles ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            </Button>
-          )}
-        </div>
-      )}
+      {/* Removed the old div for ToggleGroup and Refresh button */}
 
       <div className="border rounded-lg bg-card text-card-foreground min-h-[600px] flex-grow flex flex-col overflow-hidden mt-6 mx-4">
         {!currentWorkspace ? (
@@ -157,38 +129,67 @@ const Documents = () => {
               Please select a workspace using the selector in the navigation bar.
             </p>
           </div>
-        ) : viewMode === 'files' ? (
+        ) : (
           <div className="flex flex-col flex-grow">
-            <div className="flex items-center justify-center border-b pb-2 p-4">
-              <FileText className="h-6 w-6 text-primary" />
+            <div className="flex items-center justify-between border-b pb-2 p-4"> {/* Changed to justify-between */}
+              <FileText className="h-6 w-6 text-primary" /> {/* Kept FileText icon */}
+              <div className="flex items-center space-x-2"> {/* New div to hold toggle and refresh */}
+                <ToggleGroup
+                  type="single"
+                  value={viewMode}
+                  onValueChange={(value: ViewMode) => value && setViewMode(value)}
+                  className="border rounded-md"
+                >
+                  <ToggleGroupItem value="files" aria-label="Toggle files view">
+                    Files
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="status" aria-label="Toggle status view">
+                    Status Page
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                
+                {viewMode === 'files' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRefreshFiles}
+                    disabled={isLoadingFiles}
+                  >
+                    <RefreshCw className={isLoadingFiles ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                  </Button>
+                )}
+              </div>
             </div>
-            {isLoadingFiles ? (
-              <div className="flex items-center justify-center flex-grow">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : files.length > 0 ? (
-              <ScrollArea className="flex-grow p-4">
-                <ul className="space-y-2">
-                  {files.map((file) => (
-                    <FileListItem
-                      key={file}
-                      fileName={file}
-                      workspaceName={currentWorkspace}
-                      onDeleteSuccess={() => fetchFiles(currentWorkspace)}
-                    />
-                  ))}
-                </ul>
-              </ScrollArea>
+            {viewMode === 'files' ? (
+              isLoadingFiles ? (
+                <div className="flex items-center justify-center flex-grow">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : files.length > 0 ? (
+                <ScrollArea className="flex-grow p-4">
+                  <ul className="space-y-2">
+                    {files.map((file) => (
+                      <FileListItem
+                        key={file}
+                        fileName={file}
+                        workspaceName={currentWorkspace}
+                        onDeleteSuccess={() => fetchFiles(currentWorkspace)}
+                      />
+                    ))}
+                  </ul>
+                </ScrollArea>
+              ) : (
+                <div className="flex items-center justify-center flex-grow">
+                  <p className="text-muted-foreground">
+                    No documents found in this workspace. Upload one to get started!
+                  </p>
+                </div>
+              )
             ) : (
-              <div className="flex items-center justify-center flex-grow">
-                <p className="text-muted-foreground">
-                  No documents found in this workspace. Upload one to get started!
-                </p>
-              </div>
+              <PreprocessStatusTable workspaceName={currentWorkspace} />
             )}
           </div>
-        ) : (
-          <PreprocessStatusTable workspaceName={currentWorkspace} />
         )}
       </div>
     </div>
