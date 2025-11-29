@@ -68,7 +68,7 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-hidden">
+      <CardContent className="h-[calc(100%-60px)] flex flex-col p-3 overflow-hidden"> {/* Changed p-4 to p-3 */}
         <div className="flex space-x-2 mb-4">
           <Button
             variant="outline"

@@ -28,7 +28,7 @@ interface DetailPanelProps {
 const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if (!item) {
     return (
-      <div className="text-muted-foreground p-4 text-center">
+      <div className="text-muted-foreground p-3 text-center"> {/* Changed p-4 to p-3 */}
         <Info className="h-6 w-6 mx-auto mb-2 text-muted" />
         <p>Click on a node or edge in the graph to see its details here.</p>
       </div>
@@ -38,7 +38,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if ('type' in item) {
     // Node details
     return (
-      <div className="p-4">
+      <div className="p-3"> {/* Changed p-4 to p-3 */}
         <CardHeader className="pb-2 px-0 pt-0">
           <CardTitle className="flex items-center text-xl">
             <CircleDot className="h-5 w-5 mr-2 text-primary" />
@@ -84,7 +84,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   } else {
     // Edge details
     return (
-      <div className="p-4">
+      <div className="p-3"> {/* Changed p-4 to p-3 */}
         <CardHeader className="pb-2 px-0 pt-0">
           <CardTitle className="flex items-center text-xl">
             <Link className="h-5 w-5 mr-2 text-primary" />

@@ -411,7 +411,7 @@ const KnowledgeBase = () => {
 
           {/* Filter Panels (absolutely positioned, relative to the new block) */}
           <div ref={searchPanelRef} id="search-nodes-panel" className={cn(
-            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "absolute left-0 z-20 p-2 transition-transform duration-300 ease-in-out", // Changed p-4 to p-2
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showSearchPanel ? "translate-x-0" : "-translate-x-full"
           )}>
@@ -425,7 +425,7 @@ const KnowledgeBase = () => {
             />
           </div>
           <div ref={nodeTypesPanelRef} id="node-types-panel" className={cn(
-            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "absolute left-0 z-20 p-2 transition-transform duration-300 ease-in-out", // Changed p-4 to p-2
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
@@ -438,7 +438,7 @@ const KnowledgeBase = () => {
             />
           </div>
           <div ref={sourceFilesPanelRef} id="source-files-panel" className={cn(
-            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "absolute left-0 z-20 p-2 transition-transform duration-300 ease-in-out", // Changed p-4 to p-2
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
@@ -455,7 +455,7 @@ const KnowledgeBase = () => {
           {/* Detail Panel (right side, higher z-index, relative to the new block) */}
           {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
             <div className={cn(
-              "absolute right-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+              "absolute right-0 z-20 p-2 transition-transform duration-300 ease-in-out", // Changed p-4 to p-2
               "w-[var(--detail-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
               selectedItem ? "translate-x-0" : "translate-x-full"
             )}>

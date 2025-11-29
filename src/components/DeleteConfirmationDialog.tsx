@@ -58,7 +58,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 py-3"> {/* Changed py-4 to py-3 */}
           <p className="text-sm text-muted-foreground">
             To confirm deletion of <span className="font-semibold text-foreground">{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
           </p>

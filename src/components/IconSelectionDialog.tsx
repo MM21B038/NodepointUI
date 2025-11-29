@@ -138,7 +138,7 @@ const IconSelectionDialog: React.FC<IconSelectionDialogProps> = ({
         </DialogHeader>
 
         {viewMode === 'main' ? (
-          <div className="flex-grow flex flex-col md:flex-row gap-6 py-4">
+          <div className="flex-grow flex flex-col md:flex-row gap-6 py-3"> {/* Changed py-4 to py-3 */}
             {/* Bot Icon Selection */}
             <div className="flex flex-col items-center gap-3 flex-1 p-4 border rounded-lg bg-secondary/50">
               <h3 className="text-lg font-semibold">Bot Icon</h3>
