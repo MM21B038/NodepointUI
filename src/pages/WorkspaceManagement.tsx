@@ -80,7 +80,7 @@ const WorkspaceManagement = () => {
   }, [workspaceToDelete, fetchWorkspaces]);
 
   return (
-    <div className="flex flex-col h-full flex-grow p-4">
+    <div className="flex flex-col h-full flex-grow"> {/* Removed p-4 padding */}
       {isLoading ? (
         <div className="flex-grow flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -97,7 +97,7 @@ const WorkspaceManagement = () => {
           </Alert>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4"> {/* Added p-4 to the grid itself */}
           {workspaces.map((workspace) => (
             <WorkspaceCard
               key={workspace}
