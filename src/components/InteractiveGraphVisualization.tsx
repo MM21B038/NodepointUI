@@ -125,7 +125,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     const edges: D3Edge[] = initialEdges.map(edge => ({
       ...edge,
       source: edge.source,
-      target: edge.target,
+            target: edge.target,
     }));
 
     return { nodes, edges };
@@ -464,7 +464,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <Separator />
         <div className="text-sm space-y-1">
           <p className="break-words"><strong>Relationship Type:</strong> {item.label}</p>
-          <p><strong>Score/Weight:</strong> {item.score.toFixed(2)}</p>
+          <p><strong>Score/Weight:</strong> {(item.score || 0).toFixed(2)}</p> {/* Safely access score */}
           <p className="break-words"><strong>Source Document:</strong> <span className="break-all">{item.source_file as string}</span></p>
         </div>
       </div>
