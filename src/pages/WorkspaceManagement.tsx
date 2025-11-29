@@ -82,9 +82,9 @@ const WorkspaceManagement = () => {
     <div className="flex flex-col h-full flex-grow">
       <Card className="flex-grow flex flex-col">
         <CardHeader>
-          <CardTitle>Available Workspaces</CardTitle>
+          <CardTitle>Workspace List</CardTitle> {/* Changed title here */}
         </CardHeader>
-        <CardContent className="flex-grow flex flex-col">
+        <CardContent className="flex-grow flex flex-col p-2"> {/* Reduced padding here */}
           {isLoading ? (
             <div className="flex-grow flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -109,7 +109,7 @@ const WorkspaceManagement = () => {
                     className={cn(
                       "flex items-center justify-between p-2 transition-colors cursor-pointer",
                       currentWorkspace === workspace
-                        ? "bg-secondary text-secondary-foreground" // Changed to secondary background
+                        ? "bg-secondary text-secondary-foreground"
                         : "hover:bg-accent/50",
                     )}
                     onClick={() => handleSelectWorkspace(workspace)}
@@ -117,7 +117,7 @@ const WorkspaceManagement = () => {
                     <span
                       className={cn(
                         "font-medium truncate flex-grow",
-                        currentWorkspace === workspace && "text-secondary-foreground" // Ensure text color is correct for current
+                        currentWorkspace === workspace && "text-secondary-foreground"
                       )}
                     >
                       {workspace}
