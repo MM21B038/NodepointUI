@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 interface WorkspaceCardProps {
   workspaceName: string;
@@ -32,46 +31,45 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   totalEdges,
   isLoadingStats,
 }) => {
-  const [isHovered, setIsHovered] = useState(false); // New state for hover
+  const [isHovered, setIsHovered] = useState(false);
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
 
   return (
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer", // Removed 'group' class as we're using local state
+        "cursor-pointer",
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
           : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
       )}
       onClick={() => onSelect(workspaceName)}
-      onMouseEnter={() => setIsHovered(true)} // Set hovered state on mouse enter
-      onMouseLeave={() => setIsHovered(false)} // Clear hovered state on mouse leave
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <CardHeader className="p-0 flex flex-col space-y-2">
-        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
+        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0 relative pr-10"> {/* Added relative and pr-10 */}
           <FolderCog className={cn("h-6 w-6 mr-3", isCurrent ? "text-primary" : "text-muted-foreground")} />
           <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
             {workspaceName}
           </span>
-          {/* Tick Icon for Current Workspace */}
           {isCurrent && (
             <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
           )}
-          {/* Delete Button - now controlled by local isHovered state */}
+          {/* Delete Button - now absolutely positioned */}
           <Button
             variant="destructive"
             size="icon"
             onClick={(e) => {
-              e.stopPropagation(); // Prevent card selection when clicking delete
+              e.stopPropagation();
               onDelete(workspaceName);
             }}
             disabled={isDeleting}
             className={cn(
-              "ml-auto transition-all duration-200",
-              "pointer-events-none", // Always disable pointer events by default
-              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0" // Show if hovered or deleting
+              "absolute right-0 top-1/2 -translate-y-1/2 transition-transform duration-200", // Absolute positioning
+              "scale-0", // Hidden by default
+              (isHovered || isThisWorkspaceDeleting) && "scale-100" // Visible on hover or if deleting
             )}
           >
             {isThisWorkspaceDeleting ? (
