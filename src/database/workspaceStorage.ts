@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://163.164.165.141:3366";
+const API_BASE_URL = "http://192.168.1.2:3366";
 
 interface WorkspaceListResponse {
   workspaces: string[];
@@ -50,11 +50,17 @@ export interface PreprocessStatusResponse {
 
 // --- Knowledge Graph Interfaces ---
 
+// New interface to represent the file reference object
+export interface FileReference {
+  file_name: string;
+  uuid: string;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
   type: string; // e.g., "Person", "Concept"
-  source: string; // file.stem (document name)
+  source: string | FileReference; // Can be a string (file.stem) or an object
   attributes: Record<string, any>;
 }
 
@@ -63,7 +69,7 @@ export interface GraphEdge {
   target: string; // Target Node ID
   label: string; // Relationship description (was 'description')
   score: number; // Relationship score/weight
-  source_file: string; // Document file name (was 'source')
+  source_file: string | FileReference; // Can be a string (document name) or an object
 }
 
 export interface KnowledgeGraphResponse {
@@ -97,17 +103,37 @@ export interface SearchResponse {
     query: string;
     seed_ids: string[];
     steps_executed: number;
-    history: any[]; 
+    history: any[];
     subgraph_nodes_count: number;
     subgraph_edges_count: number;
     synthesis: {
       answer: string;
-      provenance: ProvenanceEntry[]; 
+      provenance: ProvenanceEntry[];
       recommended_next_steps: string[];
     };
   };
   error?: string;
 }
+
+// --- Chat History Interfaces ---
+export interface ChatHistoryEntry {
+  query: string;
+  ai: string;
+  // Updated type for source: it can be an array of ProvenanceEntry, a string, or null/undefined
+  source: ProvenanceEntry[] | string | null | undefined;
+  request_time: string; // ISO string
+  response_time: string; // ISO string
+}
+
+// --- Chat Message Interface for UI Display ---
+export interface ChatMessage {
+  id: string;
+  type: "user" | "bot";
+  text: string;
+  timestamp: Date;
+  provenance?: ProvenanceEntry[];
+}
+
 
 /**
  * Retrieves all existing workspace names from the API.
@@ -327,20 +353,20 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
  */
 export async function getKnowledgeGraph(workspaceName: string): Promise<KnowledgeGraphResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/knowledge_base/${workspaceName}`);
-    
+    const response = await fetch(`${API_BASE_URL}/knowledge_base_new/${workspaceName}`);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`API Error Response (${response.status}):`, errorText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data: KnowledgeGraphResponse = await response.json();
-    
+
     if (data.error) {
         throw new Error(data.error);
     }
-    
+
     return data;
   } catch (error) {
     console.error(`Error fetching knowledge graph for ${workspaceName}:`, error);
@@ -393,5 +419,37 @@ export async function performSearch(
   } catch (error) {
     console.error(`Error performing search in ${workspaceName} with ${engine}:`, error);
     throw error;
+  }
+}
+
+/**
+ * Asks a question to the AI, using the default agent search and all files.
+ * @param workspaceName The name of the workspace.
+ * @param query The question to ask.
+ * @returns A promise that resolves to an object containing the answer and provenance.
+ */
+export async function askQuestion(
+  workspaceName: string,
+  query: string
+): Promise<{ answer: string; provenance: ProvenanceEntry[] }> {
+  return performSearch(workspaceName, "agent_search", query, "all");
+}
+
+/**
+ * Retrieves chat history for a specific workspace.
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves to an array of ChatHistoryEntry.
+ */
+export async function getChatHistory(workspaceName: string): Promise<ChatHistoryEntry[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/get_chat/${workspaceName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data: ChatHistoryEntry[] = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error fetching chat history for ${workspaceName}:`, error);
+    return [];
   }
 }

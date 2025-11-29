@@ -6,10 +6,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { ThemeProvider } from "./components/ThemeProvider";
 import Layout from "./components/Layout";
-import Index from "./pages/Index";
 import Documents from "./pages/Documents";
-import KnowledgeGraphPage from "./pages/KnowledgeGraphPage"; // Updated import to use the full component
-import Ask from "./pages/Ask";
+import KnowledgeBase from "./pages/KnowledgeBase";
+import WorkspaceManagement from "./pages/WorkspaceManagement";
+import ChatIn from "./pages/ChatIn"; // Import the new ChatIn page
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,11 +24,13 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Index />} />
+                {/* Set WorkspaceManagement as the default landing page */}
+                <Route path="/" element={<Layout><WorkspaceManagement /></Layout>} />
                 {/* Using Layout to wrap page components */}
                 <Route path="/documents" element={<Layout><Documents /></Layout>} />
-                <Route path="/knowledge-base" element={<Layout><KnowledgeGraphPage /></Layout>} /> {/* Using the full component */}
-                <Route path="/ask" element={<Layout><Ask /></Layout>} />
+                <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
+                <Route path="/workspace-management" element={<Layout><WorkspaceManagement /></Layout>} />
+                <Route path="/chatin" element={<Layout><ChatIn /></Layout>} /> {/* New route for ChatIn */}
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

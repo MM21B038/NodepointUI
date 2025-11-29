@@ -1,33 +1,77 @@
 "use client";
 
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import WorkspaceSelector from "./WorkspaceSelector";
+import WorkspaceControl from "./WorkspaceControl";
 import ThemeSwitcher from "./ThemeSwitcher";
+import { Brush, GitGraph } from "lucide-react"; // Added GitGraph for app title icon
+import { cn } from "@/lib/utils";
+import IconSelectionDialog from "./IconSelectionDialog";
 
 const Navbar = () => {
+  const location = useLocation();
+  const [isIconSelectionDialogOpen, setIsIconSelectionDialogOpen] = useState(false);
+  const [botIconName, setBotIconName] = useState("Bot"); // Default bot icon
+  const [userIconName, setUserIconName] = useState("User"); // Default user icon
+
+  useEffect(() => {
+    // Load icons from localStorage on component mount
+    const savedBotIcon = localStorage.getItem("chatBotIcon");
+    const savedUserIcon = localStorage.getItem("chatUserIcon");
+    if (savedBotIcon) setBotIconName(savedBotIcon);
+    if (savedUserIcon) setUserIconName(savedUserIcon);
+  }, []);
+
+  const handleSaveIcons = (newBotIconName: string, newUserIconName: string) => {
+    setBotIconName(newBotIconName);
+    setUserIconName(newUserIconName);
+    localStorage.setItem("chatBotIcon", newBotIconName);
+    localStorage.setItem("chatUserIcon", newUserIconName);
+    // Dispatch a custom event to notify other components (like ChatIn)
+    window.dispatchEvent(new CustomEvent('chatIconsUpdated'));
+  };
+
+  const isKnowledgeBase = location.pathname === "/knowledge-base";
+  const isChatInPage = location.pathname === "/chatin";
+
   return (
-    <nav className="bg-[--nav-background] text-[--nav-foreground] p-4 shadow-md border-b border-border">
-      <div className="container mx-auto flex justify-between items-center">
-        <h1 className="text-2xl font-bold">My App</h1>
-        <div className="flex items-center space-x-6">
-          <div className="space-x-4">
-            {/* Buttons now use ghost variant with hover colors adjusted for the new nav background */}
-            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
-              <Link to="/documents">Documents</Link>
+    <nav className={cn(
+      "fixed top-0 left-0 w-full z-50 py-4 shadow-md",
+      isKnowledgeBase ? "navbar-translucent" : "navbar-opaque"
+    )}>
+      <div className="w-full px-6 flex justify-between items-center">
+        {/* Left-aligned items */}
+        <div className="flex items-center space-x-4">
+          <Link to="/" className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors">
+            <GitGraph className="h-6 w-6" />
+            <span>PRAJNA</span>
+          </Link>
+          <WorkspaceControl />
+        </div>
+
+        {/* Right-aligned items */}
+        <div className="flex items-center space-x-4">
+          {isChatInPage && (
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={() => setIsIconSelectionDialogOpen(true)}
+              title="Customize Chat Icons"
+            >
+              <Brush className="h-4 w-4" />
             </Button>
-            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
-              <Link to="/knowledge-base">Knowledge Base</Link>
-            </Button>
-            <Button asChild variant="ghost" className="text-[--nav-foreground] hover:bg-[--nav-background]/80">
-              <Link to="/ask">Ask</Link>
-            </Button>
-          </div>
-          <WorkspaceSelector />
+          )}
           <ThemeSwitcher />
         </div>
       </div>
+      <IconSelectionDialog
+        isOpen={isIconSelectionDialogOpen}
+        onClose={() => setIsIconSelectionDialogOpen(false)}
+        onSave={handleSaveIcons}
+        currentBotIconName={botIconName}
+        currentUserIconName={userIconName}
+      />
     </nav>
   );
 };

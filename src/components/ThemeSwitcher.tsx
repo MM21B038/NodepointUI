@@ -19,8 +19,8 @@ const ThemeSwitcher: React.FC = () => {
     setMounted(true);
   }, []);
 
-  // Use the custom nav foreground color for visibility
-  const buttonClasses = "text-[--nav-foreground] hover:bg-[--nav-background]/80";
+  // Set a distinct opaque background color using bg-secondary and its corresponding foreground color.
+  const buttonClasses = "bg-secondary text-secondary-foreground hover:bg-secondary/80";
 
   if (!mounted) {
     return (

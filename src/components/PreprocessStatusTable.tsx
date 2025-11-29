@@ -66,7 +66,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   };
 
   return (
-    <div className="flex flex-col flex-grow p-4"> {/* Made flex column, flex-grow, added padding */}
+    <div className="space-y-4">
       <div className="flex justify-between items-center border-b pb-2">
         <h3 className="text-xl font-medium">Preprocessing Status Summary</h3>
         <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
@@ -75,17 +75,17 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       </div>
       
       {isLoading ? (
-        <div className="flex items-center justify-center flex-grow"> {/* Made flex-grow */}
+        <div className="flex items-center justify-center h-48">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       ) : statusData.length === 0 ? (
-        <div className="flex items-center justify-center flex-grow"> {/* Made flex-grow */}
+        <div className="flex items-center justify-center h-48">
           <p className="text-muted-foreground">
             No processing report found. Start preprocessing to generate a report.
           </p>
         </div>
       ) : (
-        <ScrollArea className="flex-grow h-full"> {/* Made flex-grow, full height */}
+        <ScrollArea className="h-64">
           <Table>
             <TableHeader>
               <TableRow>
