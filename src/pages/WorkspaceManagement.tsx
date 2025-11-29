@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { FolderCog, Info, Loader2, Plus, Search } from "lucide-react";
+import { FolderCog, Info, Loader2, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 
+const WorkspacesPerPage = 4;
+
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
   const [allWorkspaces, setAllWorkspaces] = useState<string[]>([]);
@@ -33,6 +35,8 @@ const WorkspaceManagement = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(0); // New state for pagination
 
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
@@ -49,6 +53,7 @@ const WorkspaceManagement = () => {
       } else if (list.length === 0) {
         setCurrentWorkspace(null);
       }
+      setCurrentPage(0); // Reset to first page on refresh
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
       toast.error("Failed to load workspaces.");
@@ -131,6 +136,20 @@ const WorkspaceManagement = () => {
     );
   }, [allWorkspaces, searchTerm]);
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
+  const startIndex = currentPage * WorkspacesPerPage;
+  const endIndex = startIndex + WorkspacesPerPage;
+  const currentWorkspacesToDisplay = filteredWorkspaces.slice(startIndex, endIndex);
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages - 1));
+  };
+
+  const handlePreviousPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 0));
+  };
+
   return (
     <div className="flex-grow h-full p-4 bg-gradient-to-br from-background to-muted/20">
       <ResizablePanelGroup
@@ -138,13 +157,13 @@ const WorkspaceManagement = () => {
         className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 32px)] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4"> {/* Reduced padding and space-y */}
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
           {/* Create Workspace Section */}
-          <div className="space-y-3"> {/* Reduced space-y */}
-            <h2 className="text-xl font-bold flex items-center text-primary"> {/* Reduced text size */}
-              <Plus className="h-5 w-5 mr-2" /> Create New Workspace {/* Reduced icon size */}
+          <div className="space-y-3">
+            <h2 className="text-xl font-bold flex items-center text-primary">
+              <Plus className="h-5 w-5 mr-2" /> Create New Workspace
             </h2>
-            <div className="space-y-2"> {/* Reduced space-y */}
+            <div className="space-y-2">
               <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
               <Input
                 id="new-workspace-name"
@@ -176,11 +195,11 @@ const WorkspaceManagement = () => {
           <Separator />
 
           {/* Search Workspaces Section */}
-          <div className="space-y-3"> {/* Reduced space-y */}
-            <h2 className="text-xl font-bold flex items-center text-primary"> {/* Reduced text size */}
-              <Search className="h-5 w-5 mr-2" /> Search Workspaces {/* Reduced icon size */}
+          <div className="space-y-3">
+            <h2 className="text-xl font-bold flex items-center text-primary">
+              <Search className="h-5 w-5 mr-2" /> Search Workspaces
             </h2>
-            <div className="space-y-2"> {/* Reduced space-y */}
+            <div className="space-y-2">
               <Label htmlFor="search-workspace" className="sr-only">Search</Label>
               <Input
                 id="search-workspace"
@@ -194,8 +213,8 @@ const WorkspaceManagement = () => {
 
         <ResizableHandle withHandle />
 
-        {/* Right Panel: Workspace List */}
-        <ResizablePanel defaultSize={75} className="p-4"> {/* Reduced padding */}
+        {/* Right Panel: Workspace List with Pagination */}
+        <ResizablePanel defaultSize={75} className="p-4 flex flex-col">
           {isLoading ? (
             <div className="flex-grow flex flex-col items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -212,27 +231,52 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="h-full w-full pr-4 hide-scrollbar">
+            <>
               {filteredWorkspaces.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground text-lg">
                   <p>No workspaces match your search term.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"> {/* Reduced gap */}
-                  {filteredWorkspaces.map((workspace) => (
-                    <WorkspaceCard
-                      key={workspace}
-                      workspaceName={workspace}
-                      isCurrent={currentWorkspace === workspace}
-                      onSelect={handleSelectWorkspace}
-                      onDelete={handleDeleteClick}
-                      isDeleting={isDeleting}
-                      deletingWorkspaceName={workspaceToDelete}
-                    />
-                  ))}
+                <div className="flex flex-col flex-grow">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-grow"> {/* Adjusted to 4 columns */}
+                    {currentWorkspacesToDisplay.map((workspace) => (
+                      <WorkspaceCard
+                        key={workspace}
+                        workspaceName={workspace}
+                        isCurrent={currentWorkspace === workspace}
+                        onSelect={handleSelectWorkspace}
+                        onDelete={handleDeleteClick}
+                        isDeleting={isDeleting}
+                        deletingWorkspaceName={workspaceToDelete}
+                      />
+                    ))}
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-4 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handlePreviousPage}
+                        disabled={currentPage === 0}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {currentPage + 1} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleNextPage}
+                        disabled={currentPage === totalPages - 1}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-            </ScrollArea>
+            </>
           )}
         </ResizablePanel>
       </ResizablePanelGroup>
