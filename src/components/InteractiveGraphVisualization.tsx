@@ -34,6 +34,7 @@ interface InteractiveGraphVisualizationProps {
   edges: GraphEdge[];
   onSelect: (item: GraphNode | GraphEdge | null) => void;
   selectedItem: GraphNode | GraphEdge | null;
+  onGraphBackgroundClick: () => void; // New prop
 }
 
 // D3 requires nodes to have x, y, vx, vy properties, and we add 'degree'
@@ -46,7 +47,6 @@ const cleanNodeData = (d: D3Node): GraphNode => ({
     label: d.label,
     type: d.type,
     source: d.source,
-    workspace: d.workspace,
     attributes: d.attributes,
 });
 
@@ -66,6 +66,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   edges: initialEdges,
   onSelect,
   selectedItem,
+  onGraphBackgroundClick, // Destructure new prop
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
@@ -414,11 +415,11 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("transform", d => `translate(${d.x},${d.y + 20})`);
     });
 
-    // Handle click outside nodes/edges to deselect
+    // Handle click outside nodes/edges to deselect AND close panels
     svg.on("click", () => {
-      onSelect(null);
-      // Explicitly call updateHighlighting to ensure immediate visual update
-      updateHighlighting();
+      onSelect(null); // Deselect any graph item
+      updateHighlighting(); // Update visual state
+      onGraphBackgroundClick(); // Notify parent to close panels
     });
     
     // Initial highlighting update
@@ -431,7 +432,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     return () => {
       simulation.stop();
     };
-  }, [graphData, width, height, onSelect, drag]); // Dependencies for initial setup
+  }, [graphData, width, height, onSelect, drag, onGraphBackgroundClick]); // Dependencies for initial setup
 
   // --- Effect for updating highlighting when selectedItem changes ---
   useEffect(() => {

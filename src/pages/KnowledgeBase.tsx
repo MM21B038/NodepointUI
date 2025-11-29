@@ -35,6 +35,7 @@ const KnowledgeBase = () => {
   const nodeTypesPanelRef = useRef<HTMLDivElement>(null);
   const sourceFilesPanelRef = useRef<HTMLDivElement>(null);
   const filterButtonsContainerRef = useRef<HTMLDivElement>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null); // New ref for the main graph container
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
@@ -135,6 +136,13 @@ const KnowledgeBase = () => {
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
+  // Callback to close all filter panels
+  const closeAllFilterPanels = useCallback(() => {
+    setShowSearchPanel(false);
+    setShowNodeTypesPanel(false);
+    setShowSourceFilesPanel(false);
+  }, []);
+
   // Effect to handle clicks outside the panels
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -152,21 +160,19 @@ const KnowledgeBase = () => {
         filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)
       );
 
+      // Check if the click is inside the main graph visualization container
+      const isClickInsideGraphContainer = (
+        graphContainerRef.current && graphContainerRef.current.contains(target)
+      );
+
       // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
-      // Radix UI components often render their content in a portal, and these portals
-      // are typically direct children of <body> or a designated portal root.
-      // They often have attributes like `data-radix-popper-content` or `data-radix-dropdown-menu-content`.
       const isClickInsideRadixPortal = target.closest(
         '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
       );
 
-      // If the click is outside all panels, their buttons, AND not inside a Radix portal, close any open panels.
-      if (!isClickInsidePanel && !isClickInsideFilterButtons && !isClickInsideRadixPortal) {
-        if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
-          setShowSearchPanel(false);
-          setShowNodeTypesPanel(false);
-          setShowSourceFilesPanel(false);
-        }
+      // If the click is outside all panels, their buttons, Radix portals, AND the graph container, close any open panels.
+      if (!isClickInsidePanel && !isClickInsideFilterButtons && !isClickInsideRadixPortal && !isClickInsideGraphContainer) {
+        closeAllFilterPanels();
       }
     };
 
@@ -174,7 +180,7 @@ const KnowledgeBase = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
+  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel, closeAllFilterPanels]);
 
 
   const handleRefreshGraph = () => {
@@ -324,13 +330,14 @@ const KnowledgeBase = () => {
   return (
     <div className="relative h-full w-full overflow-hidden p-4">
       {currentWorkspace && !loading && !error ? (
-        <div className="relative h-full w-full border rounded-lg shadow-lg bg-card">
+        <div ref={graphContainerRef} className="relative h-full w-full border rounded-lg shadow-lg bg-card">
           {filteredNodes.length > 0 ? (
             <InteractiveGraphVisualization
               nodes={filteredNodes}
               edges={filteredEdges}
               onSelect={setSelectedItem}
               selectedItem={selectedItem}
+              onGraphBackgroundClick={closeAllFilterPanels} // Pass the callback here
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -345,7 +352,7 @@ const KnowledgeBase = () => {
           )}
 
           {/* Filter/Refresh Buttons - now relative to the new block */}
-          <div ref={filterButtonsContainerRef} className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
+          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
             {currentWorkspace && (
               <>
                 <Button
