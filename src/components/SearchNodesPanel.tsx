@@ -4,15 +4,15 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, X, ChevronDown } from "lucide-react"; // Import ChevronDown for the dropdown
+import { Search, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Import DropdownMenu components
-import { cn } from "@/lib/utils"; // Import cn for conditional classNames
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface SearchNodesPanelProps {
   searchQuery: string;
@@ -21,6 +21,8 @@ interface SearchNodesPanelProps {
   onSearchDepthChange: (depth: number) => void;
   onClose: () => void;
   onFilterInteraction: () => void;
+  // New prop to communicate dropdown's open state to parent
+  onDropdownOpenChange: (isOpen: boolean) => void;
 }
 
 const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
@@ -30,8 +32,9 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   onSearchDepthChange,
   onClose,
   onFilterInteraction,
+  onDropdownOpenChange, // Destructure new prop
 }) => {
-  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false); // Local state for dropdown
+  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSearchQueryChange(e.target.value);
@@ -43,10 +46,10 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
     onFilterInteraction();
   };
 
-  const depthOptions = Array.from({ length: 6 }, (_, i) => i); // Depths 0 to 5
+  const depthOptions = Array.from({ length: 6 }, (_, i) => i);
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* Removed onClick={e => e.stopPropagation()} */}
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
@@ -70,7 +73,13 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
           <Label htmlFor="search-depth" className="text-sm font-medium">
             Search Depth:
           </Label>
-          <DropdownMenu open={isDepthDropdownOpen} onOpenChange={setIsDepthDropdownOpen}>
+          <DropdownMenu
+            open={isDepthDropdownOpen}
+            onOpenChange={(isOpen) => {
+              setIsDepthDropdownOpen(isOpen);
+              onDropdownOpenChange(isOpen); // Communicate state change to parent
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
@@ -88,6 +97,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                   onClick={() => {
                     handleDepthSelect(depth);
                     setIsDepthDropdownOpen(false);
+                    onDropdownOpenChange(false); // Ensure parent knows it's closed
                   }}
                   className={cn(
                     "cursor-pointer",

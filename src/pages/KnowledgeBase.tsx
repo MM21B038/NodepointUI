@@ -30,6 +30,9 @@ const KnowledgeBase = () => {
   const [showNodeTypesPanel, setShowNodeTypesPanel] = useState(false);
   const [showSourceFilesPanel, setShowSourceFilesPanel] = useState(false);
 
+  // New state to track if the SearchNodesPanel's dropdown is open
+  const [isSearchDepthDropdownOpenInPanel, setIsSearchDepthDropdownOpenInPanel] = useState(false);
+
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [searchDepth, setSearchDepth] = useState<number>(0); // New state for search depth
@@ -139,19 +142,22 @@ const KnowledgeBase = () => {
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
       
-      // Use target.closest() for portal-rendered content
-      const isClickInsideSearchDepthDropdown = target.closest('.search-depth-dropdown-content');
-
+      // Check if the click is inside any of the main panels or their trigger buttons
       const isClickInsidePanelOrButton = (
         (searchPanelElement && searchPanelElement.contains(target)) ||
         (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
         (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(target)) ||
-        isClickInsideSearchDepthDropdown // Include the dropdown content here
+        (filterButtonsContainer && filterButtonsContainer.contains(target))
       );
 
+      // If the search depth dropdown is open, and the click is NOT inside the search panel itself,
+      // then we should NOT close the search panel. The dropdown will handle its own closing.
+      if (isSearchDepthDropdownOpenInPanel && !isClickInsidePanelOrButton) {
+        return; // Do nothing, let the dropdown handle its own outside click
+      }
+
+      // If the click is outside all panels and their buttons, close any open panels
       if (!isClickInsidePanelOrButton) {
-        // Only attempt to close if any panel is actually open
         if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
           setShowSearchPanel(false);
           setShowNodeTypesPanel(false);
@@ -164,7 +170,7 @@ const KnowledgeBase = () => {
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
+  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel, isSearchDepthDropdownOpenInPanel]);
 
 
   const handleRefreshGraph = () => {
@@ -392,6 +398,7 @@ const KnowledgeBase = () => {
               onSearchDepthChange={setSearchDepth}
               onClose={() => setShowSearchPanel(false)}
               onFilterInteraction={onFilterInteraction}
+              onDropdownOpenChange={setIsSearchDepthDropdownOpenInPanel} // Pass the setter
             />
           </div>
           <div id="node-types-panel" className={cn(
