@@ -238,7 +238,7 @@ const WorkspaceManagement = () => {
                 </div>
               ) : (
                 <div className="relative flex-grow"> {/* New wrapper for grid and overlays */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch"> {/* Added items-stretch */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch">
                     {currentWorkspacesToDisplay.map((workspace) => (
                       <WorkspaceCard
                         key={workspace}
@@ -279,61 +279,60 @@ const WorkspaceManagement = () => {
                       <ChevronRight className="h-8 w-8" />
                     </button>
                   )}
-
-                  {/* Dynamic Dot Indicators */}
-                  {totalPages > 1 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center items-center gap-2 z-20">
-                      {totalPages === 2 ? (
-                        <>
-                          {/* Dot for page 0 */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage === 0 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={() => setCurrentPage(0)}
-                            title="Page 1"
-                          />
-                          {/* Dot for page 1 */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage === 1 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={() => setCurrentPage(1)}
-                            title="Page 2"
-                          />
-                        </>
-                      ) : ( // totalPages >= 3
-                        <>
-                          {/* Left dot: indicates previous pages */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={currentPage > 0 ? handlePreviousPage : undefined}
-                            title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
-                          />
-                          {/* Middle dot: always current page */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full bg-primary transition-colors"
-                            )}
-                            title={`Page ${currentPage + 1}`}
-                          />
-                          {/* Right dot: indicates next pages */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
-                            title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
-                          />
-                        </>
-                      )}
-                    </div>
+                </div>
+              )}
+              {/* Dynamic Dot Indicators - Moved outside the relative flex-grow div */}
+              {totalPages > 1 && (
+                <div className="mt-auto py-4 flex justify-center items-center gap-2 z-20">
+                  {totalPages === 2 ? (
+                    <>
+                      {/* Dot for page 0 */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage === 0 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={() => setCurrentPage(0)}
+                        title="Page 1"
+                      />
+                      {/* Dot for page 1 */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage === 1 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={() => setCurrentPage(1)}
+                        title="Page 2"
+                      />
+                    </>
+                  ) : ( // totalPages >= 3
+                    <>
+                      {/* Left dot: indicates previous pages */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={currentPage > 0 ? handlePreviousPage : undefined}
+                        title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
+                      />
+                      {/* Middle dot: always current page */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full bg-primary transition-colors"
+                        )}
+                        title={`Page ${currentPage + 1}`}
+                      />
+                      {/* Right dot: indicates next pages */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
+                        title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
+                      />
+                    </>
                   )}
                 </div>
               )}
