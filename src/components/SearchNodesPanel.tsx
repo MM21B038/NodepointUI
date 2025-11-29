@@ -46,7 +46,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   const depthOptions = Array.from({ length: 6 }, (_, i) => i); // Depths 0 to 5
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onClick={e => e.stopPropagation()}>
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* Removed onClick={e => e.stopPropagation()} */}
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
@@ -81,7 +81,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                 <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content"> {/* Added className here */}
+            <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content">
               {depthOptions.map((depth) => (
                 <DropdownMenuItem
                   key={depth}

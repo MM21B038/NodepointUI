@@ -138,14 +138,16 @@ const KnowledgeBase = () => {
       const nodeTypesPanelElement = document.getElementById('node-types-panel');
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
-      const searchDepthDropdownContent = document.querySelector('.search-depth-dropdown-content'); // Select the dropdown content
+      
+      // Use target.closest() for portal-rendered content
+      const isClickInsideSearchDepthDropdown = target.closest('.search-depth-dropdown-content');
 
       const isClickInsidePanelOrButton = (
         (searchPanelElement && searchPanelElement.contains(target)) ||
         (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
         (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
         (filterButtonsContainer && filterButtonsContainer.contains(target)) ||
-        (searchDepthDropdownContent && searchDepthDropdownContent.contains(target)) // Include the dropdown content here
+        isClickInsideSearchDepthDropdown // Include the dropdown content here
       );
 
       if (!isClickInsidePanelOrButton) {
