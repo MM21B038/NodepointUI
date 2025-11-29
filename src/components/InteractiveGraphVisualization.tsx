@@ -164,34 +164,38 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         }
       });
     } else if (selectedEdge) {
+      // If an edge is selected, its source and target nodes are neighbors
       neighborNodeIds.add(selectedEdge.source as string);
       neighborNodeIds.add(selectedEdge.target as string);
     }
 
     const isNodeHighlighted = (d: D3Node) => {
-      if (!selectedItem) return true;
-      if (selectedNodeId && d.id === selectedNodeId) return true;
-      if (selectedNodeId && neighborNodeIds.has(d.id)) return true;
-      if (selectedEdge && ((selectedEdge.source as string) === d.id || (selectedEdge.target as string) === d.id)) return true;
+      if (!selectedItem) return true; // All visible if nothing selected
+      if (selectedNodeId && d.id === selectedNodeId) return true; // Selected node
+      if (selectedNodeId && neighborNodeIds.has(d.id)) return true; // Neighbors of selected node
+      if (selectedEdge && (selectedEdge.source === d.id || selectedEdge.target === d.id)) return true; // Nodes connected to selected edge
       return false;
     };
 
     const isEdgeHighlighted = (d: D3Edge) => {
-      if (!selectedItem) return true;
-      if (selectedEdge && (selectedEdge.source === d.source && selectedEdge.target === d.target)) return true;
+      if (!selectedItem) return true; // All visible if nothing selected
+      // Check if this is the selected edge itself
+      if (selectedEdge && selectedEdge.source === (d.source as D3Node).id && selectedEdge.target === (d.target as D3Node).id) return true;
+      // Check if this edge is connected to the selected node
       if (selectedNodeId && ((d.source as D3Node).id === selectedNodeId || (d.target as D3Node).id === selectedNodeId)) return true;
       return false;
     };
 
     link
-      .attr("stroke-width", d => isEdgeHighlighted(d) ? 2 : 1)
+      .attr("stroke-width", d => isEdgeHighlighted(d) ? 3 : 1) // Thicker stroke for highlighted edges
       .attr("stroke", d => getEdgeD3Color(!isEdgeHighlighted(d)))
-      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 0.8 : 0.2); // Higher opacity for highlighted, lower for faded
+      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0.2); // Full opacity for highlighted, low for faded
 
     node
+      .attr("r", d => isNodeHighlighted(d) ? 12 : 10) // Larger radius for highlighted nodes
       .attr("fill", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).fill)
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
-      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0.3) // Higher opacity for highlighted, lower for faded
+      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0.3) // Full opacity for highlighted, low for faded
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
@@ -461,4 +465,4 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   }
 };
 
-export { InteractiveGraphVisualization, DetailPanel };
+export { InteractiveGraphVisualization, DetailPanel, colorScale };
