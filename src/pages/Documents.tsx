@@ -277,7 +277,7 @@ const Documents = () => {
       ) : (
         <div className="flex flex-col flex-grow space-y-4 pb-4">
           {/* File Management Card */}
-          <Card className="flex flex-col min-h-[85vh]">
+          <Card className="flex flex-col min-h-[80vh]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 border-b">
               <CardTitle className="text-xl font-semibold flex items-center">
                 <FileStack className="h-5 w-5 mr-2" /> File Management
