@@ -68,7 +68,7 @@ const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
             directory on the server.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-3"> {/* Changed py-4 to py-3 */}
+        <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="name" className="text-right">
               Name

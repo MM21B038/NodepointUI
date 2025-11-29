@@ -37,7 +37,7 @@ const OpenWorkspaceDialog: React.FC<OpenWorkspaceDialogProps> = ({
             Select a workspace from the list below to open it.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-3"> {/* Changed py-4 to py-3 */}
+        <div className="py-4">
           {existingWorkspaces.length === 0 ? (
             <p className="text-center text-muted-foreground">
               No existing workspaces found. Create one first!

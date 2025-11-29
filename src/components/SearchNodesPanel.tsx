@@ -40,7 +40,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
 
   const handleDepthSelect = (depth: number) => {
     onSearchDepthChange(depth);
-    setIsDepthDropdownOpen(false); // Close dropdown after selection
+    onDepthDropdownOpen(false); // Close dropdown after selection
   };
 
   const depthOptions = Array.from({ length: 6 }, (_, i) => i);
@@ -61,7 +61,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-3 overflow-y-auto hide-scrollbar"> {/* Changed p-4 to p-3 */}
+      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-y-auto hide-scrollbar"> {/* Added hide-scrollbar */}
         <Label htmlFor="node-search" className="sr-only">Search Nodes</Label>
         <Input
           id="node-search"

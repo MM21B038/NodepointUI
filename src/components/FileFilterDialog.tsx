@@ -32,7 +32,7 @@ const FileFilterDialog: React.FC<FileFilterDialogProps> = ({
   initialSelectedFiles,
   onApplyFilter,
 }) => {
-  const [tempSelectedFiles, setTempSelectedFiles] = new Set<string>();
+  const [tempSelectedFiles, setTempSelectedFiles] = useState<Set<string>>(new Set());
   const [showSelectionError, setShowSelectionError] = useState(false);
 
   useEffect(() => {
@@ -99,7 +99,7 @@ const FileFilterDialog: React.FC<FileFilterDialogProps> = ({
             Select which files to include in your search queries.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-3 space-y-4"> {/* Changed py-4 to py-3 */}
+        <div className="py-4 space-y-4">
           <div className="flex space-x-2">
             <Button
               variant="outline"

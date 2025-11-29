@@ -71,7 +71,7 @@ const ManageWorkspacesDialog: React.FC<ManageWorkspacesDialogProps> = ({
               View and delete existing workspaces. Deleting a workspace is permanent.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-3"> {/* Changed py-4 to py-3 */}
+          <div className="py-4">
             {workspaces.length === 0 ? (
               <p className="text-center text-muted-foreground">
                 No existing workspaces found.
