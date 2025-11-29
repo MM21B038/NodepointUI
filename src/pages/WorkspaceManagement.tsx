@@ -283,7 +283,7 @@ const WorkspaceManagement = () => {
               )}
               {/* Dynamic Dot Indicators - Moved outside the relative flex-grow div */}
               {totalPages > 1 && (
-                <div className="mt-auto py-4 flex justify-center items-center gap-2 z-20">
+                <div className="mt-auto py-2 flex justify-center items-center gap-2 z-20"> {/* Changed py-4 to py-2 */}
                   {totalPages === 2 ? (
                     <>
                       {/* Dot for page 0 */}
