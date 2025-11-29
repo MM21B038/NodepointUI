@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeGraph, GraphNode, GraphEdge, FileReference } from "@/database/workspaceStorage";
 import { showError } from "@/utils/toast";
-import { ScrollArea } => "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
