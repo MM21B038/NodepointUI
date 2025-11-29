@@ -38,7 +38,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer group", // Added group for hover effects
+        "cursor-pointer group", // This applies the 'group' class for hover effects
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
@@ -56,9 +56,9 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           {isCurrent && (
             <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
           )}
-          {/* Delete Button - now inline with title, visible on hover */}
+          {/* Delete Button - now inline with title, visible on hover for THIS card only */}
           <Button
-            variant="destructive" // Changed to destructive for red background
+            variant="destructive"
             size="icon"
             onClick={(e) => {
               e.stopPropagation(); // Prevent card selection when clicking delete
@@ -66,8 +66,9 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             }}
             disabled={isDeleting}
             className={cn(
-              "ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-              isThisWorkspaceDeleting && "opacity-100" // Always visible if currently being deleted
+              "ml-auto transition-all duration-200", // Use transition-all for smooth visibility change
+              "invisible group-hover:visible", // Hidden by default, visible on group hover
+              isThisWorkspaceDeleting && "visible" // Always visible if currently being deleted
             )}
           >
             {isThisWorkspaceDeleting ? (
