@@ -23,7 +23,6 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Corrected: Added Alert imports
 
 interface ChatInProps {
   // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
@@ -99,8 +98,7 @@ const ChatIn: React.FC<ChatInProps> = ({
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
-      // Check if scrolled to bottom, allowing a small tolerance (e.g., 1px)
-      const isAtBottom = scrollHeight - scrollTop <= clientHeight + 1;
+      const isAtBottom = scrollHeight - scrollTop <= clientHeight + 1; // +1 for slight tolerance
       setShowScrollToBottomButton(!isAtBottom);
     };
 
