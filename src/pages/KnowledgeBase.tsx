@@ -364,8 +364,8 @@ const KnowledgeBase = () => {
             </div>
           )}
 
-          {/* Filter/Refresh Buttons - now relative to the new block */}
-          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2 h-14">
+          {/* Filter/Refresh Buttons - now fixed on the left */}
+          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-1/2 left-4 -translate-y-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex flex-col space-y-2">
             {currentWorkspace && (
               <>
                 <Button
@@ -374,7 +374,7 @@ const KnowledgeBase = () => {
                   onClick={() => handleTogglePanel('search')}
                   title={showSearchPanel ? "Hide Search Panel" : "Show Search Panel"}
                 >
-                  {showSearchPanel ? <PanelRightClose className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+                  {showSearchPanel ? <PanelLeftOpen className="h-4 w-4" /> : <Search className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
@@ -382,7 +382,7 @@ const KnowledgeBase = () => {
                   onClick={() => handleTogglePanel('nodeTypes')}
                   title={showNodeTypesPanel ? "Hide Node Types Panel" : "Show Node Types Panel"}
                 >
-                  {showNodeTypesPanel ? <PanelRightClose className="h-4 w-4" /> : <Network className="h-4 w-4" />}
+                  {showNodeTypesPanel ? <PanelLeftOpen className="h-4 w-4" /> : <Network className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
@@ -390,7 +390,7 @@ const KnowledgeBase = () => {
                   onClick={() => handleTogglePanel('sourceFiles')}
                   title={showSourceFilesPanel ? "Hide Source Files Panel" : "Show Source Files Panel"}
                 >
-                  {showSourceFilesPanel ? <PanelRightClose className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  {showSourceFilesPanel ? <PanelLeftOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
