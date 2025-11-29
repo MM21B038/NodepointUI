@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace } from "@/database/workspaceStorage";
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -36,7 +36,11 @@ const WorkspaceManagement = () => {
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState(0); // New state for pagination
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // New state for workspace statistics and their loading status
+  const [workspaceStats, setWorkspaceStats] = useState<Record<string, { files: number; nodes: number; edges: number }>>({});
+  const [statsLoading, setStatsLoading] = useState<Record<string, boolean>>({});
 
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
@@ -44,6 +48,33 @@ const WorkspaceManagement = () => {
       const list = await getWorkspaces();
       list.sort((a, b) => b.localeCompare(a));
       setAllWorkspaces(list);
+
+      // Fetch stats for each workspace in parallel
+      const statsPromises = list.map(async (wsName) => {
+        setStatsLoading(prev => ({ ...prev, [wsName]: true }));
+        try {
+          const files = await listFiles(wsName);
+          const graph = await getKnowledgeGraph(wsName);
+          return {
+            name: wsName,
+            files: files.length,
+            nodes: graph.nodes?.length || 0,
+            edges: graph.edges?.length || 0,
+          };
+        } catch (error) {
+          console.error(`Failed to fetch stats for workspace ${wsName}:`, error);
+          return { name: wsName, files: 0, nodes: 0, edges: 0 }; // Return default on error
+        } finally {
+          setStatsLoading(prev => ({ ...prev, [wsName]: false }));
+        }
+      });
+
+      const results = await Promise.all(statsPromises);
+      const newStats: Record<string, { files: number; nodes: number; edges: number }> = {};
+      results.forEach(stat => {
+        newStats[stat.name] = { files: stat.files, nodes: stat.nodes, edges: stat.edges };
+      });
+      setWorkspaceStats(newStats);
 
       if (currentWorkspace && !list.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
@@ -53,7 +84,7 @@ const WorkspaceManagement = () => {
       } else if (list.length === 0) {
         setCurrentWorkspace(null);
       }
-      setCurrentPage(0); // Reset to first page on refresh
+      setCurrentPage(0);
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
       toast.error("Failed to load workspaces.");
@@ -136,7 +167,6 @@ const WorkspaceManagement = () => {
     );
   }, [allWorkspaces, searchTerm]);
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
   const startIndex = currentPage * WorkspacesPerPage;
   const endIndex = startIndex + WorkspacesPerPage;
@@ -214,7 +244,7 @@ const WorkspaceManagement = () => {
         <ResizableHandle withHandle />
 
         {/* Right Panel: Workspace List with Hover Navigation */}
-        <ResizablePanel defaultSize={75} className="p-4 flex flex-col group"> {/* Added group class */}
+        <ResizablePanel defaultSize={75} className="p-4 flex flex-col group">
           {isLoading ? (
             <div className="flex-grow flex flex-col items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -237,7 +267,7 @@ const WorkspaceManagement = () => {
                   <p>No workspaces match your search term.</p>
                 </div>
               ) : (
-                <div className="relative flex-grow"> {/* New wrapper for grid and overlays */}
+                <div className="relative flex-grow">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch">
                     {currentWorkspacesToDisplay.map((workspace) => (
                       <WorkspaceCard
@@ -248,6 +278,10 @@ const WorkspaceManagement = () => {
                         onDelete={handleDeleteClick}
                         isDeleting={isDeleting}
                         deletingWorkspaceName={workspaceToDelete}
+                        totalFiles={workspaceStats[workspace]?.files}
+                        totalNodes={workspaceStats[workspace]?.nodes}
+                        totalEdges={workspaceStats[workspace]?.edges}
+                        isLoadingStats={statsLoading[workspace]}
                       />
                     ))}
                   </div>
