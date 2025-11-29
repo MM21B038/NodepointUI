@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils"; // Import cn for utility classes
 
 interface DeleteConfirmationDialogProps {
   isOpen: boolean;
@@ -60,7 +61,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
         </AlertDialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            To confirm deletion of <span className="font-semibold text-foreground">{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
+            To confirm deletion of <span className={cn("font-semibold text-foreground inline-block max-w-full break-words")}>{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
           </p>
           <div>
             <Label htmlFor="delete-confirm" className="sr-only">
