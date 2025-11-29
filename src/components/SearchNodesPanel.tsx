@@ -79,18 +79,18 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
             open={isDepthDropdownOpen}
             onOpenChange={(isOpen) => {
               setIsDepthDropdownOpen(isOpen);
-              // Removed onFilterInteraction() from here as it's not a direct filter change
             }}
           >
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="w-full justify-between bg-background/50 border-primary/20"
+                className="w-full justify-between bg-background/50 border-primary/20 whitespace-normal" // Added whitespace-normal here
                 disabled={!searchQuery}
-                // Removed onClick={(e) => e.stopPropagation()}
               >
-                {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
-                <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                <span className="flex-1 text-left truncate"> {/* Added flex-1 text-left truncate */}
+                  {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
+                </span>
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /> {/* Added shrink-0 */}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content">
@@ -102,7 +102,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                     setIsDepthDropdownOpen(false);
                   }}
                   className={cn(
-                    "cursor-pointer max-w-full break-words whitespace-normal", // Added whitespace-normal
+                    "cursor-pointer max-w-full break-words whitespace-normal",
                     searchDepth === depth && "bg-accent text-accent-foreground"
                   )}
                 >
@@ -111,7 +111,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <p className="text-xs text-muted-foreground break-words">
+          <p className="text-xs text-muted-foreground break-words max-w-full"> {/* Added max-w-full */}
             Controls how many "hops" away from the searched node(s) are displayed.
           </p>
         </div>
