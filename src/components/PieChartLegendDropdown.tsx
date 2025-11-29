@@ -34,7 +34,7 @@ const PieChartLegendDropdown: React.FC<PieChartLegendDropdownProps> = ({ data, c
           <DropdownMenuItem disabled>No node types</DropdownMenuItem>
         ) : (
           data.map((entry, index) => (
-            <DropdownMenuItem key={`legend-item-${entry.name}`} className="flex items-center justify-between w-full">
+            <DropdownMenuItem key={`legend-item-${entry.name}`} className="flex items-center justify-between w-full overflow-hidden">
               <div className="flex items-center flex-grow min-w-0">
                 <span
                   className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0")}
@@ -42,7 +42,7 @@ const PieChartLegendDropdown: React.FC<PieChartLegendDropdownProps> = ({ data, c
                 ></span>
                 <span className="flex-grow truncate">{entry.name}</span>
               </div>
-              <span className="text-muted-foreground flex-shrink-0 ml-2">{entry.value}</span>
+              <span className="text-muted-foreground flex-shrink-0 ml-2 whitespace-nowrap">{entry.value}</span>
             </DropdownMenuItem>
           ))
         )}
