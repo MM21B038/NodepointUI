@@ -135,7 +135,7 @@ const FileFilterDialog: React.FC<FileFilterDialogProps> = ({
                       checked={tempSelectedFiles.has(file)}
                       onCheckedChange={(checked) => handleFileChange(file, checked as boolean)}
                     />
-                    <Label htmlFor={`file-filter-${file}`} className="text-sm cursor-pointer">
+                    <Label htmlFor={`file-filter-${file}`} className="text-sm cursor-pointer flex-1 min-w-0 break-words"> {/* Added flex-1 min-w-0 break-words */}
                       {file}
                     </Label>
                   </div>
