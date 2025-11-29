@@ -55,8 +55,9 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
       <AlertDialogContent 
         className={cn(
           "w-full sm:max-w-md",
-          "bg-card/50 backdrop-blur-sm", // Increased translucency to 50% opacity
-          "border-t-4 border-b-4 border-destructive"
+          "bg-card/50 backdrop-blur-sm",
+          "border-t-4 border-b-4 border-destructive", // Red top and bottom borders
+          "border-x-0" // Explicitly remove left and right borders
         )}
       >
         <AlertDialogHeader>
