@@ -44,7 +44,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-lg font-semibold flex items-center">
           <FolderCog className="h-5 w-5 mr-2 text-muted-foreground" />
-          <span className={cn("truncate max-w-[calc(100%-2.5rem)]", isCurrent ? "text-primary" : "text-foreground")}>
+          <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
             {workspaceName}
           </span>
         </CardTitle>
