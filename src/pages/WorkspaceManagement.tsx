@@ -85,7 +85,7 @@ const WorkspaceManagement = () => {
         <CardHeader>
           <CardTitle>Workspace List</CardTitle>
         </CardHeader>
-        <CardContent className="flex-grow flex flex-col p-4"> {/* Adjusted padding for grid */}
+        <CardContent className="flex-grow flex flex-col p-2"> {/* Reduced padding here */}
           {isLoading ? (
             <div className="flex-grow flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -102,7 +102,7 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="flex-grow h-0 rounded-md border p-2 hide-scrollbar"> {/* Added padding to scroll area */}
+            <ScrollArea className="flex-grow h-0 rounded-md border p-2 hide-scrollbar">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {workspaces.map((workspace) => (
                   <WorkspaceCard
