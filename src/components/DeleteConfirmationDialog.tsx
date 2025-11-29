@@ -52,15 +52,15 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleClose}>
-      <AlertDialogContent className="max-w-full sm:max-w-[425px]"> {/* Added max-w-full here */}
+      <AlertDialogContent className="w-full max-w-full sm:max-w-[425px]">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-red-600">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="w-full break-words"> {/* Ensured w-full break-words */}
+          <AlertDialogDescription className="w-full break-words">
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground w-full break-words"> {/* Ensured w-full break-words */}
+          <p className="text-sm text-muted-foreground w-full break-words">
             To confirm deletion of <span className="font-semibold text-foreground inline-block max-w-full break-words">{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
           </p>
           <div>
@@ -76,7 +76,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
             />
           </div>
         </div>
-        <AlertDialogFooter className="w-full"> {/* Ensured w-full */}
+        <AlertDialogFooter className="w-full flex-wrap">
           <AlertDialogCancel asChild>
             <Button variant="outline" onClick={handleClose}>
               Cancel
