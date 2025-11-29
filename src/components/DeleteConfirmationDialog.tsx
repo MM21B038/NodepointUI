@@ -52,7 +52,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleClose}>
-      <AlertDialogContent className="w-full max-w-full sm:max-w-[425px]">
+      <AlertDialogContent className="w-full max-w-full"> {/* Removed sm:max-w-[425px] to allow full responsiveness */}
         <AlertDialogHeader>
           <AlertDialogTitle className="text-red-600">{title}</AlertDialogTitle>
           <AlertDialogDescription className="w-full break-words">
