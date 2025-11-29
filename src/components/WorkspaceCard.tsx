@@ -58,7 +58,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           )}
           {/* Delete Button - now inline with title, visible on hover */}
           <Button
-            variant="ghost"
+            variant="destructive" // Changed to destructive for red background
             size="icon"
             onClick={(e) => {
               e.stopPropagation(); // Prevent card selection when clicking delete
