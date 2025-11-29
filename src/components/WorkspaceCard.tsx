@@ -38,7 +38,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer group",
+        "cursor-pointer group", // Added group for hover effects
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
@@ -46,6 +46,27 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       )}
       onClick={() => onSelect(workspaceName)}
     >
+      {/* Delete Button - positioned absolutely at top-right, visible on hover */}
+      <Button
+        variant="destructive"
+        size="icon"
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent card selection when clicking delete
+          onDelete(workspaceName);
+        }}
+        disabled={isDeleting}
+        className={cn(
+          "absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+          isThisWorkspaceDeleting && "opacity-100" // Always visible if currently being deleted
+        )}
+      >
+        {isThisWorkspaceDeleting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Trash2 className="h-4 w-4" />
+        )}
+      </Button>
+
       <CardHeader className="p-0 flex flex-col space-y-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
@@ -53,12 +74,12 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
               {workspaceName}
             </span>
+            {/* Tick Icon for Current Workspace */}
+            {isCurrent && (
+              <CheckCircle2 className="h-5 w-5 ml-2 text-primary flex-shrink-0" />
+            )}
           </CardTitle>
-          {isCurrent && (
-            <Badge variant="default" className="bg-primary text-primary-foreground ml-2 flex-shrink-0">
-              <CheckCircle2 className="h-4 w-4 mr-1" /> Current
-            </Badge>
-          )}
+          {/* Removed the Badge for "Current" */}
         </div>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
@@ -89,27 +110,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             {isLoadingStats ? <Loader2 className="inline h-3 w-3 animate-spin" /> : totalEdges ?? 0}
           </span>
         </div>
-        <div className="flex justify-end items-center mt-4">
-          <Button
-            variant="destructive"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(workspaceName);
-            }}
-            disabled={isDeleting}
-            className={cn(
-              "transition-opacity duration-200",
-              isCurrent ? "opacity-100" : "opacity-70 group-hover:opacity-100"
-            )}
-          >
-            {isThisWorkspaceDeleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        {/* Removed the old delete button container */}
       </CardContent>
     </Card>
   );
