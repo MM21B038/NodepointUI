@@ -238,3 +238,10 @@
   background-color: hsl(var(--nav-background) / 0.8);
   backdrop-filter: blur(8px);
 }
+
+/* Make shadcn/ui dialog and alert dialog overlays translucent */
+[data-radix-dialog-overlay],
+[data-radix-alert-dialog-overlay] {
+  background-color: hsl(var(--background) / 0.5) !important; /* Use background color with 50% opacity */
+  backdrop-filter: blur(4px); /* Add a subtle blur effect */
+}
