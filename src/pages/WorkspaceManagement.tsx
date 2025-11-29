@@ -253,31 +253,56 @@ const WorkspaceManagement = () => {
                   </div>
                   {totalPages > 1 && (
                     <div className="flex justify-center items-center gap-2 mt-4 flex-shrink-0">
-                      {/* Previous pages indicator */}
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                          currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
-                        )}
-                        onClick={currentPage > 0 ? handlePreviousPage : undefined}
-                        title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
-                      />
-                      {/* Current page indicator */}
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full bg-primary transition-colors"
-                        )}
-                        title="Current Page"
-                      />
-                      {/* Next pages indicator */}
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                          currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
-                        )}
-                        onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
-                        title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
-                      />
+                      {totalPages === 2 ? (
+                        <>
+                          {/* Dot for page 0 */}
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                              currentPage === 0 ? "bg-primary" : "bg-muted-foreground/30"
+                            )}
+                            onClick={() => setCurrentPage(0)}
+                            title="Page 1"
+                          />
+                          {/* Dot for page 1 */}
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                              currentPage === 1 ? "bg-primary" : "bg-muted-foreground/30"
+                            )}
+                            onClick={() => setCurrentPage(1)}
+                            title="Page 2"
+                          />
+                        </>
+                      ) : ( // totalPages >= 3
+                        <>
+                          {/* Left dot: indicates previous pages */}
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                              currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
+                            )}
+                            onClick={currentPage > 0 ? handlePreviousPage : undefined}
+                            title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
+                          />
+                          {/* Middle dot: always current page */}
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full bg-primary transition-colors"
+                            )}
+                            title={`Page ${currentPage + 1}`}
+                          />
+                          {/* Right dot: indicates next pages */}
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                              currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
+                            )}
+                            onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
+                            title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
