@@ -91,7 +91,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
         <ScrollArea className="flex-grow pr-4 hide-scrollbar">
           <div className="grid gap-2">
             {uniqueSourceFiles.map((file) => (
-              <div key={file} className="flex items-center space-x-2">
+              <div key={file} className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
                 <Checkbox
                   id={`source-file-${file}`}
                   checked={selectedSourceFiles.has(file)}
