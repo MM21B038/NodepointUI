@@ -11,7 +11,7 @@ import { getWorkspaces, deleteWorkspace } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import WorkspaceCard from "@/components/WorkspaceCard";
+// Removed import for WorkspaceCard as it's no longer used
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
@@ -97,18 +97,10 @@ const WorkspaceManagement = () => {
           </Alert>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {workspaces.map((workspace) => (
-            <WorkspaceCard
-              key={workspace}
-              workspaceName={workspace}
-              isCurrent={currentWorkspace === workspace}
-              onSelect={handleSelectWorkspace}
-              onDelete={handleDeleteClick}
-              isDeleting={isDeleting}
-              deletingWorkspaceName={workspaceToDelete}
-            />
-          ))}
+        // Removed the grid and WorkspaceCard components.
+        // The content for displaying individual workspaces will be added here by you.
+        <div className="flex-grow flex items-center justify-center text-muted-foreground">
+          <p>Workspace list content will go here.</p>
         </div>
       )}
 
