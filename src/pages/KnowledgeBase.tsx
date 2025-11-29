@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { InteractiveGraphVisualization, DetailPanel } from "@/components/InteractiveGraphVisualization";
@@ -29,6 +29,12 @@ const KnowledgeBase = () => {
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [showNodeTypesPanel, setShowNodeTypesPanel] = useState(false);
   const [showSourceFilesPanel, setShowSourceFilesPanel] = useState(false);
+
+  // Refs for the panels and filter buttons container
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+  const nodeTypesPanelRef = useRef<HTMLDivElement>(null);
+  const sourceFilesPanelRef = useRef<HTMLDivElement>(null);
+  const filterButtonsContainerRef = useRef<HTMLDivElement>(null);
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
@@ -134,27 +140,28 @@ const KnowledgeBase = () => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      const searchPanelElement = document.getElementById('search-nodes-panel');
-      const nodeTypesPanelElement = document.getElementById('node-types-panel');
-      const sourceFilesPanelElement = document.getElementById('source-files-panel');
-      const filterButtonsContainer = document.getElementById('filter-buttons-container');
-      
-      // Check if the click is inside any of the main panels or their trigger buttons
-      const isClickInsidePanelOrButton = (
-        (searchPanelElement && searchPanelElement.contains(target)) ||
-        (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
-        (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(target))
+      // Check if the click is inside any of the panel elements
+      const isClickInsidePanel = (
+        (searchPanelRef.current && searchPanelRef.current.contains(target)) ||
+        (nodeTypesPanelRef.current && nodeTypesPanelRef.current.contains(target)) ||
+        (sourceFilesPanelRef.current && sourceFilesPanelRef.current.contains(target))
+      );
+
+      // Check if the click is inside the filter buttons container
+      const isClickInsideFilterButtons = (
+        filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)
       );
 
       // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
-      // This is the most reliable way to detect clicks inside shadcn/ui dropdowns.
-      const isClickInsideRadixPopperContent = target.closest('[data-radix-popper-content]');
+      // Radix UI components often render their content in a portal, and these portals
+      // are typically direct children of <body> or a designated portal root.
+      // They often have attributes like `data-radix-popper-content` or `data-radix-dropdown-menu-content`.
+      const isClickInsideRadixPortal = target.closest(
+        '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
+      );
 
-      // If the click is NOT inside any of the panels/buttons AND NOT inside any Radix content, then close panels.
-      const isClickHandled = isClickInsidePanelOrButton || isClickInsideRadixPopperContent;
-
-      if (!isClickHandled) {
+      // If the click is outside all panels, their buttons, AND not inside a Radix portal, close any open panels.
+      if (!isClickInsidePanel && !isClickInsideFilterButtons && !isClickInsideRadixPortal) {
         if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
           setShowSearchPanel(false);
           setShowNodeTypesPanel(false);
@@ -163,9 +170,9 @@ const KnowledgeBase = () => {
       }
     };
 
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside); // Use mousedown for better event order
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
 
@@ -338,7 +345,7 @@ const KnowledgeBase = () => {
           )}
 
           {/* Filter/Refresh Buttons - now relative to the new block */}
-          <div id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
+          <div ref={filterButtonsContainerRef} className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
             {currentWorkspace && (
               <>
                 <Button
@@ -383,7 +390,7 @@ const KnowledgeBase = () => {
           </div>
 
           {/* Filter Panels (absolutely positioned, relative to the new block) */}
-          <div id="search-nodes-panel" className={cn(
+          <div ref={searchPanelRef} id="search-nodes-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
             "h-full top-0 bottom-0",
             showSearchPanel ? "translate-x-0" : "-translate-x-full"
@@ -397,7 +404,7 @@ const KnowledgeBase = () => {
               onFilterInteraction={onFilterInteraction}
             />
           </div>
-          <div id="node-types-panel" className={cn(
+          <div ref={nodeTypesPanelRef} id="node-types-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
             "h-full top-0 bottom-0",
             showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
@@ -410,7 +417,7 @@ const KnowledgeBase = () => {
               onFilterInteraction={onFilterInteraction}
             />
           </div>
-          <div id="source-files-panel" className={cn(
+          <div ref={sourceFilesPanelRef} id="source-files-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
             "h-full top-0 bottom-0",
             showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
