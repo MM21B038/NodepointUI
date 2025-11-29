@@ -102,7 +102,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                     setIsDepthDropdownOpen(false);
                   }}
                   className={cn(
-                    "cursor-pointer max-w-full break-words", // Added max-w-full and break-words
+                    "cursor-pointer max-w-full break-words whitespace-normal", // Added whitespace-normal
                     searchDepth === depth && "bg-accent text-accent-foreground"
                   )}
                 >
