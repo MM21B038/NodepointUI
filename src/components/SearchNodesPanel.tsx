@@ -55,7 +55,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
-          <CardTitle className="text-xl flex-1 min-w-0">Search Nodes</CardTitle>
+          <CardTitle className="text-xl flex-1 min-w-0 break-words">Search Nodes</CardTitle>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} title="Close Search Panel">
           <X className="h-4 w-4" />
@@ -102,7 +102,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                     setIsDepthDropdownOpen(false);
                   }}
                   className={cn(
-                    "cursor-pointer",
+                    "cursor-pointer max-w-full break-words", // Added max-w-full and break-words
                     searchDepth === depth && "bg-accent text-accent-foreground"
                   )}
                 >
