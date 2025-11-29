@@ -308,9 +308,13 @@ const KnowledgeBase = () => {
   }, []);
 
   return (
-    <div className="relative h-full w-full overflow-hidden p-4"> {/* Added padding here */}
+    <div className="relative h-full w-full overflow-hidden flex items-center justify-center"> {/* Removed p-4, added flex centering */}
       {currentWorkspace && !loading && !error ? (
-        <div className="relative h-full w-full border rounded-lg shadow-lg bg-card"> {/* New block for the graph */}
+        <div className="relative border rounded-lg shadow-lg bg-card p-4" // Removed h-full w-full, added p-4
+             style={{
+               height: 'calc(100vh - var(--navbar-height) - var(--footer-height) - 2rem)',
+               width: 'calc(100% - var(--sidebar-collapsed-width) - 2rem)'
+             }}>
           {filteredNodes.length > 0 ? (
             <InteractiveGraphVisualization
               nodes={filteredNodes}
