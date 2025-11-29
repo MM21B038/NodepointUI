@@ -38,7 +38,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       )}
       onClick={() => onSelect(workspaceName)}
     >
-      <CardHeader className="p-0 pb-3 flex flex-col space-y-2">
+      <CardHeader className="p-0 flex flex-col space-y-2"> {/* Removed pb-3, p-0 */}
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
             <FolderCog className={cn("h-6 w-6 mr-3", isCurrent ? "text-primary" : "text-muted-foreground")} />
@@ -53,7 +53,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-0 flex justify-end items-center mt-4">
+      <CardContent className="p-0 flex justify-end items-center mt-4"> {/* Removed p-0, mt-4, added flex justify-end */}
         <Button
           variant="destructive"
           size="icon"
