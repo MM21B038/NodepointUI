@@ -337,7 +337,7 @@ const Documents = () => {
               {files.length === 0 ? (
                 <p className="text-muted-foreground p-4">No documents uploaded yet. Upload a PDF to get started!</p>
               ) : (
-                <ScrollArea className="flex-grow h-0">
+                <ScrollArea className="flex-grow h-0 hide-scrollbar"> {/* Added hide-scrollbar here */}
                   <div className="overflow-visible">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card">
