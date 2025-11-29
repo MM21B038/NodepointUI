@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react"; // Removed ArrowDown
+import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getChatHistory, ProvenanceEntry, ChatMessage, listFiles, performSearch, SearchEngineType } from "@/database/workspaceStorage";
@@ -23,7 +23,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { iconComponents } from "@/lib/icons"; // Import iconComponents
+import { iconComponents } from "@/lib/icons";
 
 interface ChatInProps {
   onShowScrollToBottomChange?: (show: boolean) => void;
@@ -39,7 +39,6 @@ const ChatIn: React.FC<ChatInProps> = ({
   const { currentWorkspace } = useWorkspace();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [currentInput, setCurrentInput] = useState("");
   const [selectedEngine, setSelectedEngine] = useState<string>("agent_search");
@@ -74,6 +73,40 @@ const ChatIn: React.FC<ChatInProps> = ({
   const fileSelectionError = useMemo(() => {
     return Array.isArray(selectedFiles) && selectedFiles.length === 0;
   }, [selectedFiles]);
+
+  // --- Scroll to Bottom Button Logic ---
+  const checkScrollPosition = useCallback(() => {
+    if (chatScrollViewportRef?.current && onShowScrollToBottomChange) {
+      const { scrollTop, scrollHeight, clientHeight } = chatScrollViewportRef.current;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10; // 10px threshold
+      onShowScrollToBottomChange(!isAtBottom); // Show button if NOT at bottom
+    }
+  }, [chatScrollViewportRef, onShowScrollToBottomChange]);
+
+  useEffect(() => {
+    const viewport = chatScrollViewportRef?.current;
+    if (viewport) {
+      viewport.addEventListener('scroll', checkScrollPosition);
+      // Initial check on mount
+      checkScrollPosition();
+      return () => {
+        viewport.removeEventListener('scroll', checkScrollPosition);
+      };
+    }
+  }, [chatScrollViewportRef, checkScrollPosition, messages]); // Re-run if messages change to re-evaluate scroll state
+
+  // Auto-scroll to bottom when new messages arrive or history loads
+  useEffect(() => {
+    if (isLoadingHistory) return;
+    const behavior = messages.length > 2 ? 'smooth' : 'auto';
+    if (chatScrollViewportRef?.current) {
+      chatScrollViewportRef.current.scrollTo({
+        top: chatScrollViewportRef.current.scrollHeight,
+        behavior: behavior,
+      });
+    }
+  }, [messages, isLoadingHistory, chatScrollViewportRef]);
+  // --- End Scroll to Bottom Button Logic ---
 
   useEffect(() => {
     const loadIcons = () => {
@@ -176,20 +209,6 @@ const ChatIn: React.FC<ChatInProps> = ({
       window.removeEventListener('chatIconsUpdated', loadIcons);
     };
   }, [currentWorkspace, selectedFiles]);
-
-  useEffect(() => {
-    if (isLoadingHistory) return;
-    const behavior = messages.length > 2 ? 'smooth' : 'auto';
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, [messages, isLoadingHistory]);
-
-  // Effect for handling the visibility of the "scroll to bottom" button
-  useEffect(() => {
-    if (onShowScrollToBottomChange) {
-      onShowScrollToBottomChange(true); // Always show for debugging
-      console.log("ChatIn Debug: Calling onShowScrollToBottomChange(true)");
-    }
-  }, [onShowScrollToBottomChange]); // Only re-run if the callback itself changes
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCurrentInput(e.target.value);
@@ -412,7 +431,6 @@ const ChatIn: React.FC<ChatInProps> = ({
                         <span>Searching...</span>
                       </div>
                     )}
-                    <div ref={messagesEndRef} />
                   </>
                 )}
               </div>
