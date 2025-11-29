@@ -148,6 +148,63 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     const { link, node, labelGroups, g, zoom } = d3Refs.current;
     if (!link || !node || !labelGroups || !g || !zoom) return;
 
+    if (selectedItem === null) {
+      // If nothing is selected, make everything fully visible
+      link.attr("stroke-width", 1)
+          .attr("stroke", getEdgeD3Color(false))
+          .attr("stroke-opacity", 1)
+          .style("display", null);
+
+      node.attr("r", 10)
+          .attr("fill", d => getNodeD3Colors(d.type, false).fill)
+          .attr("stroke", d => getNodeD3Colors(d.type, false).stroke)
+          .attr("opacity", 1)
+          .style("display", null)
+          .attr("class", "cursor-pointer hover:ring-2 hover:ring-primary/50"); // Reset class
+
+      labelGroups.each(function(d: D3Node) {
+        const currentLabelGroup = d3.select(this);
+        const currentLabelText = currentLabelGroup.select(".label-text");
+        const currentLabelBackground = currentLabelGroup.select(".label-background");
+
+        const currentTransform = d3.zoomTransform(g.node()!);
+        const k = currentTransform.k;
+        const baseFontSize = 10;
+        currentLabelText.attr("font-size", `${baseFontSize / k}px`);
+
+        const textNode = currentLabelText.node();
+        if (!textNode) {
+          console.warn(`InteractiveGraphVisualization: Label text node is null for node ID ${d.id}. Skipping getBBox calculation.`);
+          return;
+        }
+        const bbox = textNode.getBBox();
+        const padding = 5;
+        currentLabelBackground
+          .attr("x", bbox.x - padding)
+          .attr("y", bbox.y - padding)
+          .attr("width", bbox.width + 2 * padding)
+          .attr("height", bbox.height + 2 * padding);
+
+        const nodeDegree = d.degree || 0;
+        const minZoomBase = 3.0;
+        const maxZoomBase = 10.0;
+        const degreeFactor = 1 + Math.log1p(nodeDegree);
+        const effectiveMinZoom = minZoomBase / degreeFactor;
+        const effectiveMaxZoom = maxZoomBase / (1 + Math.log1p(nodeDegree) / 2);
+        const clampedEffectiveMinZoom = Math.max(0.1, effectiveMinZoom);
+        const clampedEffectiveMaxZoom = Math.min(5.0, effectiveMaxZoom);
+
+        const opacityScale = d3.scaleLinear()
+          .domain([clampedEffectiveMinZoom, clampedEffectiveMaxZoom])
+          .range([0, 1])
+          .clamp(true);
+
+        currentLabelGroup.attr("opacity", opacityScale(k)).style("display", null);
+      });
+      return; // Exit early if nothing is selected
+    }
+
+    // --- If an item IS selected, apply highlighting logic ---
     const selectedNodeId = selectedItem && 'id' in selectedItem ? selectedItem.id : null;
     const selectedEdge = selectedItem && 'source' in selectedItem && 'target' in selectedItem ? selectedItem : null;
 
@@ -161,46 +218,40 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         }
       });
     } else if (selectedEdge) {
-      // If an edge is selected, its source and target nodes are neighbors
       neighborNodeIds.add(selectedEdge.source as string);
       neighborNodeIds.add(selectedEdge.target as string);
     }
 
     const isNodeHighlighted = (d: D3Node) => {
-      if (!selectedItem) return true; // All visible if nothing selected
-      if (selectedNodeId && d.id === selectedNodeId) return true; // Selected node
-      if (selectedNodeId && neighborNodeIds.has(d.id)) return true; // Neighbors of selected node
-      if (selectedEdge && (selectedEdge.source === d.id || selectedEdge.target === d.id)) return true; // Nodes connected to selected edge
+      if (selectedNodeId && d.id === selectedNodeId) return true;
+      if (selectedNodeId && neighborNodeIds.has(d.id)) return true;
+      if (selectedEdge && (selectedEdge.source === d.id || selectedEdge.target === d.id)) return true;
       return false;
     };
 
     const isEdgeHighlighted = (d: D3Edge) => {
-      if (!selectedItem) return true; // All visible if nothing selected
-      // Check if this is the selected edge itself
       if (selectedEdge && selectedEdge.source === (d.source as D3Node).id && selectedEdge.target === (d.target as D3Node).id) return true;
-      // Check if this edge is connected to the selected node
       if (selectedNodeId && ((d.source as D3Node).id === selectedNodeId || (d.target as D3Node).id === selectedNodeId)) return true;
       return false;
     };
 
     link
-      .attr("stroke-width", d => isEdgeHighlighted(d) ? 3 : 1) // Thicker stroke for highlighted edges
+      .attr("stroke-width", d => isEdgeHighlighted(d) ? 3 : 1)
       .attr("stroke", d => getEdgeD3Color(!isEdgeHighlighted(d)))
-      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
-      .style("display", d => isEdgeHighlighted(d) ? null : "none"); // Toggle display for edges
+      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0)
+      .style("display", d => isEdgeHighlighted(d) ? null : "none");
 
     node
-      .attr("r", d => isNodeHighlighted(d) ? 12 : 10) // Larger radius for highlighted nodes
+      .attr("r", d => isNodeHighlighted(d) ? 12 : 10)
       .attr("fill", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).fill)
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
-      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
-      .style("display", d => isNodeHighlighted(d) ? null : "none") // Toggle display for nodes
+      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0)
+      .style("display", d => isNodeHighlighted(d) ? null : "none")
       .attr("class", d => cn(
         "cursor-pointer",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
       ));
 
-    // Re-evaluate label opacity based on current zoom and highlighting
     const currentTransform = d3.zoomTransform(g.node()!);
     labelGroups.each(function(d: D3Node) {
       const currentLabelGroup = d3.select(this);
@@ -214,7 +265,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       const textNode = currentLabelText.node();
       if (!textNode) {
         console.warn(`InteractiveGraphVisualization: Label text node is null for node ID ${d.id}. Skipping getBBox calculation.`);
-        return; 
+        return;
       }
       const bbox = textNode.getBBox();
       const padding = 5;
@@ -225,7 +276,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("height", bbox.height + 2 * padding);
 
       if (!isNodeHighlighted(d)) {
-        currentLabelGroup.attr("opacity", 0).style("display", "none"); // Keep labels hidden for non-highlighted nodes
+        currentLabelGroup.attr("opacity", 0).style("display", "none");
         return;
       }
 
@@ -243,10 +294,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .range([0, 1])
         .clamp(true);
 
-      currentLabelGroup.attr("opacity", opacityScale(k)).style("display", null); // Show labels
+      currentLabelGroup.attr("opacity", opacityScale(k)).style("display", null);
     });
 
-  }, [selectedItem, graphData]);
+  }, [selectedItem, graphData]); // Dependencies for useCallback
 
   // --- Effect for initial D3 setup and data changes ---
   useEffect(() => {
@@ -366,7 +417,8 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     // Handle click outside nodes/edges to deselect
     svg.on("click", () => {
       onSelect(null);
-      // Do NOT restart simulation here. It should remain stable after deselecting.
+      // Explicitly call updateHighlighting to ensure immediate visual update
+      updateHighlighting();
     });
     
     // Initial highlighting update
