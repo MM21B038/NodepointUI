@@ -156,7 +156,7 @@ const KnowledgeBase = () => {
       }
     };
 
-    document.addEventListener('click', handleClickOutside); // Changed to 'click'
+    document.addEventListener('click', handleClickOutside);
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
@@ -308,162 +308,158 @@ const KnowledgeBase = () => {
   }, []);
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
-      {/* Filter/Refresh Buttons - positioned on top-right of the graph */}
-      <div id="filter-buttons-container" className="absolute top-[10%] left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
-        {currentWorkspace && (
-          <>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => handleTogglePanel('search')}
-              title={showSearchPanel ? "Hide Search Panel" : "Show Search Panel"}
-            >
-              {showSearchPanel ? <PanelRightClose className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => handleTogglePanel('nodeTypes')}
-              title={showNodeTypesPanel ? "Hide Node Types Panel" : "Show Node Types Panel"}
-            >
-              {showNodeTypesPanel ? <PanelRightClose className="h-4 w-4" /> : <Network className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => handleTogglePanel('sourceFiles')}
-              title={showSourceFilesPanel ? "Hide Source Files Panel" : "Show Source Files Panel"}
-            >
-              {showSourceFilesPanel ? <PanelRightClose className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleRefreshGraph}
-              title="Refresh Graph"
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Main content area */}
-      <div className="absolute inset-0 z-0">
-        {currentWorkspace && !loading && !error ? (
-          // Graph Visualization container (now also the parent for panels)
-          <div className="relative h-full w-full">
-            {filteredNodes.length > 0 ? (
-              <InteractiveGraphVisualization
-                nodes={filteredNodes}
-                edges={filteredEdges}
-                onSelect={setSelectedItem}
-                selectedItem={selectedItem}
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <Alert className="max-w-lg">
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>No Graph Data</AlertTitle>
-                  <AlertDescription>
-                    {alertMessage}
-                  </AlertDescription>
-                </Alert>
-              </div>
-            )}
-
-            {/* Filter Panels (absolutely positioned, relative to graph container) */}
-            <div id="search-nodes-panel" className={cn(
-              "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "top-20 bottom-4 pl-8", // Relative to graph container, with 1rem padding
-              showSearchPanel ? "translate-x-0" : "-translate-x-full"
-            )}>
-              <SearchNodesPanel
-                searchQuery={nodeSearchQuery}
-                onSearchQueryChange={setNodeSearchQuery}
-                searchDepth={searchDepth} // Pass searchDepth
-                onSearchDepthChange={setSearchDepth} // Pass depth setter
-                onClose={() => setShowSearchPanel(false)}
-                onFilterInteraction={onFilterInteraction}
-              />
-            </div>
-            <div id="node-types-panel" className={cn(
-              "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "top-4 bottom-4 pl-8", // Relative to graph container, with 1rem padding
-              showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
-            )}>
-              <NodeTypesPanel
-                nodes={allNodes}
-                selectedNodeTypes={selectedNodeTypes}
-                onSelectedNodeTypesChange={setSelectedNodeTypes}
-                onClose={() => setShowNodeTypesPanel(false)}
-                onFilterInteraction={onFilterInteraction}
-              />
-            </div>
-            <div id="source-files-panel" className={cn(
-              "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "top-4 bottom-4 pl-8", // Relative to graph container, with 1rem padding
-              showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
-            )}>
-              <SourceFilesPanel
-                nodes={allNodes}
-                edges={allEdges}
-                selectedSourceFiles={selectedSourceFiles}
-                onSelectedSourceFilesChange={setSelectedSourceFiles}
-                onClose={() => setShowSourceFilesPanel(false)}
-                onFilterInteraction={onFilterInteraction}
-              />
-            </div>
-
-            {/* Detail Panel (right side, higher z-index, relative to graph container) */}
-            {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
-              <div className={cn(
-                "absolute right-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-                "top-20 bottom-4 pr-8", // Relative to graph container, with 1rem padding
-                selectedItem ? "translate-x-0" : "translate-x-full"
-              )}>
-                <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">
-                  <h3 className="text-lg font-semibold p-4 border-b flex items-center justify-between">
-                    Details
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedItem(null);
-                        console.log("KnowledgeBase: Closing Detail Panel.");
-                      }}
-                      title="Close Details"
-                    >
-                      <PanelRightClose className="h-4 w-4" />
-                    </Button>
-                  </h3>
-                  <ScrollArea className="h-[calc(100%-57px)]">
-                    <DetailPanel item={selectedItem} />
-                  </ScrollArea>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
-            <div className="pointer-events-auto bg-card p-6 rounded-lg shadow-lg">
+    <div className="relative h-full w-full overflow-hidden p-4"> {/* Added padding here */}
+      {currentWorkspace && !loading && !error ? (
+        <div className="relative h-full w-full border rounded-lg shadow-lg bg-card"> {/* New block for the graph */}
+          {filteredNodes.length > 0 ? (
+            <InteractiveGraphVisualization
+              nodes={filteredNodes}
+              edges={filteredEdges}
+              onSelect={setSelectedItem}
+              selectedItem={selectedItem}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
               <Alert className="max-w-lg">
                 <Info className="h-4 w-4" />
-                <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
+                <AlertTitle>No Graph Data</AlertTitle>
                 <AlertDescription>
                   {alertMessage}
                 </AlertDescription>
               </Alert>
             </div>
+          )}
+
+          {/* Filter/Refresh Buttons - now relative to the new block */}
+          <div id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
+            {currentWorkspace && (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleTogglePanel('search')}
+                  title={showSearchPanel ? "Hide Search Panel" : "Show Search Panel"}
+                >
+                  {showSearchPanel ? <PanelRightClose className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleTogglePanel('nodeTypes')}
+                  title={showNodeTypesPanel ? "Hide Node Types Panel" : "Show Node Types Panel"}
+                >
+                  {showNodeTypesPanel ? <PanelRightClose className="h-4 w-4" /> : <Network className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleTogglePanel('sourceFiles')}
+                  title={showSourceFilesPanel ? "Hide Source Files Panel" : "Show Source Files Panel"}
+                >
+                  {showSourceFilesPanel ? <PanelRightClose className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleRefreshGraph}
+                  title="Refresh Graph"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+              </>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Filter Panels (absolutely positioned, relative to the new block) */}
+          <div id="search-nodes-panel" className={cn(
+            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
+            "top-4 bottom-4", // Adjusted top and removed pl-8 as p-4 is already there
+            showSearchPanel ? "translate-x-0" : "-translate-x-full"
+          )}>
+            <SearchNodesPanel
+              searchQuery={nodeSearchQuery}
+              onSearchQueryChange={setNodeSearchQuery}
+              searchDepth={searchDepth}
+              onSearchDepthChange={setSearchDepth}
+              onClose={() => setShowSearchPanel(false)}
+              onFilterInteraction={onFilterInteraction}
+            />
+          </div>
+          <div id="node-types-panel" className={cn(
+            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
+            "top-4 bottom-4", // Adjusted top and removed pl-8
+            showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
+          )}>
+            <NodeTypesPanel
+              nodes={allNodes}
+              selectedNodeTypes={selectedNodeTypes}
+              onSelectedNodeTypesChange={setSelectedNodeTypes}
+              onClose={() => setShowNodeTypesPanel(false)}
+              onFilterInteraction={onFilterInteraction}
+            />
+          </div>
+          <div id="source-files-panel" className={cn(
+            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
+            "top-4 bottom-4", // Adjusted top and removed pl-8
+            showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
+          )}>
+            <SourceFilesPanel
+              nodes={allNodes}
+              edges={allEdges}
+              selectedSourceFiles={selectedSourceFiles}
+              onSelectedSourceFilesChange={setSelectedSourceFiles}
+              onClose={() => setShowSourceFilesPanel(false)}
+              onFilterInteraction={onFilterInteraction}
+            />
+          </div>
+
+          {/* Detail Panel (right side, higher z-index, relative to the new block) */}
+          {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
+            <div className={cn(
+              "absolute right-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
+              "top-4 bottom-4", // Adjusted top and removed pr-8
+              selectedItem ? "translate-x-0" : "translate-x-full"
+            )}>
+              <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">
+                <h3 className="text-lg font-semibold p-4 border-b flex items-center justify-between">
+                  Details
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSelectedItem(null);
+                      console.log("KnowledgeBase: Closing Detail Panel.");
+                    }}
+                    title="Close Details"
+                  >
+                    <PanelRightClose className="h-4 w-4" />
+                  </Button>
+                </h3>
+                <ScrollArea className="h-[calc(100%-57px)]">
+                  <DetailPanel item={selectedItem} />
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+          <div className="pointer-events-auto bg-card p-6 rounded-lg shadow-lg">
+            <Alert className="max-w-lg">
+              <Info className="h-4 w-4" />
+              <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
+              <AlertDescription>
+                {alertMessage}
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
