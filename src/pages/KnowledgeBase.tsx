@@ -143,34 +143,45 @@ const KnowledgeBase = () => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      // Check if the click is inside any of the filter buttons
-      const isClickInsideFilterButtons = (
-        filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)
-      );
-      if (isClickInsideFilterButtons) return; // Don't close if clicking on a filter button
+      // If no filter panel is currently active, there's nothing to close.
+      if (activeFilterPanel === 'none') return;
 
-      // Check if the click is inside the main graph visualization container
-      const isClickInsideGraphContainer = (
-        graphContainerRef.current && graphContainerRef.current.contains(target)
+      // Check if the click originated from within the filter buttons container.
+      // Clicking these buttons should toggle panels, not close them.
+      if (filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)) {
+        return;
+      }
+
+      // Check if the click originated from within the active filter panel itself,
+      // or any of its content rendered via React Portals (like dropdowns).
+      const isClickInsideFilterPanel = (
+        rotatingFilterPanelRef.current && rotatingFilterPanelRef.current.contains(target)
+      ) || target.closest(
+        '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
       );
-      // If clicking inside the graph container, deselect item and close panels
-      if (isClickInsideGraphContainer) {
+
+      if (isClickInsideFilterPanel) {
+        // If the click is inside the filter panel or its associated Radix UI portals, do not close.
+        return;
+      }
+
+      // Check if the click is inside the graph visualization area.
+      // If so, deselect item and close filter panels.
+      if (graphContainerRef.current && graphContainerRef.current.contains(target)) {
         setSelectedItem(null);
         closeAllFilterPanels();
         return;
       }
 
-      // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
-      const isClickInsideRadixPortal = target.closest(
-        '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
-      );
-      if (isClickInsideRadixPortal) return; // Don't close if clicking inside a Radix portal
-
-      // Now, check if the click is outside the *open* rotating filter panel
-      // The onClick on rotatingFilterPanelRef should stop propagation before this is reached for clicks inside the panel.
-      if (activeFilterPanel !== 'none' && rotatingFilterPanelRef.current && !rotatingFilterPanelRef.current.contains(target)) {
-        setActiveFilterPanel('none');
+      // Check if the click is inside the detail panel.
+      // Clicking the detail panel should not close the filter panel.
+      const detailPanelElement = document.getElementById('detail-panel-container');
+      if (detailPanelElement && detailPanelElement.contains(target)) {
+        return;
       }
+
+      // If the click is not within any of the above elements, it's truly an "outside" click for the filter panels.
+      setActiveFilterPanel('none');
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -393,7 +404,7 @@ const KnowledgeBase = () => {
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             activeFilterPanel !== 'none' ? "translate-x-0" : "-translate-x-full"
           )}
-          onClick={e => e.stopPropagation()} // ADDED THIS LINE
+          // Removed onClick={e => e.stopPropagation()} here
           >
             {activeFilterPanel === 'search' && (
               <SearchNodesPanel
@@ -428,11 +439,13 @@ const KnowledgeBase = () => {
 
           {/* Detail Panel (right side, higher z-index, relative to the new block) */}
           {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
-            <div className={cn(
+            <div id="detail-panel-container" className={cn(
               "absolute right-0 z-20 p-4 transition-transform duration-300 ease-in-out",
               "w-[var(--detail-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
               selectedItem ? "translate-x-0" : "translate-x-full"
-            )}>
+            )}
+            // Removed onClick={e => e.stopPropagation()} here
+            >
               <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">
                 <h3 className="text-lg font-semibold p-4 border-b flex items-center justify-between">
                   Details
