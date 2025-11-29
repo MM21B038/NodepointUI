@@ -58,7 +58,7 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
   };
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onClick={e => e.stopPropagation()}>
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* REMOVED onClick */}
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Network className="h-5 w-5 mr-2" />
@@ -92,7 +92,7 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
         <ScrollArea className="flex-grow pr-4 hide-scrollbar"> {/* Added hide-scrollbar here */}
           <div className="grid gap-2">
             {uniqueNodeTypes.map((type) => (
-              <div key={type} className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
+              <div key={type} className="flex items-center space-x-2"> {/* Removed onClick here */}
                 <Checkbox
                   id={`node-type-${type}`}
                   checked={selectedNodeTypes.has(type)}

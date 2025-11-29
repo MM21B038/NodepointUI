@@ -167,6 +167,7 @@ const KnowledgeBase = () => {
       if (isClickInsideRadixPortal) return; // Don't close if clicking inside a Radix portal
 
       // Now, check if the click is outside the *open* rotating filter panel
+      // The onClick on rotatingFilterPanelRef should stop propagation before this is reached for clicks inside the panel.
       if (activeFilterPanel !== 'none' && rotatingFilterPanelRef.current && !rotatingFilterPanelRef.current.contains(target)) {
         setActiveFilterPanel('none');
       }
@@ -391,7 +392,9 @@ const KnowledgeBase = () => {
             "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             activeFilterPanel !== 'none' ? "translate-x-0" : "-translate-x-full"
-          )}>
+          )}
+          onClick={e => e.stopPropagation()} // ADDED THIS LINE
+          >
             {activeFilterPanel === 'search' && (
               <SearchNodesPanel
                 searchQuery={nodeSearchQuery}

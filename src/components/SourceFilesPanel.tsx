@@ -57,7 +57,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
   };
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onClick={e => e.stopPropagation()}>
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* REMOVED onClick */}
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <FileText className="h-5 w-5 mr-2" />
@@ -91,7 +91,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
         <ScrollArea className="flex-grow pr-4 hide-scrollbar">
           <div className="grid gap-2">
             {uniqueSourceFiles.map((file) => (
-              <div key={file} className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
+              <div key={file} className="flex items-center space-x-2"> {/* Removed onClick here */}
                 <Checkbox
                   id={`source-file-${file}`}
                   checked={selectedSourceFiles.has(file)}
