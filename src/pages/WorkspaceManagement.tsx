@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { FolderCog, Info, Loader2, Trash2, Plus, Search } from "lucide-react";
+import { FolderCog, Info, Loader2, Plus, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,11 +19,11 @@ import { getWorkspaces, createWorkspace, deleteWorkspace } from "@/database/work
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
-import WorkspaceCard from "@/components/WorkspaceCard"; // Re-import WorkspaceCard
+import WorkspaceCard from "@/components/WorkspaceCard";
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
-  const [allWorkspaces, setAllWorkspaces] = useState<string[]>([]); // Store all workspaces
+  const [allWorkspaces, setAllWorkspaces] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
@@ -38,14 +38,12 @@ const WorkspaceManagement = () => {
     setIsLoading(true);
     try {
       const list = await getWorkspaces();
-      list.sort((a, b) => b.localeCompare(a)); // Sort alphabetically
+      list.sort((a, b) => b.localeCompare(a));
       setAllWorkspaces(list);
 
-      // If the current workspace is no longer in the list, clear it
       if (currentWorkspace && !list.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
       }
-      // If no workspace is selected, default to the first one if available
       if (!currentWorkspace && list.length > 0) {
         setCurrentWorkspace(list[0]);
       } else if (list.length === 0) {
@@ -79,7 +77,7 @@ const WorkspaceManagement = () => {
         toast.success(`Workspace "${name}" created successfully!`, { id: loadingToastId });
         setNewWorkspaceName("");
         fetchWorkspaces().then(() => {
-          setCurrentWorkspace(name); // Automatically select the newly created workspace
+          setCurrentWorkspace(name);
         });
       } else {
         toast.error(`Workspace "${name}" already exists. Please choose another name.`, { id: loadingToastId });
@@ -112,7 +110,7 @@ const WorkspaceManagement = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-      fetchWorkspaces(); // Re-fetch to update the list and potentially current workspace
+      fetchWorkspaces();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
       toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
@@ -140,95 +138,87 @@ const WorkspaceManagement = () => {
         className="min-h-[calc(100vh-120px)] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4">
-          <div className="flex flex-col h-full space-y-6">
-            {/* Create New Workspace Card */}
-            <Card className="flex-shrink-0">
-              <CardHeader>
-                <CardTitle className="flex items-center text-xl">
-                  <Plus className="h-5 w-5 mr-2 text-primary" /> Create Workspace
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
-                  <Input
-                    id="new-workspace-name"
-                    placeholder="Enter new workspace name"
-                    value={newWorkspaceName}
-                    onChange={(e) => setNewWorkspaceName(e.target.value)}
-                    disabled={isCreating}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleCreateWorkspace();
-                      }
-                    }}
-                  />
-                </div>
-                <Button
-                  onClick={handleCreateWorkspace}
-                  disabled={isCreating || !newWorkspaceName.trim()}
-                  className="w-full"
-                >
-                  {isCreating ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
-                  )}
-                  Create
-                </Button>
-              </CardContent>
-            </Card>
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-6 flex flex-col space-y-8">
+          {/* Create Workspace Section */}
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold flex items-center text-primary">
+              <Plus className="h-6 w-6 mr-3" /> Create New Workspace
+            </h2>
+            <div className="space-y-3">
+              <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
+              <Input
+                id="new-workspace-name"
+                placeholder="Enter new workspace name"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                disabled={isCreating}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCreateWorkspace();
+                  }
+                }}
+              />
+              <Button
+                onClick={handleCreateWorkspace}
+                disabled={isCreating || !newWorkspaceName.trim()}
+                className="w-full"
+              >
+                {isCreating ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Create
+              </Button>
+            </div>
+          </div>
 
-            <Separator />
+          <Separator />
 
-            {/* Search Workspaces Card */}
-            <Card className="flex-shrink-0">
-              <CardHeader>
-                <CardTitle className="flex items-center text-xl">
-                  <Search className="h-5 w-5 mr-2 text-primary" /> Search Workspaces
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Label htmlFor="search-workspace" className="sr-only">Search</Label>
-                <Input
-                  id="search-workspace"
-                  placeholder="Search by name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </CardContent>
-            </Card>
+          {/* Search Workspaces Section */}
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold flex items-center text-primary">
+              <Search className="h-6 w-6 mr-3" /> Search Workspaces
+            </h2>
+            <div className="space-y-3">
+              <Label htmlFor="search-workspace" className="sr-only">Search</Label>
+              <Input
+                id="search-workspace"
+                placeholder="Search by name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
 
         {/* Right Panel: Workspace List */}
-        <ResizablePanel defaultSize={75} className="p-4">
+        <ResizablePanel defaultSize={75} className="p-6">
           {isLoading ? (
-            <div className="flex-grow flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading workspaces...</span>
+            <div className="flex-grow flex flex-col items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="mt-4 text-lg text-muted-foreground">Loading workspaces...</span>
             </div>
           ) : allWorkspaces.length === 0 ? (
-            <div className="flex-grow flex items-center justify-center h-full">
+            <div className="flex-grow flex flex-col items-center justify-center h-full text-center">
               <Alert className="max-w-lg">
                 <Info className="h-4 w-4" />
                 <AlertTitle>No Workspaces Found</AlertTitle>
                 <AlertDescription>
-                  It looks like you don't have any workspaces yet. Use the "Create Workspace" panel to get started!
+                  It looks like you don't have any workspaces yet. Use the "Create New Workspace" panel to get started!
                 </AlertDescription>
               </Alert>
             </div>
           ) : (
             <ScrollArea className="h-full w-full pr-4 hide-scrollbar">
               {filteredWorkspaces.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="flex items-center justify-center h-full text-muted-foreground text-lg">
                   <p>No workspaces match your search term.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredWorkspaces.map((workspace) => (
                     <WorkspaceCard
                       key={workspace}
