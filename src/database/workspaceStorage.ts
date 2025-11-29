@@ -1,8 +1,13 @@
 const API_BASE_URL = "http://192.168.1.2:3366";
 
-interface WorkspaceListResponse {
-  workspaces: string[];
+// Updated interface for a single workspace entry
+export interface WorkspaceEntry {
+  workspace_name: string;
+  timestamp: string; // ISO string
 }
+
+// The API now returns an array of WorkspaceEntry directly, not an object with a 'workspaces' key.
+// So, WorkspaceListResponse is no longer needed as a wrapper.
 
 interface FileListResponse {
   workspace: string;
@@ -145,8 +150,9 @@ export async function getWorkspaces(): Promise<string[]> {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    const data: WorkspaceListResponse = await response.json();
-    return data.workspaces || [];
+    // The API now returns an array of WorkspaceEntry directly
+    const data: WorkspaceEntry[] = await response.json();
+    return data.map(entry => entry.workspace_name) || [];
   } catch (error) {
     console.error("Error fetching workspaces:", error);
     return [];
