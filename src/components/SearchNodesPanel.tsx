@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,8 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   onClose,
   onFilterInteraction,
 }) => {
+  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false); // Local state for dropdown
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSearchQueryChange(e.target.value);
     onFilterInteraction();
@@ -68,7 +70,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
           <Label htmlFor="search-depth" className="text-sm font-medium">
             Search Depth:
           </Label>
-          <DropdownMenu>
+          <DropdownMenu open={isDepthDropdownOpen} onOpenChange={setIsDepthDropdownOpen}> {/* Bind state here */}
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
@@ -83,7 +85,10 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
               {depthOptions.map((depth) => (
                 <DropdownMenuItem
                   key={depth}
-                  onClick={() => handleDepthSelect(depth)}
+                  onClick={() => {
+                    handleDepthSelect(depth);
+                    setIsDepthDropdownOpen(false); // Close after selection
+                  }}
                   className={cn(
                     "cursor-pointer",
                     searchDepth === depth && "bg-accent text-accent-foreground"
