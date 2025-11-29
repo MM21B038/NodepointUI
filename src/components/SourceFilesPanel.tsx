@@ -57,7 +57,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
   };
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg">
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onClick={e => e.stopPropagation()}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <FileText className="h-5 w-5 mr-2" />

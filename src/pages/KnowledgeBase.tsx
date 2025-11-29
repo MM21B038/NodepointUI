@@ -129,6 +129,44 @@ const KnowledgeBase = () => {
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
+  // Effect to handle clicks outside the panels
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!showSearchPanel && !showNodeTypesPanel && !showSourceFilesPanel) {
+        return; // No panels are open, so no need to check
+      }
+
+      let clickedInsideAnyPanelOrButton = false;
+
+      // Check if click was inside any of the panel divs
+      const searchPanelElement = document.getElementById('search-nodes-panel');
+      const nodeTypesPanelElement = document.getElementById('node-types-panel');
+      const sourceFilesPanelElement = document.getElementById('source-files-panel');
+      const filterButtonsContainer = document.getElementById('filter-buttons-container');
+
+      if (
+        (searchPanelElement && searchPanelElement.contains(event.target as Node)) ||
+        (nodeTypesPanelElement && nodeTypesPanelElement.contains(event.target as Node)) ||
+        (sourceFilesPanelElement && sourceFilesPanelElement.contains(event.target as Node)) ||
+        (filterButtonsContainer && filterButtonsContainer.contains(event.target as Node))
+      ) {
+        clickedInsideAnyPanelOrButton = true;
+      }
+
+      if (!clickedInsideAnyPanelOrButton) {
+        setShowSearchPanel(false);
+        setShowNodeTypesPanel(false);
+        setShowSourceFilesPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
+
+
   const handleRefreshGraph = () => {
     console.log("KnowledgeBase: handleRefreshGraph called.");
     setRefreshCounter(prev => prev + 1);
@@ -276,7 +314,7 @@ const KnowledgeBase = () => {
   return (
     <div className="relative h-full w-full overflow-hidden">
       {/* Filter/Refresh Buttons - positioned on top-right of the graph */}
-      <div className="absolute top-[10%] left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
+      <div id="filter-buttons-container" className="absolute top-[10%] left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
         {currentWorkspace && (
           <>
             <Button
@@ -345,7 +383,7 @@ const KnowledgeBase = () => {
             )}
 
             {/* Filter Panels (absolutely positioned, relative to graph container) */}
-            <div className={cn(
+            <div id="search-nodes-panel" className={cn(
               "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
               "top-20 bottom-4 pl-8", // Relative to graph container, with 1rem padding
               showSearchPanel ? "translate-x-0" : "-translate-x-full"
@@ -359,7 +397,7 @@ const KnowledgeBase = () => {
                 onFilterInteraction={onFilterInteraction}
               />
             </div>
-            <div className={cn(
+            <div id="node-types-panel" className={cn(
               "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
               "top-4 bottom-4 pl-8", // Relative to graph container, with 1rem padding
               showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
@@ -372,7 +410,7 @@ const KnowledgeBase = () => {
                 onFilterInteraction={onFilterInteraction}
               />
             </div>
-            <div className={cn(
+            <div id="source-files-panel" className={cn(
               "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
               "top-4 bottom-4 pl-8", // Relative to graph container, with 1rem padding
               showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
