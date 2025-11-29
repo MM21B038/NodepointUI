@@ -132,8 +132,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     }
 
     function dragended(event: d3.D3DragEvent<SVGCircleElement, D3Node, D3Node>, d: D3Node) {
-      if (!event.active) simulation.alphaTarget(0);
-      // Keep the node fixed after dragging until the user clicks away
+      if (!event.active) simulation.alphaTarget(0); // Let simulation decay naturally
       // d.fx = null;
       // d.fy = null;
     }

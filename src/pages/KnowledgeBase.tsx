@@ -49,7 +49,7 @@ const KnowledgeBase = () => {
     setError(null);
     setAllNodes([]);
     setAllEdges([]);
-    setSelectedItem(null);
+    // setSelectedItem(null); // REMOVED: Do not reset selected item on data fetch
     setHasFiltersBeenInteracted(false); // Reset interaction state on new data fetch
     try {
       const data = await getKnowledgeGraph(workspaceName);
