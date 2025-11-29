@@ -107,25 +107,31 @@ const WorkspaceManagement = () => {
                   <li
                     key={workspace}
                     className={cn(
-                      "flex items-center justify-between p-2 transition-colors", // Reduced padding to p-2
-                      currentWorkspace === workspace ? "bg-primary text-primary-foreground" : "hover:bg-accent/50",
+                      "flex items-center justify-between p-2 transition-colors cursor-pointer", // Added cursor-pointer
+                      currentWorkspace === workspace
+                        ? "bg-primary text-primary-foreground" // Distinct color for selected
+                        : "hover:bg-accent/50", // Hover for non-selected
                     )}
+                    onClick={() => handleSelectWorkspace(workspace)} // Make the entire row clickable
                   >
                     <span
                       className={cn(
                         "font-medium truncate flex-grow",
-                        currentWorkspace === workspace && "text-primary-foreground"
+                        currentWorkspace === workspace && "text-primary-foreground" // Ensure text color is correct for current
                       )}
                     >
                       {workspace}
                       {currentWorkspace === workspace && " (Current)"}
                     </span>
-                    <div className="flex items-center space-x-2 ml-4"> {/* Added space-x-2 for button spacing */}
+                    <div className="flex items-center space-x-2 ml-4">
                       {currentWorkspace !== workspace && ( // Only show select button if not current workspace
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleSelectWorkspace(workspace)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent parent li click
+                            handleSelectWorkspace(workspace);
+                          }}
                           disabled={isDeleting}
                         >
                           Select
@@ -135,7 +141,7 @@ const WorkspaceManagement = () => {
                         variant="destructive"
                         size="icon"
                         onClick={(e) => {
-                          e.stopPropagation();
+                          e.stopPropagation(); // Prevent selecting workspace when clicking delete
                           handleDeleteClick(workspace);
                         }}
                         disabled={isDeleting}
