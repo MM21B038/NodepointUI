@@ -31,6 +31,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
         "cursor-pointer group",
+        "h-[15vh] w-[18vw]", // Fixed size in vh and vw
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]" // Subtle highlight for current
           : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10", // Engaging hover
