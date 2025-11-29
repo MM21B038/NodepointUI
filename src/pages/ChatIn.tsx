@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react";
+import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User, ChevronDown, ChevronUp } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getChatHistory, ProvenanceEntry, ChatMessage, listFiles, performSearch, SearchEngineType } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -36,6 +35,7 @@ const ChatIn: React.FC<ChatInProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null); // Still used for internal scrolling
+  const chatScrollViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport
 
   const [currentInput, setCurrentInput] = useState("");
   const [selectedEngine, setSelectedEngine] = useState<string>("agent_search");
@@ -47,6 +47,9 @@ const ChatIn: React.FC<ChatInProps> = ({
 
   const [botIconComponent, setBotIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(Bot);
   const [userIconComponent, setUserIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(User);
+
+  // New state for scroll to bottom button visibility
+  const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
 
   const searchEngineOptions = [
     { value: "agent_search", label: "Agent Search", icon: Sparkles },
@@ -70,6 +73,43 @@ const ChatIn: React.FC<ChatInProps> = ({
   const fileSelectionError = useMemo(() => {
     return Array.isArray(selectedFiles) && selectedFiles.length === 0;
   }, [selectedFiles]);
+
+  // Function to scroll to the bottom
+  const scrollToBottom = useCallback(() => {
+    if (chatScrollViewportRef.current) {
+      chatScrollViewportRef.current.scrollTo({
+        top: chatScrollViewportRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
+  // Effect to scroll to bottom when messages change or history loads
+  useEffect(() => {
+    if (!isLoadingHistory) {
+      scrollToBottom();
+    }
+  }, [messages, isLoadingHistory, scrollToBottom]);
+
+  // Effect to handle scroll button visibility
+  useEffect(() => {
+    const viewport = chatScrollViewportRef.current;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const isAtBottom = scrollHeight - scrollTop <= clientHeight + 1; // +1 for slight tolerance
+      setShowScrollToBottomButton(!isAtBottom);
+    };
+
+    viewport.addEventListener("scroll", handleScroll);
+    // Initial check
+    handleScroll();
+
+    return () => {
+      viewport.removeEventListener("scroll", handleScroll);
+    };
+  }, [messages]); // Re-run when messages change to update scrollHeight
 
   useEffect(() => {
     const loadIcons = () => {
@@ -172,14 +212,6 @@ const ChatIn: React.FC<ChatInProps> = ({
       window.removeEventListener('chatIconsUpdated', loadIcons);
     };
   }, [currentWorkspace, selectedFiles]);
-
-  useEffect(() => {
-    if (isLoadingHistory) return;
-    const behavior = messages.length > 2 ? 'smooth' : 'auto';
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, [messages, isLoadingHistory]);
-
-  // Removed Effect for handling the visibility of the "scroll to bottom" button
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCurrentInput(e.target.value);
@@ -292,7 +324,7 @@ const ChatIn: React.FC<ChatInProps> = ({
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <div className="flex-grow flex flex-col border rounded-lg shadow-sm z-[0]">
-            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={messagesEndRef}> {/* Changed to messagesEndRef */}
+            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={chatScrollViewportRef}> {/* Changed to chatScrollViewportRef */}
               <div className={cn(
                 "p-4 space-y-6 relative",
                 (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
@@ -407,6 +439,17 @@ const ChatIn: React.FC<ChatInProps> = ({
                 )}
               </div>
             </ScrollArea>
+            {showScrollToBottomButton && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute bottom-[120px] right-8 z-10 rounded-full shadow-lg"
+                onClick={scrollToBottom}
+                title="Scroll to bottom"
+              >
+                <ChevronDown className="h-5 w-5" />
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 border rounded-lg px-3 py-2 bg-background shadow-sm">
@@ -472,7 +515,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="text-sm font-semibold">Source: {tag.id}</p>
-                                <p className className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     ))}
