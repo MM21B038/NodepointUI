@@ -206,6 +206,11 @@
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* Apply hide-scrollbar to all Radix UI ScrollArea viewports */
+[data-radix-scroll-area-viewport] {
+  @apply hide-scrollbar;
+}
+
 /* Custom classes for navbar background */
 .navbar-opaque {
   background-color: hsl(var(--nav-background));

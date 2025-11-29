@@ -474,7 +474,7 @@ const KnowledgeBase = () => {
                     <PanelRightClose className="h-4 w-4" />
                   </Button>
                 </h3>
-                <ScrollArea className="h-[calc(100%-57px)] hide-scrollbar">
+                <ScrollArea className="h-[calc(100%-57px)]">
                   <DetailPanel item={selectedItem} />
                 </ScrollArea>
               </div>
