@@ -29,28 +29,28 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   return (
     <Card
       className={cn(
-        "relative flex flex-col justify-between p-4 rounded-lg shadow-sm transition-all duration-200 ease-in-out",
+        "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
         "cursor-pointer group",
         isCurrent
-          ? "border-2 border-primary bg-primary/5 ring-2 ring-primary/20" // More subtle current styling
-          : "border bg-card hover:shadow-md hover:border-accent hover:bg-secondary/10", // Subtle hover
+          ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]" // Subtle highlight for current
+          : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10", // Engaging hover
       )}
       onClick={() => onSelect(workspaceName)}
     >
-      <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between">
-        <div className="flex items-center flex-grow min-w-0"> {/* Added flex-grow and min-w-0 */}
-          <FolderCog className={cn("h-5 w-5 mr-2", isCurrent ? "text-primary" : "text-muted-foreground")} />
-          <CardTitle className="text-lg font-semibold flex-grow min-w-0">
+      <CardHeader className="p-0 pb-3 flex flex-col space-y-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
+            <FolderCog className={cn("h-6 w-6 mr-3", isCurrent ? "text-primary" : "text-muted-foreground")} />
             <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
               {workspaceName}
             </span>
           </CardTitle>
+          {isCurrent && (
+            <Badge variant="default" className="bg-primary text-primary-foreground ml-2 flex-shrink-0">
+              <CheckCircle2 className="h-4 w-4 mr-1" /> Current
+            </Badge>
+          )}
         </div>
-        {isCurrent && (
-          <Badge variant="secondary" className="ml-2 flex-shrink-0"> {/* Subtle badge, flex-shrink-0 */}
-            <CheckCircle2 className="h-3 w-3 mr-1" /> Current
-          </Badge>
-        )}
       </CardHeader>
       <CardContent className="p-0 flex justify-end items-center mt-4">
         <Button
