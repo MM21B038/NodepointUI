@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -26,17 +26,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
 
 interface ChatInProps {
-  onShowScrollToBottomChange: (show: boolean) => void;
-  chatScrollViewportRef: React.RefObject<HTMLDivElement>;
+  // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
 }
 
 const ChatIn: React.FC<ChatInProps> = ({
-  onShowScrollToBottomChange,
-  chatScrollViewportRef,
+  // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
 }) => {
   const { currentWorkspace } = useWorkspace();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Still used for internal scrolling
 
   const [currentInput, setCurrentInput] = useState("");
   const [selectedEngine, setSelectedEngine] = useState<string>("agent_search");
@@ -175,30 +174,12 @@ const ChatIn: React.FC<ChatInProps> = ({
   }, [currentWorkspace, selectedFiles]);
 
   useEffect(() => {
-    const viewport = chatScrollViewportRef.current;
-    if (!viewport || isLoadingHistory) return;
+    if (isLoadingHistory) return;
+    const behavior = messages.length > 2 ? 'smooth' : 'auto';
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, [messages, isLoadingHistory]);
 
-    const isNearBottom = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 100;
-
-    if (isNearBottom) {
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
-    }
-  }, [messages, isLoadingHistory, chatScrollViewportRef]);
-
-  useEffect(() => {
-    const viewport = chatScrollViewportRef.current;
-    if (!viewport) return;
-
-    const handleScroll = () => {
-      const isAtBottom = viewport.scrollHeight - viewport.clientHeight <= viewport.scrollTop + 10;
-      onShowScrollToBottomChange(!isAtBottom);
-    };
-
-    viewport.addEventListener("scroll", handleScroll);
-    handleScroll(); // Initial check
-
-    return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [chatScrollViewportRef, onShowScrollToBottomChange]);
+  // Removed Effect for handling the visibility of the "scroll to bottom" button
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCurrentInput(e.target.value);
@@ -311,7 +292,7 @@ const ChatIn: React.FC<ChatInProps> = ({
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <div className="flex-grow flex flex-col border rounded-lg shadow-sm z-[0]">
-            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={chatScrollViewportRef}>
+            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={messagesEndRef}> {/* Changed to messagesEndRef */}
               <div className={cn(
                 "p-4 space-y-6 relative",
                 (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
@@ -421,6 +402,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                         <span>Searching...</span>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </>
                 )}
               </div>
