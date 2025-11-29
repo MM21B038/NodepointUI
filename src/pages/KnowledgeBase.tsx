@@ -147,14 +147,14 @@ const KnowledgeBase = () => {
         (filterButtonsContainer && filterButtonsContainer.contains(target))
       );
 
-      // Check if the click is inside a Radix UI portal (which includes dropdowns, popovers, etc.)
-      // Radix UI components often render their content in a portal, and these portals
-      // are typically direct children of <body> or a designated portal root.
-      // They often have attributes like `data-radix-popper-content` or `data-radix-dropdown-menu-content`.
-      const isClickInsideRadixPortal = target.closest('[data-radix-popper-content], [data-radix-dropdown-menu-content]');
+      // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
+      // This is the most reliable way to detect clicks inside shadcn/ui dropdowns.
+      const isClickInsideRadixPopperContent = target.closest('[data-radix-popper-content]');
 
-      // If the click is outside all panels, their buttons, AND not inside a Radix portal, close any open panels.
-      if (!isClickInsidePanelOrButton && !isClickInsideRadixPortal) {
+      // If the click is NOT inside any of the panels/buttons AND NOT inside any Radix content, then close panels.
+      const isClickHandled = isClickInsidePanelOrButton || isClickInsideRadixPopperContent;
+
+      if (!isClickHandled) {
         if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
           setShowSearchPanel(false);
           setShowNodeTypesPanel(false);
