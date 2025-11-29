@@ -132,37 +132,33 @@ const KnowledgeBase = () => {
   // Effect to handle clicks outside the panels
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!showSearchPanel && !showNodeTypesPanel && !showSourceFilesPanel) {
-        return; // No panels are open, so no need to check
-      }
+      const target = event.target as Node;
 
-      let clickedInsideAnyPanelOrButton = false;
-
-      // Check if click was inside any of the panel divs
       const searchPanelElement = document.getElementById('search-nodes-panel');
       const nodeTypesPanelElement = document.getElementById('node-types-panel');
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
 
-      if (
-        (searchPanelElement && searchPanelElement.contains(event.target as Node)) ||
-        (nodeTypesPanelElement && nodeTypesPanelElement.contains(event.target as Node)) ||
-        (sourceFilesPanelElement && sourceFilesPanelElement.contains(event.target as Node)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(event.target as Node))
-      ) {
-        clickedInsideAnyPanelOrButton = true;
-      }
+      const isClickInsidePanelOrButton = (
+        (searchPanelElement && searchPanelElement.contains(target)) ||
+        (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
+        (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
+        (filterButtonsContainer && filterButtonsContainer.contains(target))
+      );
 
-      if (!clickedInsideAnyPanelOrButton) {
-        setShowSearchPanel(false);
-        setShowNodeTypesPanel(false);
-        setShowSourceFilesPanel(false);
+      if (!isClickInsidePanelOrButton) {
+        // Only attempt to close if any panel is actually open
+        if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
+          setShowSearchPanel(false);
+          setShowNodeTypesPanel(false);
+          setShowSourceFilesPanel(false);
+        }
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside); // Changed to 'click'
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
   }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
 
