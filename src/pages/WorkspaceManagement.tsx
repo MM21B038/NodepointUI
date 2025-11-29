@@ -154,7 +154,7 @@ const WorkspaceManagement = () => {
     <div className="flex-grow h-full bg-gradient-to-br from-background to-muted/20">
       <ResizablePanelGroup
         direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
+        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 32px)] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
@@ -252,26 +252,32 @@ const WorkspaceManagement = () => {
                     ))}
                   </div>
                   {totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-4 mt-4 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handlePreviousPage}
-                        disabled={currentPage === 0}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <span className="text-sm text-muted-foreground">
-                        Page {currentPage + 1} of {totalPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleNextPage}
-                        disabled={currentPage === totalPages - 1}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
+                    <div className="flex justify-center items-center gap-2 mt-4 flex-shrink-0">
+                      {/* Previous pages indicator */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={currentPage > 0 ? handlePreviousPage : undefined}
+                        title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
+                      />
+                      {/* Current page indicator */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full bg-primary transition-colors"
+                        )}
+                        title="Current Page"
+                      />
+                      {/* Next pages indicator */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-colors cursor-pointer",
+                          currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
+                        )}
+                        onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
+                        title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
+                      />
                     </div>
                   )}
                 </div>
