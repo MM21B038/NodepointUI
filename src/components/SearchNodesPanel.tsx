@@ -21,7 +21,6 @@ interface SearchNodesPanelProps {
   onSearchDepthChange: (depth: number) => void;
   onClose: () => void;
   onFilterInteraction: () => void;
-  // Removed onDropdownOpenChange prop
 }
 
 const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
@@ -31,7 +30,6 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   onSearchDepthChange,
   onClose,
   onFilterInteraction,
-  // Removed onDropdownOpenChange from destructuring
 }) => {
   const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
 
@@ -47,8 +45,13 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
 
   const depthOptions = Array.from({ length: 6 }, (_, i) => i);
 
+  // Add onMouseDown to stop propagation for clicks within the panel
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg">
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onMouseDown={handleMouseDown}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
@@ -76,7 +79,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
             open={isDepthDropdownOpen}
             onOpenChange={(isOpen) => {
               setIsDepthDropdownOpen(isOpen);
-              // Removed onDropdownOpenChange(isOpen);
+              onFilterInteraction(); // Also trigger interaction on dropdown open/close
             }}
           >
             <DropdownMenuTrigger asChild>
@@ -96,7 +99,6 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                   onClick={() => {
                     handleDepthSelect(depth);
                     setIsDepthDropdownOpen(false);
-                    // Removed onDropdownOpenChange(false);
                   }}
                   className={cn(
                     "cursor-pointer",
