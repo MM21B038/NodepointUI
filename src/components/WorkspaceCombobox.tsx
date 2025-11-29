@@ -52,7 +52,7 @@ const WorkspaceCombobox: React.FC<WorkspaceComboboxProps> = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[200px] justify-between bg-card text-foreground hover:bg-card/90"
+          className="w-[200px] justify-between bg-card text-foreground hover:bg-card/90 h-9 px-3" // Reduced height and horizontal padding
           disabled={disabled}
         >
           {value
@@ -76,6 +76,7 @@ const WorkspaceCombobox: React.FC<WorkspaceComboboxProps> = ({
                     setValue(currentValue === value ? "" : currentValue);
                     setOpen(false);
                   }}
+                  className="py-1" // Reduced vertical padding
                 >
                   <Check
                     className={cn(
