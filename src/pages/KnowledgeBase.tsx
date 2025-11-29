@@ -30,14 +30,13 @@ const KnowledgeBase = () => {
   const [showNodeTypesPanel, setShowNodeTypesPanel] = useState(false);
   const [showSourceFilesPanel, setShowSourceFilesPanel] = useState(false);
 
-  // New state to track if the SearchNodesPanel's dropdown is open
-  const [isSearchDepthDropdownOpenInPanel, setIsSearchDepthDropdownOpenInPanel] = useState(false);
+  // Removed isSearchDepthDropdownOpenInPanel state
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [searchDepth, setSearchDepth] = useState<number>(0); // New state for search depth
   const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
-  const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set());
+  const [selectedSourceFiles, setSelectedSourceTypes] = useState<Set<string>>(new Set());
 
   // New state to track if filters have been interacted with
   const [hasFiltersBeenInteracted, setHasFiltersBeenInteracted] = useState(false);
@@ -95,10 +94,10 @@ const KnowledgeBase = () => {
       // On initial load or refresh, if there are nodes, select all by default
       if (processedNodes.length > 0) {
         setSelectedNodeTypes(new Set(processedNodes.map(node => node.type)));
-        setSelectedSourceFiles(new Set(processedNodes.map(node => node.source as string)));
+        setSelectedSourceTypes(new Set(processedNodes.map(node => node.source as string)));
       } else {
         setSelectedNodeTypes(new Set());
-        setSelectedSourceFiles(new Set());
+        setSelectedSourceTypes(new Set());
       }
       setNodeSearchQuery(""); // Clear search query on refresh
       setSearchDepth(0); // Reset search depth on refresh
@@ -128,7 +127,7 @@ const KnowledgeBase = () => {
       setNodeSearchQuery("");
       setSearchDepth(0);
       setSelectedNodeTypes(new Set());
-      setSelectedSourceFiles(new Set());
+      setSelectedSourceTypes(new Set());
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
@@ -142,21 +141,17 @@ const KnowledgeBase = () => {
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
       
-      // Check if the click is inside any of the main panels or their trigger buttons
+      // Check if the click is inside any of the main panels, their trigger buttons,
+      // or the dropdown content associated with the search panel.
       const isClickInsidePanelOrButton = (
         (searchPanelElement && searchPanelElement.contains(target)) ||
         (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
         (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(target))
+        (filterButtonsContainer && filterButtonsContainer.contains(target)) ||
+        target.closest('.search-depth-dropdown-content') // This checks if the click is within the dropdown content
       );
 
-      // If the search depth dropdown is open, and the click is NOT inside the search panel itself,
-      // then we should NOT close the search panel. The dropdown will handle its own closing.
-      if (isSearchDepthDropdownOpenInPanel && !isClickInsidePanelOrButton) {
-        return; // Do nothing, let the dropdown handle its own outside click
-      }
-
-      // If the click is outside all panels and their buttons, close any open panels
+      // If the click is outside all panels, their buttons, and the dropdown content, close any open panels.
       if (!isClickInsidePanelOrButton) {
         if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
           setShowSearchPanel(false);
@@ -170,7 +165,7 @@ const KnowledgeBase = () => {
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel, isSearchDepthDropdownOpenInPanel]);
+  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel]);
 
 
   const handleRefreshGraph = () => {
@@ -182,7 +177,7 @@ const KnowledgeBase = () => {
   const { filteredNodes, filteredEdges } = useMemo(() => {
     // Condition to explicitly show an empty graph if filters have been interacted with
     // AND either no node types or no source files are selected.
-    if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) {
+    if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceTypes.size === 0)) {
       return { filteredNodes: [], filteredEdges: [] };
     }
 
@@ -193,8 +188,8 @@ const KnowledgeBase = () => {
     if (selectedNodeTypes.size > 0) {
       tempNodes = tempNodes.filter((node) => selectedNodeTypes.has(node.type));
     }
-    if (selectedSourceFiles.size > 0) {
-      tempNodes = tempNodes.filter((node) => selectedSourceFiles.has(node.source as string));
+    if (selectedSourceTypes.size > 0) {
+      tempNodes = tempNodes.filter((node) => selectedSourceTypes.has(node.source as string));
     }
 
     // Filter edges based on the already filtered nodes and source files
@@ -203,7 +198,7 @@ const KnowledgeBase = () => {
       (edge) =>
         preFilteredNodeIds.has(edge.source as string) &&
         preFilteredNodeIds.has(edge.target as string) &&
-        (selectedSourceFiles.size === 0 || selectedSourceFiles.has(edge.source_file as string))
+        (selectedSourceTypes.size === 0 || selectedSourceTypes.has(edge.source_file as string))
     );
 
     // If there's a search query, apply depth filtering
@@ -290,7 +285,7 @@ const KnowledgeBase = () => {
       );
       return { filteredNodes: tempNodes, filteredEdges: finalFilteredEdges };
     }
-  }, [allNodes, allEdges, nodeSearchQuery, searchDepth, selectedNodeTypes, selectedSourceFiles, hasFiltersBeenInteracted]);
+  }, [allNodes, allEdges, nodeSearchQuery, searchDepth, selectedNodeTypes, selectedSourceTypes, hasFiltersBeenInteracted]);
 
   let alertMessage = "";
   if (!currentWorkspace) {
@@ -301,10 +296,10 @@ const KnowledgeBase = () => {
     alertMessage = error;
   } else if (allNodes.length === 0 && allEdges.length === 0) {
     alertMessage = "No knowledge graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
-  } else if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) {
+  } else if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceTypes.size === 0)) {
     // New condition for specific filter state: if filters were interacted with and either node types or source files are empty
     alertMessage = "Please select node types and/or source files to display the graph.";
-  } else if (filteredNodes.length === 0 && (hasFiltersBeenInteracted || nodeSearchQuery || selectedNodeTypes.size > 0 || selectedSourceFiles.size > 0)) {
+  } else if (filteredNodes.length === 0 && (hasFiltersBeenInteracted || nodeSearchQuery || selectedNodeTypes.size > 0 || selectedSourceTypes.size > 0)) {
     alertMessage = "No graph data matches your current filters. Adjust your filters or clear them to see the full graph.";
   } else if (filteredNodes.length === 0) {
     alertMessage = "No graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
@@ -398,7 +393,7 @@ const KnowledgeBase = () => {
               onSearchDepthChange={setSearchDepth}
               onClose={() => setShowSearchPanel(false)}
               onFilterInteraction={onFilterInteraction}
-              onDropdownOpenChange={setIsSearchDepthDropdownOpenInPanel} // Pass the setter
+              // Removed onDropdownOpenChange prop
             />
           </div>
           <div id="node-types-panel" className={cn(
@@ -422,8 +417,8 @@ const KnowledgeBase = () => {
             <SourceFilesPanel
               nodes={allNodes}
               edges={allEdges}
-              selectedSourceFiles={selectedSourceFiles}
-              onSelectedSourceFilesChange={setSelectedSourceFiles}
+              selectedSourceFiles={selectedSourceTypes}
+              onSelectedSourceFilesChange={setSelectedSourceTypes}
               onClose={() => setShowSourceFilesPanel(false)}
               onFilterInteraction={onFilterInteraction}
             />

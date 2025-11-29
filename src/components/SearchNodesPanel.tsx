@@ -21,8 +21,7 @@ interface SearchNodesPanelProps {
   onSearchDepthChange: (depth: number) => void;
   onClose: () => void;
   onFilterInteraction: () => void;
-  // New prop to communicate dropdown's open state to parent
-  onDropdownOpenChange: (isOpen: boolean) => void;
+  // Removed onDropdownOpenChange prop
 }
 
 const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
@@ -32,7 +31,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   onSearchDepthChange,
   onClose,
   onFilterInteraction,
-  onDropdownOpenChange, // Destructure new prop
+  // Removed onDropdownOpenChange from destructuring
 }) => {
   const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
 
@@ -77,7 +76,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
             open={isDepthDropdownOpen}
             onOpenChange={(isOpen) => {
               setIsDepthDropdownOpen(isOpen);
-              onDropdownOpenChange(isOpen); // Communicate state change to parent
+              // Removed onDropdownOpenChange(isOpen);
             }}
           >
             <DropdownMenuTrigger asChild>
@@ -97,7 +96,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                   onClick={() => {
                     handleDepthSelect(depth);
                     setIsDepthDropdownOpen(false);
-                    onDropdownOpenChange(false); // Ensure parent knows it's closed
+                    // Removed onDropdownOpenChange(false);
                   }}
                   className={cn(
                     "cursor-pointer",
