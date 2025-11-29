@@ -114,7 +114,7 @@ const WorkspaceManagement = () => {
 
     try {
       await deleteWorkspace(workspaceToDelete);
-      toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
+      toast.success(`Workspace "${workspaceToDelete}" deleted successfully!`, { id: loadingToastId });
       fetchWorkspaces();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
@@ -154,7 +154,7 @@ const WorkspaceManagement = () => {
     <div className="flex-grow h-full bg-gradient-to-br from-background to-muted/20">
       <ResizablePanelGroup
         direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 32px)] rounded-xl border shadow-lg bg-card"
+        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
@@ -213,8 +213,8 @@ const WorkspaceManagement = () => {
 
         <ResizableHandle withHandle />
 
-        {/* Right Panel: Workspace List with Pagination */}
-        <ResizablePanel defaultSize={75} className="p-4 flex flex-col">
+        {/* Right Panel: Workspace List with Hover Navigation */}
+        <ResizablePanel defaultSize={75} className="p-4 flex flex-col group"> {/* Added group class */}
           {isLoading ? (
             <div className="flex-grow flex flex-col items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -237,8 +237,8 @@ const WorkspaceManagement = () => {
                   <p>No workspaces match your search term.</p>
                 </div>
               ) : (
-                <div className="flex flex-col flex-grow">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-grow"> {/* Adjusted to 4 columns */}
+                <div className="relative flex-grow"> {/* New wrapper for grid and overlays */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full">
                     {currentWorkspacesToDisplay.map((workspace) => (
                       <WorkspaceCard
                         key={workspace}
@@ -251,59 +251,33 @@ const WorkspaceManagement = () => {
                       />
                     ))}
                   </div>
-                  {totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-2 mt-4 flex-shrink-0">
-                      {totalPages === 2 ? (
-                        <>
-                          {/* Dot for page 0 */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage === 0 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={() => setCurrentPage(0)}
-                            title="Page 1"
-                          />
-                          {/* Dot for page 1 */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage === 1 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={() => setCurrentPage(1)}
-                            title="Page 2"
-                          />
-                        </>
-                      ) : ( // totalPages >= 3
-                        <>
-                          {/* Left dot: indicates previous pages */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage > 0 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={currentPage > 0 ? handlePreviousPage : undefined}
-                            title={currentPage > 0 ? "Previous Page" : "No Previous Page"}
-                          />
-                          {/* Middle dot: always current page */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full bg-primary transition-colors"
-                            )}
-                            title={`Page ${currentPage + 1}`}
-                          />
-                          {/* Right dot: indicates next pages */}
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                              currentPage < totalPages - 1 ? "bg-primary" : "bg-muted-foreground/30"
-                            )}
-                            onClick={currentPage < totalPages - 1 ? handleNextPage : undefined}
-                            title={currentPage < totalPages - 1 ? "Next Page" : "No Next Page"}
-                          />
-                        </>
-                      )}
-                    </div>
+
+                  {/* Left Navigation Overlay */}
+                  {totalPages > 1 && currentPage > 0 && (
+                    <button
+                      onClick={handlePreviousPage}
+                      className="absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center
+                                 bg-gradient-to-r from-background/70 to-transparent
+                                 opacity-0 group-hover:opacity-100 transition-opacity duration-300
+                                 cursor-pointer z-10 text-foreground hover:text-primary"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-8 w-8" />
+                    </button>
+                  )}
+
+                  {/* Right Navigation Overlay */}
+                  {totalPages > 1 && currentPage < totalPages - 1 && (
+                    <button
+                      onClick={handleNextPage}
+                      className="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center
+                                 bg-gradient-to-l from-background/70 to-transparent
+                                 opacity-0 group-hover:opacity-100 transition-opacity duration-300
+                                 cursor-pointer z-10 text-foreground hover:text-primary"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-8 w-8" />
+                    </button>
                   )}
                 </div>
               )}
