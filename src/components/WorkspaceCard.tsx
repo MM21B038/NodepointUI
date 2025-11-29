@@ -67,8 +67,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             disabled={isDeleting}
             className={cn(
               "ml-auto transition-all duration-200", // Use transition-all for smooth visibility change
-              "invisible group-hover:visible", // Hidden by default, visible on group hover
-              isThisWorkspaceDeleting && "visible" // Always visible if currently being deleted
+              "hidden group-hover:block", // Hidden by default, block on group hover
+              isThisWorkspaceDeleting && "block" // Always visible if currently being deleted
             )}
           >
             {isThisWorkspaceDeleting ? (
