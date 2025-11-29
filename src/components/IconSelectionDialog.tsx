@@ -98,7 +98,7 @@ const IconSelectionDialog: React.FC<IconSelectionDialogProps> = ({
           </SelectContent>
         </Select>
 
-        <ScrollArea className="flex-grow rounded-md border p-2 min-h-0">
+        <ScrollArea className="flex-grow rounded-md border p-2 min-h-0 hide-scrollbar">
           <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-2 p-2">
             {categorizedIcons[selectedCategory]?.map((iconName) => {
               const IconComponent = iconComponents[iconName];

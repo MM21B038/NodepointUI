@@ -97,7 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
-      <ScrollArea className="flex-grow h-0" ref={scrollAreaRef}>
+      <ScrollArea className="flex-grow h-0 hide-scrollbar" ref={scrollAreaRef}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-grow p-4">
             <div className="text-muted-foreground text-lg">

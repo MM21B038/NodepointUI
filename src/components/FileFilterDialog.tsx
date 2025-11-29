@@ -126,7 +126,7 @@ const FileFilterDialog: React.FC<FileFilterDialogProps> = ({
               No files available in this workspace.
             </p>
           ) : (
-            <ScrollArea className="h-48 w-full rounded-md border p-4">
+            <ScrollArea className="h-48 w-full rounded-md border p-4 hide-scrollbar">
               <div className="grid gap-2">
                 {availableFiles.map((file) => (
                   <div key={file} className="flex items-center space-x-2">

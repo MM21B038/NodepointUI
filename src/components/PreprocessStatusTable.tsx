@@ -77,6 +77,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       {isLoading ? (
         <div className="flex items-center justify-center h-48">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="mt-2 text-muted-foreground">Loading status...</span>
         </div>
       ) : statusData.length === 0 ? (
         <div className="flex items-center justify-center h-48">
@@ -85,7 +86,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-64">
+        <ScrollArea className="h-64 hide-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

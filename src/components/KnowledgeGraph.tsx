@@ -265,7 +265,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               <PopoverContent className="w-[280px] p-0">
                 <Command>
                   <CommandInput placeholder="Search types..." />
-                  <CommandList>
+                  <CommandList className="hide-scrollbar">
                     <CommandEmpty>No types found.</CommandEmpty>
                     <CommandGroup>
                       {uniqueTypes.map(type => (
@@ -320,7 +320,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
               onChange={(e) => setSourceSearchTerm(e.target.value)}
               className="mb-3"
             />
-            <ScrollArea className="h-48 border rounded-md p-2"> {/* Fixed height for vertical scrolling */}
+            <ScrollArea className="h-48 border rounded-md p-2 hide-scrollbar"> {/* Fixed height for vertical scrolling */}
               <div className="space-y-2">
                 {filteredUniqueSources.length === 0 && (
                   <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
@@ -364,7 +364,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ workspaceName }) => {
         </div>
         
         {isDetailPanelOpen && (
-          <ScrollArea className="overflow-y-auto flex-grow">
+          <ScrollArea className="overflow-y-auto flex-grow hide-scrollbar">
             <DetailPanel item={selectedItem} />
           </ScrollArea>
         )}

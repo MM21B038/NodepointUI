@@ -292,7 +292,7 @@ const ChatIn: React.FC<ChatInProps> = ({
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <div className="flex-grow flex flex-col border rounded-lg shadow-sm z-[0]">
-            <ScrollArea className="flex-grow h-0 w-full !transform-none" viewportRef={messagesEndRef}> {/* Changed to messagesEndRef */}
+            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={messagesEndRef}> {/* Changed to messagesEndRef */}
               <div className={cn(
                 "p-4 space-y-6 relative",
                 (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
@@ -472,7 +472,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="text-sm font-semibold">Source: {tag.id}</p>
-                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                                <p className className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     ))}

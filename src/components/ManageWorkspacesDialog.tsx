@@ -77,7 +77,7 @@ const ManageWorkspacesDialog: React.FC<ManageWorkspacesDialogProps> = ({
                 No existing workspaces found.
               </p>
             ) : (
-              <ScrollArea className="h-64 w-full rounded-md border">
+              <ScrollArea className="h-64 w-full rounded-md border hide-scrollbar">
                 <ul className="divide-y">
                   {workspaces.map((workspace) => (
                     <li

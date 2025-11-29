@@ -69,7 +69,7 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="flex-grow h-0 rounded-md border">
+            <ScrollArea className="flex-grow h-0 rounded-md border hide-scrollbar">
               <ul className="divide-y">
                 {workspaces.map((workspace) => (
                   <li
