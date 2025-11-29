@@ -186,15 +186,17 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     link
       .attr("stroke-width", d => isEdgeHighlighted(d) ? 3 : 1) // Thicker stroke for highlighted edges
       .attr("stroke", d => getEdgeD3Color(!isEdgeHighlighted(d)))
-      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0); // Full opacity for highlighted, 0 for hidden
+      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
+      .style("display", d => isEdgeHighlighted(d) ? null : "none"); // Toggle display for edges
 
     node
       .attr("r", d => isNodeHighlighted(d) ? 12 : 10) // Larger radius for highlighted nodes
       .attr("fill", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).fill)
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
       .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
+      .style("display", d => isNodeHighlighted(d) ? null : "none") // Toggle display for nodes
       .attr("class", d => cn(
-        "cursor-pointer", // Removed transition-all
+        "cursor-pointer",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
       ));
 
@@ -223,7 +225,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("height", bbox.height + 2 * padding);
 
       if (!isNodeHighlighted(d)) {
-        currentLabelGroup.attr("opacity", 0); // Keep labels hidden for non-highlighted nodes
+        currentLabelGroup.attr("opacity", 0).style("display", "none"); // Keep labels hidden for non-highlighted nodes
         return;
       }
 
@@ -241,7 +243,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .range([0, 1])
         .clamp(true);
 
-      currentLabelGroup.attr("opacity", opacityScale(k));
+      currentLabelGroup.attr("opacity", opacityScale(k)).style("display", null); // Show labels
     });
 
   }, [selectedItem, graphData]);
@@ -285,7 +287,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .selectAll("line")
       .data(graphData.edges)
       .join("line")
-      .attr("class", "cursor-pointer") // Removed transition-all
+      .attr("class", "cursor-pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanEdgeData(d));
@@ -300,7 +302,6 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      // Removed transition-all
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanNodeData(d));
