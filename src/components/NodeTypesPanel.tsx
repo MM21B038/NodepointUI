@@ -89,8 +89,8 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
             Clear All
           </Button>
         </div>
-        <ScrollArea className="flex-grow hide-scrollbar"> {/* Removed pr-4 */}
-          <div className="grid gap-2 p-4"> {/* Added p-4 here */}
+        <ScrollArea className="flex-grow pr-4 hide-scrollbar"> {/* Added hide-scrollbar here */}
+          <div className="grid gap-2">
             {uniqueNodeTypes.map((type) => (
               <div key={type} className="flex items-center space-x-2">
                 <Checkbox
