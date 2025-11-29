@@ -64,10 +64,7 @@ const ManageWorkspacesDialog: React.FC<ManageWorkspacesDialogProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className={cn(
-          "sm:max-w-[425px]",
-          "bg-card/50 backdrop-blur-sm" // Added translucency to the dialog content
-        )}>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Manage Workspaces</DialogTitle>
             <DialogDescription>
