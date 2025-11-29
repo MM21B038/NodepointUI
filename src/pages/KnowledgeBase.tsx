@@ -138,12 +138,14 @@ const KnowledgeBase = () => {
       const nodeTypesPanelElement = document.getElementById('node-types-panel');
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
+      const searchDepthDropdownContent = document.querySelector('.search-depth-dropdown-content'); // Select the dropdown content
 
       const isClickInsidePanelOrButton = (
         (searchPanelElement && searchPanelElement.contains(target)) ||
         (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
         (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(target))
+        (filterButtonsContainer && filterButtonsContainer.contains(target)) ||
+        (searchDepthDropdownContent && searchDepthDropdownContent.contains(target)) // Include the dropdown content here
       );
 
       if (!isClickInsidePanelOrButton) {
@@ -378,7 +380,7 @@ const KnowledgeBase = () => {
           {/* Filter Panels (absolutely positioned, relative to the new block) */}
           <div id="search-nodes-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0", // Changed to h-full, top-0, bottom-0
+            "h-full top-0 bottom-0",
             showSearchPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SearchNodesPanel
@@ -392,7 +394,7 @@ const KnowledgeBase = () => {
           </div>
           <div id="node-types-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0", // Changed to h-full, top-0, bottom-0
+            "h-full top-0 bottom-0",
             showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <NodeTypesPanel
@@ -405,7 +407,7 @@ const KnowledgeBase = () => {
           </div>
           <div id="source-files-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0", // Changed to h-full, top-0, bottom-0
+            "h-full top-0 bottom-0",
             showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SourceFilesPanel
@@ -422,7 +424,7 @@ const KnowledgeBase = () => {
           {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
             <div className={cn(
               "absolute right-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "h-full top-0 bottom-0", // Changed to h-full, top-0, bottom-0
+              "h-full top-0 bottom-0",
               selectedItem ? "translate-x-0" : "translate-x-full"
             )}>
               <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">

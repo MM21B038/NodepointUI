@@ -70,24 +70,24 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
           <Label htmlFor="search-depth" className="text-sm font-medium">
             Search Depth:
           </Label>
-          <DropdownMenu open={isDepthDropdownOpen} onOpenChange={setIsDepthDropdownOpen}> {/* Bind state here */}
+          <DropdownMenu open={isDepthDropdownOpen} onOpenChange={setIsDepthDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 className="w-full justify-between bg-background/50 border-primary/20"
-                disabled={!searchQuery} // Disable depth dropdown if no search query
+                disabled={!searchQuery}
               >
                 {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
                 <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-full">
+            <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content"> {/* Added className here */}
               {depthOptions.map((depth) => (
                 <DropdownMenuItem
                   key={depth}
                   onClick={() => {
                     handleDepthSelect(depth);
-                    setIsDepthDropdownOpen(false); // Close after selection
+                    setIsDepthDropdownOpen(false);
                   }}
                   className={cn(
                     "cursor-pointer",
