@@ -80,8 +80,7 @@ const WorkspaceManagement = () => {
   }, [workspaceToDelete, fetchWorkspaces]);
 
   return (
-    <div className="flex flex-col h-full flex-grow p-4"> {/* Added padding to the main container */}
-      <h1 className="text-3xl font-bold mb-6">Workspace List</h1> {/* Added a title */}
+    <div className="flex flex-col h-full flex-grow p-4">
       {isLoading ? (
         <div className="flex-grow flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -98,21 +97,19 @@ const WorkspaceManagement = () => {
           </Alert>
         </div>
       ) : (
-        <ScrollArea className="flex-grow h-0 rounded-md border p-2 hide-scrollbar bg-card shadow-md"> {/* Added bg-card and shadow */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {workspaces.map((workspace) => (
-              <WorkspaceCard
-                key={workspace}
-                workspaceName={workspace}
-                isCurrent={currentWorkspace === workspace}
-                onSelect={handleSelectWorkspace}
-                onDelete={handleDeleteClick}
-                isDeleting={isDeleting}
-                deletingWorkspaceName={workspaceToDelete}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {workspaces.map((workspace) => (
+            <WorkspaceCard
+              key={workspace}
+              workspaceName={workspace}
+              isCurrent={currentWorkspace === workspace}
+              onSelect={handleSelectWorkspace}
+              onDelete={handleDeleteClick}
+              isDeleting={isDeleting}
+              deletingWorkspaceName={workspaceToDelete}
+            />
+          ))}
+        </div>
       )}
 
       {workspaceToDelete && (
