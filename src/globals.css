@@ -9,7 +9,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground hide-scrollbar; /* Added hide-scrollbar here */
   }
 
   :root {
@@ -191,36 +191,29 @@
     @apply border-border;
   }
 
-  /* Hide scrollbar for entire page */
-  html, body {
-    scrollbar-width: none;        /* Firefox */
-    -ms-overflow-style: none;     /* IE/Edge */
-  }
-
-  html::-webkit-scrollbar,
-  body::-webkit-scrollbar {
-    display: none;                /* Chrome/Safari */
+  body {
+    @apply bg-background text-foreground hide-scrollbar;
   }
 }
 
 /* Custom utility to hide scrollbar */
-.no-scrollbar {
+.hide-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
 
-.no-scrollbar::-webkit-scrollbar {
+.hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
 
-/* Apply no-scrollbar to all Radix UI ScrollArea viewports */
+/* Apply hide-scrollbar to all Radix UI ScrollArea viewports */
 [data-radix-scroll-area-viewport] {
-  scrollbar-width: none !important;        /* Firefox */
-  -ms-overflow-style: none !important;     /* IE/Edge */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 [data-radix-scroll-area-viewport]::-webkit-scrollbar {
-  display: none !important;                /* Chrome/Safari */
+  display: none; /* Chrome, Safari, Opera */
 }
 
 /* Custom classes for navbar background */
