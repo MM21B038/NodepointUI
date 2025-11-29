@@ -12,11 +12,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 // Using d3.schemeSet3 which provides 12 bright, distinct colors.
 const colorScale = d3.scaleOrdinal(d3.schemeSet3);
 
-// Function to get D3 colors based on node type and faded state
-const getNodeD3Colors = (type: string, isFaded: boolean) => {
-  if (isFaded) {
-    // Faded gray for non-highlighted nodes
-    return { fill: "hsl(var(--muted))", stroke: "hsl(var(--muted-foreground))" };
+// Function to get D3 colors based on node type and saturation state
+const getNodeD3Colors = (type: string, isDesaturated: boolean) => {
+  if (isDesaturated) {
+    return { fill: "transparent", stroke: "transparent" }; // Completely transparent
   }
   const fill = colorScale(type);
   // Calculate a darker stroke color for contrast
@@ -24,10 +23,9 @@ const getNodeD3Colors = (type: string, isFaded: boolean) => {
   return { fill, stroke };
 };
 
-// Function to get D3 color for edges based on faded state
-const getEdgeD3Color = (isFaded: boolean) => {
-  // Faded muted-foreground for non-highlighted edges, primary for highlighted
-  return isFaded ? "hsl(var(--muted-foreground))" : "hsl(var(--primary))";
+// Function to get D3 color for edges based on saturation state
+const getEdgeD3Color = (isDesaturated: boolean) => {
+  return isDesaturated ? "transparent" : "hsl(var(--muted-foreground))"; // Completely transparent
 };
 
 
@@ -189,13 +187,13 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     link
       .attr("stroke-width", d => isEdgeHighlighted(d) ? 3 : 1) // Thicker stroke for highlighted edges
       .attr("stroke", d => getEdgeD3Color(!isEdgeHighlighted(d)))
-      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0.2); // Full opacity for highlighted, low for faded
+      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 1 : 0); // Full opacity for highlighted, 0 for hidden
 
     node
       .attr("r", d => isNodeHighlighted(d) ? 12 : 10) // Larger radius for highlighted nodes
       .attr("fill", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).fill)
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
-      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0.3) // Full opacity for highlighted, low for faded
+      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
@@ -226,7 +224,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("height", bbox.height + 2 * padding);
 
       if (!isNodeHighlighted(d)) {
-        currentLabelGroup.attr("opacity", 0); // Keep labels hidden for non-highlighted nodes to avoid clutter
+        currentLabelGroup.attr("opacity", 0); // Keep labels hidden for non-highlighted nodes
         return;
       }
 
