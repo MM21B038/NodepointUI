@@ -27,8 +27,10 @@ const PieChartLegendDropdown: React.FC<PieChartLegendDropdownProps> = ({ data, c
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
-        align="end" 
-        className="w-auto min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[300px] max-h-[250px] overflow-y-auto hide-scrollbar p-2"
+        align="start" // Align left edge with trigger's left edge
+        side="bottom" // Always open downwards
+        sideOffset={5} // Small gap from trigger
+        className="z-50 w-auto max-w-[min(300px, calc(100vw - 32px))] max-h-[250px] overflow-y-auto hide-scrollbar p-2"
       >
         {data.length === 0 ? (
           <DropdownMenuItem disabled>No node types</DropdownMenuItem>
