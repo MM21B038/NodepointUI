@@ -64,7 +64,7 @@
     --footer-height: 36px; /* Height of MadeWithDyad component */
 
     /* KnowledgeBase Panel Sizing */
-    --filter-panel-width: min(30vw, 400px);
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
     --panel-top-offset: 88px; /* 16px (graph container top padding) + 16px (filter buttons top) + 56px (filter buttons height) + 16px (gap) */
     --panel-bottom-offset: 16px; /* Desired bottom padding */
@@ -120,7 +120,7 @@
     --footer-height: 36px; /* Height of MadeWithDyad component */
 
     /* KnowledgeBase Panel Sizing */
-    --filter-panel-width: min(30vw, 400px);
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
     --panel-top-offset: 88px;
     --panel-bottom-offset: 16px;
@@ -178,7 +178,7 @@
     --footer-height: 36px; /* Height of MadeWithDyad component */
 
     /* KnowledgeBase Panel Sizing */
-    --filter-panel-width: min(30vw, 400px);
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
     --panel-top-offset: 88px;
     --panel-bottom-offset: 16px;
