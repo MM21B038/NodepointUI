@@ -46,41 +46,37 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       )}
       onClick={() => onSelect(workspaceName)}
     >
-      {/* Delete Button - positioned absolutely at top-right, visible on hover */}
-      <Button
-        variant="destructive"
-        size="icon"
-        onClick={(e) => {
-          e.stopPropagation(); // Prevent card selection when clicking delete
-          onDelete(workspaceName);
-        }}
-        disabled={isDeleting}
-        className={cn(
-          "absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-          isThisWorkspaceDeleting && "opacity-100" // Always visible if currently being deleted
-        )}
-      >
-        {isThisWorkspaceDeleting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Trash2 className="h-4 w-4" />
-        )}
-      </Button>
-
       <CardHeader className="p-0 flex flex-col space-y-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
-            <FolderCog className={cn("h-6 w-6 mr-3", isCurrent ? "text-primary" : "text-muted-foreground")} />
-            <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
-              {workspaceName}
-            </span>
-            {/* Tick Icon for Current Workspace */}
-            {isCurrent && (
-              <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
+        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
+          <FolderCog className={cn("h-6 w-6 mr-3", isCurrent ? "text-primary" : "text-muted-foreground")} />
+          <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
+            {workspaceName}
+          </span>
+          {/* Tick Icon for Current Workspace */}
+          {isCurrent && (
+            <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
+          )}
+          {/* Delete Button - now inline with title, visible on hover */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent card selection when clicking delete
+              onDelete(workspaceName);
+            }}
+            disabled={isDeleting}
+            className={cn(
+              "ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+              isThisWorkspaceDeleting && "opacity-100" // Always visible if currently being deleted
             )}
-          </CardTitle>
-          {/* Removed the Badge for "Current" */}
-        </div>
+          >
+            {isThisWorkspaceDeleting ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Trash2 className="h-6 w-6" />
+            )}
+          </Button>
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -110,7 +106,6 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             {isLoadingStats ? <Loader2 className="inline h-3 w-3 animate-spin" /> : totalEdges ?? 0}
           </span>
         </div>
-        {/* Removed the old delete button container */}
       </CardContent>
     </Card>
   );
