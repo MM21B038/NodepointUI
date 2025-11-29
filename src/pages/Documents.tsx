@@ -17,17 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   listFiles,
@@ -62,6 +51,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import NodeTypeDistributionChart from "@/components/NodeTypeDistributionChart"; // Import new chart
 import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
+import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog"; // Import DeleteConfirmationDialog
 
 // Helper function to get the appropriate icon based on file extension
 const getFileIcon = (fileName: string) => {
@@ -92,6 +82,10 @@ const Documents = () => {
   const [isGraphLoading, setIsGraphLoading] = useState(false);
   // New state to store node and edge counts per file
   const [fileGraphData, setFileGraphData] = useState<Record<string, { nodes: number; edges: number }>>({});
+
+  // State for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -211,15 +205,20 @@ const Documents = () => {
     }
   };
 
-  const handleDeleteFile = async (fileName: string) => {
-    if (!currentWorkspace) return;
+  const confirmDeleteFile = (fileName: string) => {
+    setFileToDelete(fileName);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const executeDeleteFile = async () => {
+    if (!currentWorkspace || !fileToDelete) return;
 
     setIsDeleting(true);
-    const deleteToastId = showLoading(`Deleting ${fileName}...`);
+    const deleteToastId = showLoading(`Deleting ${fileToDelete}...`);
     try {
-      await deleteFile(currentWorkspace, fileName);
+      await deleteFile(currentWorkspace, fileToDelete);
       dismissToast(deleteToastId);
-      showSuccess(`${fileName} deleted successfully!`);
+      showSuccess(`${fileToDelete} deleted successfully!`);
       fetchFiles(currentWorkspace);
       fetchPipelineAndPreprocessStatus(currentWorkspace);
       fetchKnowledgeGraphData(currentWorkspace);
@@ -229,6 +228,8 @@ const Documents = () => {
       console.error("Delete error:", error);
     } finally {
       setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setFileToDelete(null);
     }
   };
 
@@ -366,28 +367,14 @@ const Documents = () => {
                                 {isGraphLoading ? <Loader2 className="inline h-3 w-3 animate-spin" /> : fileStats.edges}
                               </TableCell>
                               <TableCell className="text-right py-2">
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm" disabled={isDeleting}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        This action cannot be undone. This will permanently delete the file
-                                        &quot;{file}&quot; from your workspace.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteFile(file)}>
-                                        Continue
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  onClick={() => confirmDeleteFile(file)} 
+                                  disabled={isDeleting}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </TableCell>
                             </TableRow>
                           );
@@ -405,6 +392,17 @@ const Documents = () => {
             <NodeTypeDistributionChart nodes={graphNodes} isLoading={isGraphLoading} />
           </div>
         </div>
+      )}
+
+      {fileToDelete && (
+        <DeleteConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={executeDeleteFile}
+          title={`Permanently Delete File: ${fileToDelete}`}
+          description={`This action will permanently delete the file "${fileToDelete}" from workspace "${currentWorkspace}". This action cannot be undone.`}
+          itemName={fileToDelete}
+        />
       )}
     </div>
   );
