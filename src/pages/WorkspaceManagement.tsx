@@ -11,6 +11,7 @@ import { getWorkspaces, deleteWorkspace } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import WorkspaceCard from "@/components/WorkspaceCard"; // Import the new component
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
@@ -82,9 +83,9 @@ const WorkspaceManagement = () => {
     <div className="flex flex-col h-full flex-grow">
       <Card className="flex-grow flex flex-col">
         <CardHeader>
-          <CardTitle>Workspace List</CardTitle> {/* Changed title here */}
+          <CardTitle>Workspace List</CardTitle>
         </CardHeader>
-        <CardContent className="flex-grow flex flex-col p-2"> {/* Reduced padding here */}
+        <CardContent className="flex-grow flex flex-col p-4"> {/* Adjusted padding for grid */}
           {isLoading ? (
             <div className="flex-grow flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -101,61 +102,20 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="flex-grow h-0 rounded-md border hide-scrollbar">
-              <ul className="divide-y">
+            <ScrollArea className="flex-grow h-0 rounded-md border p-2 hide-scrollbar"> {/* Added padding to scroll area */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {workspaces.map((workspace) => (
-                  <li
+                  <WorkspaceCard
                     key={workspace}
-                    className={cn(
-                      "flex items-center justify-between p-2 transition-colors cursor-pointer",
-                      currentWorkspace === workspace
-                        ? "bg-secondary text-secondary-foreground"
-                        : "hover:bg-accent/50",
-                    )}
-                    onClick={() => handleSelectWorkspace(workspace)}
-                  >
-                    <span
-                      className={cn(
-                        "font-medium truncate flex-grow",
-                        currentWorkspace === workspace && "text-secondary-foreground"
-                      )}
-                    >
-                      {workspace}
-                      {currentWorkspace === workspace && " (Current)"}
-                    </span>
-                    <div className="flex items-center space-x-2 ml-4">
-                      {currentWorkspace !== workspace && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectWorkspace(workspace);
-                          }}
-                          disabled={isDeleting}
-                        >
-                          Select
-                        </Button>
-                      )}
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(workspace);
-                        }}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting && workspaceToDelete === workspace ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </li>
+                    workspaceName={workspace}
+                    isCurrent={currentWorkspace === workspace}
+                    onSelect={handleSelectWorkspace}
+                    onDelete={handleDeleteClick}
+                    isDeleting={isDeleting}
+                    deletingWorkspaceName={workspaceToDelete}
+                  />
                 ))}
-              </ul>
+              </div>
             </ScrollArea>
           )}
         </CardContent>
