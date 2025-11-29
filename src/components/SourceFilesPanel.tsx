@@ -67,7 +67,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4">
+      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-hidden">
         <div className="flex space-x-2 mb-4">
           <Button
             variant="outline"
