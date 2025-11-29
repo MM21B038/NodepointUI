@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces } from "@/database/workspaceStorage";
+import { getWorkspaces, WorkspaceEntry } from "@/database/workspaceStorage"; // Import WorkspaceEntry
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw, Loader2 } from "lucide-react"; // Removed Settings
+import { Plus, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
-// Removed ManageWorkspacesDialog
 import WorkspaceCombobox from "./WorkspaceCombobox";
 import { useLocation } from "react-router-dom";
 
@@ -16,7 +15,6 @@ const WorkspaceControl = () => {
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  // Removed isManageDialogOpen
 
   const location = useLocation();
   const hideButtonsOnPaths = ["/documents", "/knowledge-base", "/ask", "/chat"];
@@ -25,16 +23,20 @@ const WorkspaceControl = () => {
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
     try {
-      const list = await getWorkspaces();
-      list.sort((a, b) => b.localeCompare(a));
-      setWorkspaces(list);
+      const list: WorkspaceEntry[] = await getWorkspaces(); // Expect WorkspaceEntry[]
+      
+      // Sort by timestamp in descending order (latest first)
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      const workspaceNames = list.map(ws => ws.workspace_name);
+      setWorkspaces(workspaceNames);
 
-      if (currentWorkspace && !list.includes(currentWorkspace)) {
+      if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
       }
 
-      if (!currentWorkspace && list.length > 0) {
-        setCurrentWorkspace(list[0]);
+      if (!currentWorkspace && workspaceNames.length > 0) {
+        setCurrentWorkspace(workspaceNames[0]);
       }
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
@@ -60,8 +62,6 @@ const WorkspaceControl = () => {
     });
   };
 
-  // Removed handleWorkspaceDeleted as ManageWorkspacesDialog is removed
-
   return (
     <div className="flex items-center space-x-2">
       <WorkspaceCombobox
@@ -82,8 +82,6 @@ const WorkspaceControl = () => {
           >
             <Plus className="h-4 w-4" />
           </Button>
-
-          {/* Removed Manage Workspaces Button */}
 
           <Button
             variant="secondary"
@@ -106,8 +104,6 @@ const WorkspaceControl = () => {
         onClose={() => setIsCreateDialogOpen(false)}
         onCreate={handleWorkspaceCreated}
       />
-
-      {/* Removed ManageWorkspacesDialog */}
     </div>
   );
 };

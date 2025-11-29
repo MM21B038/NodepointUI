@@ -142,9 +142,9 @@ export interface ChatMessage {
 
 /**
  * Retrieves all existing workspace names from the API.
- * @returns A promise that resolves to an array of workspace names.
+ * @returns A promise that resolves to an array of WorkspaceEntry objects.
  */
-export async function getWorkspaces(): Promise<string[]> {
+export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/list_workspaces`);
     if (!response.ok) {
@@ -152,7 +152,7 @@ export async function getWorkspaces(): Promise<string[]> {
     }
     // The API now returns an array of WorkspaceEntry directly
     const data: WorkspaceEntry[] = await response.json();
-    return data.map(entry => entry.workspace_name) || [];
+    return data || [];
   } catch (error) {
     console.error("Error fetching workspaces:", error);
     return [];

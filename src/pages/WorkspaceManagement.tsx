@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph } from "@/database/workspaceStorage";
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry } from "@/database/workspaceStorage"; // Import WorkspaceEntry
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -45,27 +45,31 @@ const WorkspaceManagement = () => {
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
     try {
-      const list = await getWorkspaces();
-      list.sort((a, b) => b.localeCompare(a));
-      setAllWorkspaces(list);
+      const list: WorkspaceEntry[] = await getWorkspaces(); // Expect WorkspaceEntry[]
+      
+      // Sort by timestamp in descending order (latest first)
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      const workspaceNames = list.map(ws => ws.workspace_name);
+      setAllWorkspaces(workspaceNames);
 
       // Fetch stats for each workspace in parallel
-      const statsPromises = list.map(async (wsName) => {
-        setStatsLoading(prev => ({ ...prev, [wsName]: true }));
+      const statsPromises = list.map(async (wsEntry) => { // Use wsEntry for name
+        setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: true }));
         try {
-          const files = await listFiles(wsName);
-          const graph = await getKnowledgeGraph(wsName);
+          const files = await listFiles(wsEntry.workspace_name);
+          const graph = await getKnowledgeGraph(wsEntry.workspace_name);
           return {
-            name: wsName,
+            name: wsEntry.workspace_name,
             files: files.length,
             nodes: graph.nodes?.length || 0,
             edges: graph.edges?.length || 0,
           };
         } catch (error) {
-          console.error(`Failed to fetch stats for workspace ${wsName}:`, error);
-          return { name: wsName, files: 0, nodes: 0, edges: 0 }; // Return default on error
+          console.error(`Failed to fetch stats for workspace ${wsEntry.workspace_name}:`, error);
+          return { name: wsEntry.workspace_name, files: 0, nodes: 0, edges: 0 }; // Return default on error
         } finally {
-          setStatsLoading(prev => ({ ...prev, [wsName]: false }));
+          setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: false }));
         }
       });
 
@@ -76,12 +80,12 @@ const WorkspaceManagement = () => {
       });
       setWorkspaceStats(newStats);
 
-      if (currentWorkspace && !list.includes(currentWorkspace)) {
+      if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
       }
-      if (!currentWorkspace && list.length > 0) {
-        setCurrentWorkspace(list[0]);
-      } else if (list.length === 0) {
+      if (!currentWorkspace && workspaceNames.length > 0) {
+        setCurrentWorkspace(workspaceNames[0]);
+      } else if (workspaceNames.length === 0) {
         setCurrentWorkspace(null);
       }
       setCurrentPage(0);
