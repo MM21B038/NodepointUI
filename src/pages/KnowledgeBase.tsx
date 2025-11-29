@@ -352,7 +352,7 @@ const KnowledgeBase = () => {
           )}
 
           {/* Filter/Refresh Buttons - now relative to the new block */}
-          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2">
+          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex items-center space-x-2 -translate-x-1/2 h-14">
             {currentWorkspace && (
               <>
                 <Button
@@ -398,8 +398,8 @@ const KnowledgeBase = () => {
 
           {/* Filter Panels (absolutely positioned, relative to the new block) */}
           <div ref={searchPanelRef} id="search-nodes-panel" className={cn(
-            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0",
+            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showSearchPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SearchNodesPanel
@@ -412,8 +412,8 @@ const KnowledgeBase = () => {
             />
           </div>
           <div ref={nodeTypesPanelRef} id="node-types-panel" className={cn(
-            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0",
+            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <NodeTypesPanel
@@ -425,8 +425,8 @@ const KnowledgeBase = () => {
             />
           </div>
           <div ref={sourceFilesPanelRef} id="source-files-panel" className={cn(
-            "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "h-full top-0 bottom-0",
+            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
             showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SourceFilesPanel
@@ -442,8 +442,8 @@ const KnowledgeBase = () => {
           {/* Detail Panel (right side, higher z-index, relative to the new block) */}
           {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
             <div className={cn(
-              "absolute right-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "h-full top-0 bottom-0",
+              "absolute right-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+              "w-[var(--detail-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
               selectedItem ? "translate-x-0" : "translate-x-full"
             )}>
               <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">

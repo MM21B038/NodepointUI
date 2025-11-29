@@ -58,6 +58,13 @@
     --sidebar-collapsed-width: 64px; /* w-16 */
     --sidebar-expanded-width: 240px; /* w-60 */
     --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(30vw, 400px);
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px; /* 16px (graph container top padding) + 16px (filter buttons top) + 56px (filter buttons height) + 16px (gap) */
+    --panel-bottom-offset: 16px; /* Desired bottom padding */
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
 
   .dark {
@@ -107,6 +114,13 @@
     --sidebar-collapsed-width: 64px; /* w-16 */
     --sidebar-expanded-width: 240px; /* w-60 */
     --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(30vw, 400px);
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px;
+    --panel-bottom-offset: 16px;
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
   
   .navy-blue {
@@ -158,6 +172,13 @@
     --sidebar-collapsed-width: 64px; /* w-16 */
     --sidebar-expanded-width: 240px; /* w-60 */
     --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(30vw, 400px);
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px;
+    --panel-bottom-offset: 16px;
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
 }
 
