@@ -5,9 +5,9 @@ import Navbar from "./Navbar";
 import { MadeWithDyad } from "./made-with-dyad";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import SidebarNav from "./SidebarNav"; // New import
-import { FileStack, BookOpen, FolderCog, MessageCircle, ArrowDown } from "lucide-react"; // Icons for pages, added ArrowDown
-import { Button } from "@/components/ui/button"; // Import Button
+import SidebarNav from "./SidebarNav";
+import { FileStack, BookOpen, FolderCog, MessageCircle, ArrowDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,11 +25,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isKnowledgeBase = location.pathname === "/knowledge-base";
   const isChatInPage = location.pathname === "/chatin";
 
-  // State and ref for the scroll-to-bottom button, managed by Layout
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
-  const chatScrollViewportRef = useRef<HTMLDivElement>(null); // Ref for ChatIn's ScrollArea viewport
+  const chatScrollViewportRef = useRef<HTMLDivElement>(null);
 
-  // Function to scroll ChatIn's content to bottom
   const handleScrollToChatBottom = useCallback(() => {
     if (chatScrollViewportRef.current) {
       chatScrollViewportRef.current.scrollTo({
@@ -39,22 +37,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   }, []);
 
-  // Pass these props to ChatIn
+  const handleChatScroll = useCallback(() => {
+    if (chatScrollViewportRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatScrollViewportRef.current;
+      // Show button if not at the very bottom (with a small tolerance)
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10; // 10px tolerance
+      setShowScrollToBottomButton(!isAtBottom);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isChatInPage && chatScrollViewportRef.current) {
+      const viewport = chatScrollViewportRef.current;
+      viewport.addEventListener('scroll', handleChatScroll);
+      // Initial check when component mounts or workspace changes
+      handleChatScroll();
+      return () => {
+        viewport.removeEventListener('scroll', handleChatScroll);
+      };
+    } else {
+      setShowScrollToBottomButton(false); // Hide button if not on chat page
+    }
+  }, [isChatInPage, handleChatScroll]);
+
+  // Pass chatScrollViewportRef to ChatIn
   const chatInProps = isChatInPage ? {
-    onShowScrollToBottomChange: setShowScrollToBottomButton,
-    onScrollToBottom: handleScrollToChatBottom,
     chatScrollViewportRef: chatScrollViewportRef,
   } : {};
-
-  // Debugging logs
-  console.log("Layout Debug: location.pathname =", location.pathname);
-  console.log("Layout Debug: isChatInPage =", isChatInPage);
-  console.log("Layout Debug: showScrollToBottomButton (initial/current render) =", showScrollToBottomButton);
-
-  // New useEffect to log when showScrollToBottomButton state actually changes
-  useEffect(() => {
-    console.log("Layout Debug: showScrollToBottomButton state changed to =", showScrollToBottomButton);
-  }, [showScrollToBottomButton]);
 
   return (
     <div className="flex flex-col h-screen">
