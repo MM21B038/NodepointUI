@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert component
 
 interface ChatInProps {
   // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
