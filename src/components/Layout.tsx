@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, astate, useRef, useCallback } from "react";
 import Navbar from "./Navbar";
 import { MadeWithDyad } from "./made-with-dyad";
 import { useLocation } from "react-router-dom";
@@ -52,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         />
         
         <main
-          className="flex-grow flex flex-col overflow-y-auto hide-scrollbar"
+          className="flex-grow flex flex-col hide-scrollbar"
           style={{ marginLeft: 'var(--sidebar-collapsed-width)', paddingTop: 'var(--navbar-height)' }}
         >
           {isKnowledgeBase ? (
