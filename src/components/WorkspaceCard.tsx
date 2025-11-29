@@ -3,7 +3,7 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link } from "lucide-react"; // Added Link icon
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -100,7 +100,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </div>
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center">
-            <GitGraph className="h-4 w-4 mr-1" />
+            <Link className="h-4 w-4 mr-1" /> {/* Changed icon to Link */}
             <span>Edges:</span>
           </div>
           <span className="font-medium text-foreground">
