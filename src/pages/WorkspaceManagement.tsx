@@ -83,7 +83,7 @@ const WorkspaceManagement = () => {
   return (
     <div className="flex flex-col h-full flex-grow">
       <Card className="flex-grow flex flex-col">
-        <CardHeader className="p-4"> {/* Reduced padding */}
+        <CardHeader>
           <CardTitle>Available Workspaces</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col">
@@ -103,22 +103,22 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="flex-grow h-0 rounded-md border hide-scrollbar p-2"> {/* Reduced padding */}
+            <ScrollArea className="flex-grow h-0 rounded-md border hide-scrollbar">
               <ul className="divide-y">
                 {workspaces.map((workspace) => (
                   <li
                     key={workspace}
                     className={cn(
-                      "flex items-center justify-between p-2 transition-colors", // Reduced padding
+                      "flex items-center justify-between p-3 transition-colors",
                       currentWorkspace === workspace ? "bg-primary text-primary-foreground" : "hover:bg-accent/50",
                     )}
                   >
                     <span
                       className={cn(
-                        "font-medium truncate flex-grow cursor-pointer",
-                        currentWorkspace === workspace && "text-primary-foreground"
+                        "font-medium truncate flex-grow cursor-pointer", // Added cursor-pointer
+                        currentWorkspace === workspace && "text-primary-foreground" // Ensure text color is correct for current
                       )}
-                      onClick={() => handleSelectWorkspace(workspace)}
+                      onClick={() => handleSelectWorkspace(workspace)} // Make the name clickable to select
                     >
                       {workspace}
                       {currentWorkspace === workspace && " (Current)"}
@@ -127,11 +127,11 @@ const WorkspaceManagement = () => {
                       variant="destructive"
                       size="icon"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Prevent selecting workspace when clicking delete
                         handleDeleteClick(workspace);
                       }}
                       disabled={isDeleting}
-                      className="ml-2" {/* Reduced margin */}
+                      className="ml-4" // Add some margin
                     >
                       {isDeleting && workspaceToDelete === workspace ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
