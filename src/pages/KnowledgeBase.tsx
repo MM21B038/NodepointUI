@@ -15,6 +15,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
+type ActiveFilterPanel = 'none' | 'search' | 'nodeTypes' | 'sourceFiles';
+
 const KnowledgeBase = () => {
   console.log("KnowledgeBase: Component rendered.");
   const { currentWorkspace } = useWorkspace();
@@ -25,21 +27,17 @@ const KnowledgeBase = () => {
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
-  // State for individual filter panel visibility
-  const [showSearchPanel, setShowSearchPanel] = useState(false);
-  const [showNodeTypesPanel, setShowNodeTypesPanel] = useState(false);
-  const [showSourceFilesPanel, setShowSourceFilesPanel] = useState(false);
+  // State for the single active filter panel
+  const [activeFilterPanel, setActiveFilterPanel] = useState<ActiveFilterPanel>('none');
 
   // Refs for the panels and filter buttons container
-  const searchPanelRef = useRef<HTMLDivElement>(null);
-  const nodeTypesPanelRef = useRef<HTMLDivElement>(null);
-  const sourceFilesPanelRef = useRef<HTMLDivElement>(null);
+  const rotatingFilterPanelRef = useRef<HTMLDivElement>(null); // Ref for the single rotating panel container
   const filterButtonsContainerRef = useRef<HTMLDivElement>(null);
-  const graphContainerRef = useRef<HTMLDivElement>(null); // New ref for the main graph container
+  const graphContainerRef = useRef<HTMLDivElement>(null);
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
-  const [searchDepth, setSearchDepth] = useState<number>(0); // New state for search depth
+  const [searchDepth, setSearchDepth] = useState<number>(0);
   const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
   const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set());
 
@@ -56,7 +54,6 @@ const KnowledgeBase = () => {
     setError(null);
     setAllNodes([]);
     setAllEdges([]);
-    // setSelectedItem(null); // REMOVED: Do not reset selected item on data fetch
     setHasFiltersBeenInteracted(false); // Reset interaction state on new data fetch
     try {
       const data = await getKnowledgeGraph(workspaceName);
@@ -138,9 +135,7 @@ const KnowledgeBase = () => {
 
   // Callback to close all filter panels
   const closeAllFilterPanels = useCallback(() => {
-    setShowSearchPanel(false);
-    setShowNodeTypesPanel(false);
-    setShowSourceFilesPanel(false);
+    setActiveFilterPanel('none');
   }, []);
 
   // Effect to handle clicks outside the panels
@@ -166,21 +161,14 @@ const KnowledgeBase = () => {
       }
 
       // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
-      // This is crucial for dropdowns like the search depth selector
       const isClickInsideRadixPortal = target.closest(
         '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
       );
       if (isClickInsideRadixPortal) return; // Don't close if clicking inside a Radix portal
 
-      // Now, check if the click is outside any *open* panel
-      if (showSearchPanel && searchPanelRef.current && !searchPanelRef.current.contains(target)) {
-        setShowSearchPanel(false);
-      }
-      if (showNodeTypesPanel && nodeTypesPanelRef.current && !nodeTypesPanelRef.current.contains(target)) {
-        setShowNodeTypesPanel(false);
-      }
-      if (showSourceFilesPanel && sourceFilesPanelRef.current && !sourceFilesPanelRef.current.contains(target)) {
-        setShowSourceFilesPanel(false);
+      // Now, check if the click is outside the *open* rotating filter panel
+      if (activeFilterPanel !== 'none' && rotatingFilterPanelRef.current && !rotatingFilterPanelRef.current.contains(target)) {
+        setActiveFilterPanel('none');
       }
     };
 
@@ -188,12 +176,7 @@ const KnowledgeBase = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [
-    showSearchPanel, setShowSearchPanel,
-    showNodeTypesPanel, setShowNodeTypesPanel,
-    showSourceFilesPanel, setShowSourceFilesPanel,
-    setSelectedItem, closeAllFilterPanels,
-  ]);
+  }, [activeFilterPanel, closeAllFilterPanels, setSelectedItem]);
 
 
   const handleRefreshGraph = () => {
@@ -261,7 +244,7 @@ const KnowledgeBase = () => {
 
       // For searchDepth > 0, perform hops
       // The loop should run 'searchDepth' times to get 'searchDepth' hops
-      for (let depth = 0; depth < searchDepth; depth++) { // Changed condition to < searchDepth
+      for (let depth = 0; depth < searchDepth; depth++) {
         if (currentLevelNodes.length === 0) break;
 
         const nextLevelNodes: GraphNode[] = [];
@@ -275,7 +258,6 @@ const KnowledgeBase = () => {
           if (connectedData) {
             for (const edge of connectedData.edges) {
               // Only add edges if both source and target are in the current filtered set
-              // This ensures edges only appear if both ends are visible
               const sourceNodeInFilter = nodesInDepth.has(tempNodes.find(n => n.id === edge.source)!);
               const targetNodeInFilter = nodesInDepth.has(tempNodes.find(n => n.id === edge.target)!);
               if (sourceNodeInFilter && targetNodeInFilter) {
@@ -296,8 +278,6 @@ const KnowledgeBase = () => {
       }
 
       // After the loop, filter edges again to ensure only edges between `nodesInDepth` are included.
-      // This is important because `edgesInDepth.add(edge)` might have added edges whose other end
-      // was not yet in `nodesInDepth` but was added in a later iteration or was an initial node.
       const finalNodesInDepthIds = new Set(Array.from(nodesInDepth).map(n => n.id));
       const finalEdgesInDepth = Array.from(edgesInDepth).filter(edge =>
         finalNodesInDepthIds.has(edge.source as string) && finalNodesInDepthIds.has(edge.target as string)
@@ -325,7 +305,6 @@ const KnowledgeBase = () => {
   } else if (allNodes.length === 0 && allEdges.length === 0) {
     alertMessage = "No knowledge graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
   } else if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) {
-    // New condition for specific filter state: if filters were interacted with and either node types or source files are empty
     alertMessage = "Please select node types and/or source files to display the graph.";
   } else if (filteredNodes.length === 0 && (hasFiltersBeenInteracted || nodeSearchQuery || selectedNodeTypes.size > 0 || selectedSourceFiles.size > 0)) {
     alertMessage = "No graph data matches your current filters. Adjust your filters or clear them to see the full graph.";
@@ -334,10 +313,8 @@ const KnowledgeBase = () => {
   }
 
 
-  const handleTogglePanel = useCallback((panelName: 'search' | 'nodeTypes' | 'sourceFiles') => {
-    setShowSearchPanel(panelName === 'search' ? prev => !prev : false);
-    setShowNodeTypesPanel(panelName === 'nodeTypes' ? prev => !prev : false);
-    setShowSourceFilesPanel(panelName === 'sourceFiles' ? prev => !prev : false);
+  const handleTogglePanel = useCallback((panelName: ActiveFilterPanel) => {
+    setActiveFilterPanel(prev => (prev === panelName ? 'none' : panelName));
   }, []);
 
   return (
@@ -350,7 +327,7 @@ const KnowledgeBase = () => {
               edges={filteredEdges}
               onSelect={setSelectedItem}
               selectedItem={selectedItem}
-              onGraphBackgroundClick={closeAllFilterPanels} // Pass the callback here
+              onGraphBackgroundClick={closeAllFilterPanels}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -372,25 +349,25 @@ const KnowledgeBase = () => {
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('search')}
-                  title={showSearchPanel ? "Hide Search Panel" : "Show Search Panel"}
+                  title={activeFilterPanel === 'search' ? "Hide Search Panel" : "Show Search Panel"}
                 >
-                  {showSearchPanel ? <PanelLeftOpen className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+                  {activeFilterPanel === 'search' ? <PanelLeftOpen className="h-4 w-4" /> : <Search className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('nodeTypes')}
-                  title={showNodeTypesPanel ? "Hide Node Types Panel" : "Show Node Types Panel"}
+                  title={activeFilterPanel === 'nodeTypes' ? "Hide Node Types Panel" : "Show Node Types Panel"}
                 >
-                  {showNodeTypesPanel ? <PanelLeftOpen className="h-4 w-4" /> : <Network className="h-4 w-4" />}
+                  {activeFilterPanel === 'nodeTypes' ? <PanelLeftOpen className="h-4 w-4" /> : <Network className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('sourceFiles')}
-                  title={showSourceFilesPanel ? "Hide Source Files Panel" : "Show Source Files Panel"}
+                  title={activeFilterPanel === 'sourceFiles' ? "Hide Source Files Panel" : "Show Source Files Panel"}
                 >
-                  {showSourceFilesPanel ? <PanelLeftOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  {activeFilterPanel === 'sourceFiles' ? <PanelLeftOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
@@ -409,47 +386,41 @@ const KnowledgeBase = () => {
             )}
           </div>
 
-          {/* Filter Panels (absolutely positioned, relative to the new block) */}
-          <div ref={searchPanelRef} id="search-nodes-panel" className={cn(
+          {/* Single Rotating Filter Panel Container */}
+          <div ref={rotatingFilterPanelRef} id="rotating-filter-panel-container" className={cn(
             "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
             "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
-            showSearchPanel ? "translate-x-0" : "-translate-x-full"
+            activeFilterPanel !== 'none' ? "translate-x-0" : "-translate-x-full"
           )}>
-            <SearchNodesPanel
-              searchQuery={nodeSearchQuery}
-              onSearchQueryChange={setNodeSearchQuery}
-              searchDepth={searchDepth}
-              onSearchDepthChange={setSearchDepth}
-              onClose={() => setShowSearchPanel(false)}
-              onFilterInteraction={onFilterInteraction}
-            />
-          </div>
-          <div ref={nodeTypesPanelRef} id="node-types-panel" className={cn(
-            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
-            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
-            showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
-          )}>
-            <NodeTypesPanel
-              nodes={allNodes}
-              selectedNodeTypes={selectedNodeTypes}
-              onSelectedNodeTypesChange={setSelectedNodeTypes}
-              onClose={() => setShowNodeTypesPanel(false)}
-              onFilterInteraction={onFilterInteraction}
-            />
-          </div>
-          <div ref={sourceFilesPanelRef} id="source-files-panel" className={cn(
-            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
-            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
-            showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
-          )}>
-            <SourceFilesPanel
-              nodes={allNodes}
-              edges={allEdges}
-              selectedSourceFiles={selectedSourceFiles}
-              onSelectedSourceFilesChange={setSelectedSourceFiles}
-              onClose={() => setShowSourceFilesPanel(false)}
-              onFilterInteraction={onFilterInteraction}
-            />
+            {activeFilterPanel === 'search' && (
+              <SearchNodesPanel
+                searchQuery={nodeSearchQuery}
+                onSearchQueryChange={setNodeSearchQuery}
+                searchDepth={searchDepth}
+                onSearchDepthChange={setSearchDepth}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
+            {activeFilterPanel === 'nodeTypes' && (
+              <NodeTypesPanel
+                nodes={allNodes}
+                selectedNodeTypes={selectedNodeTypes}
+                onSelectedNodeTypesChange={setSelectedNodeTypes}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
+            {activeFilterPanel === 'sourceFiles' && (
+              <SourceFilesPanel
+                nodes={allNodes}
+                edges={allEdges}
+                selectedSourceFiles={selectedSourceFiles}
+                onSelectedSourceFilesChange={setSelectedSourceFiles}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
           </div>
 
           {/* Detail Panel (right side, higher z-index, relative to the new block) */}
