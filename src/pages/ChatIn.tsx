@@ -356,7 +356,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                                       {message.provenance.map((entry, index) => (
                                         <div key={entry.id} className="border rounded-md p-3 bg-muted">
                                           <div className="flex justify-between items-start mb-1">
-                                              <p className="text-xs font-semibold text-primary/80 break-words"> {/* Added break-words */}
+                                              <p className="text-xs font-semibold text-primary/80">
                                                   Source: {entry.id}
                                               </p>
                                               <Button
@@ -368,7 +368,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                                                   <Tag className="h-3 w-3 mr-1" /> Tag
                                               </Button>
                                           </div>
-                                          <p className="text-xs text-muted-foreground italic mb-2 break-words"> {/* Added break-words */}
+                                          <p className="text-xs text-muted-foreground italic mb-2">
                                             Reason: {entry.reason}
                                           </p>
                                           <Separator className="my-2" />
@@ -472,7 +472,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="text-sm font-semibold">Source: {tag.id}</p>
-                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                                <p className className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     ))}
