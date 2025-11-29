@@ -277,7 +277,7 @@ const Documents = () => {
       ) : (
         <div className="flex flex-col flex-grow space-y-4 pb-4">
           {/* File Management Card */}
-          <Card className="flex flex-col flex-grow"> {/* Removed min-h-[85vh] and added flex-grow */}
+          <Card className="flex flex-col min-h-[85vh]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 border-b">
               <CardTitle className="text-xl font-semibold flex items-center">
                 <FileStack className="h-5 w-5 mr-2" /> File Management
@@ -337,7 +337,7 @@ const Documents = () => {
               {files.length === 0 ? (
                 <p className="text-muted-foreground p-4">No documents uploaded yet. Upload a PDF to get started!</p>
               ) : (
-                <ScrollArea className="flex-grow h-0 hide-scrollbar">
+                <ScrollArea className="flex-grow h-0 hide-scrollbar"> {/* Added hide-scrollbar here */}
                   <div className="overflow-visible">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card">
