@@ -290,7 +290,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanEdgeData(d));
-        d3Refs.current.simulation?.stop(); // Stop simulation on click
+        // d3Refs.current.simulation?.stop(); // Removed this line
       });
     d3Refs.current.link = link; // Store link selection
 
@@ -305,7 +305,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanNodeData(d));
-        d3Refs.current.simulation?.stop(); // Stop simulation on click
+        // d3Refs.current.simulation?.stop(); // Removed this line
       })
       .call(drag(simulation) as any);
     d3Refs.current.node = node; // Store node selection
