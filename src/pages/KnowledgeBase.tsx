@@ -34,7 +34,7 @@ const KnowledgeBase = () => {
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [searchDepth, setSearchDepth] = useState<number>(0); // New state for search depth
   const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
-  const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set()); // Corrected state variable name
+  const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set());
 
   // New state to track if filters have been interacted with
   const [hasFiltersBeenInteracted, setHasFiltersBeenInteracted] = useState(false);
@@ -92,10 +92,10 @@ const KnowledgeBase = () => {
       // On initial load or refresh, if there are nodes, select all by default
       if (processedNodes.length > 0) {
         setSelectedNodeTypes(new Set(processedNodes.map(node => node.type)));
-        setSelectedSourceFiles(new Set(processedNodes.map(node => node.source as string))); // Corrected setter usage
+        setSelectedSourceFiles(new Set(processedNodes.map(node => node.source as string)));
       } else {
         setSelectedNodeTypes(new Set());
-        setSelectedSourceFiles(new Set()); // Corrected setter usage
+        setSelectedSourceFiles(new Set());
       }
       setNodeSearchQuery(""); // Clear search query on refresh
       setSearchDepth(0); // Reset search depth on refresh
@@ -125,7 +125,7 @@ const KnowledgeBase = () => {
       setNodeSearchQuery("");
       setSearchDepth(0);
       setSelectedNodeTypes(new Set());
-      setSelectedSourceFiles(new Set()); // Corrected setter usage
+      setSelectedSourceFiles(new Set());
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
@@ -139,18 +139,22 @@ const KnowledgeBase = () => {
       const sourceFilesPanelElement = document.getElementById('source-files-panel');
       const filterButtonsContainer = document.getElementById('filter-buttons-container');
       
-      // Check if the click is inside any of the main panels, their trigger buttons,
-      // or the dropdown content associated with the search panel.
+      // Check if the click is inside any of the main panels or their trigger buttons
       const isClickInsidePanelOrButton = (
         (searchPanelElement && searchPanelElement.contains(target)) ||
         (nodeTypesPanelElement && nodeTypesPanelElement.contains(target)) ||
         (sourceFilesPanelElement && sourceFilesPanelElement.contains(target)) ||
-        (filterButtonsContainer && filterButtonsContainer.contains(target)) ||
-        target.closest('.search-depth-dropdown-content') // This checks if the click is within the dropdown content
+        (filterButtonsContainer && filterButtonsContainer.contains(target))
       );
 
-      // If the click is outside all panels, their buttons, and the dropdown content, close any open panels.
-      if (!isClickInsidePanelOrButton) {
+      // Check if the click is inside a Radix UI portal (which includes dropdowns, popovers, etc.)
+      // Radix UI components often render their content in a portal, and these portals
+      // are typically direct children of <body> or a designated portal root.
+      // They often have attributes like `data-radix-popper-content` or `data-radix-dropdown-menu-content`.
+      const isClickInsideRadixPortal = target.closest('[data-radix-popper-content], [data-radix-dropdown-menu-content]');
+
+      // If the click is outside all panels, their buttons, AND not inside a Radix portal, close any open panels.
+      if (!isClickInsidePanelOrButton && !isClickInsideRadixPortal) {
         if (showSearchPanel || showNodeTypesPanel || showSourceFilesPanel) {
           setShowSearchPanel(false);
           setShowNodeTypesPanel(false);
@@ -175,7 +179,7 @@ const KnowledgeBase = () => {
   const { filteredNodes, filteredEdges } = useMemo(() => {
     // Condition to explicitly show an empty graph if filters have been interacted with
     // AND either no node types or no source files are selected.
-    if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) { // Corrected variable name
+    if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) {
       return { filteredNodes: [], filteredEdges: [] };
     }
 
@@ -186,8 +190,8 @@ const KnowledgeBase = () => {
     if (selectedNodeTypes.size > 0) {
       tempNodes = tempNodes.filter((node) => selectedNodeTypes.has(node.type));
     }
-    if (selectedSourceFiles.size > 0) { // Corrected variable name
-      tempNodes = tempNodes.filter((node) => selectedSourceFiles.has(node.source as string)); // Corrected variable name
+    if (selectedSourceFiles.size > 0) {
+      tempNodes = tempNodes.filter((node) => selectedSourceFiles.has(node.source as string));
     }
 
     // Filter edges based on the already filtered nodes and source files
@@ -196,7 +200,7 @@ const KnowledgeBase = () => {
       (edge) =>
         preFilteredNodeIds.has(edge.source as string) &&
         preFilteredNodeIds.has(edge.target as string) &&
-        (selectedSourceFiles.size === 0 || selectedSourceFiles.has(edge.source_file as string)) // Corrected variable name
+        (selectedSourceFiles.size === 0 || selectedSourceFiles.has(edge.source_file as string))
     );
 
     // If there's a search query, apply depth filtering
@@ -294,10 +298,10 @@ const KnowledgeBase = () => {
     alertMessage = error;
   } else if (allNodes.length === 0 && allEdges.length === 0) {
     alertMessage = "No knowledge graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
-  } else if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) { // Corrected variable name
+  } else if (hasFiltersBeenInteracted && (selectedNodeTypes.size === 0 || selectedSourceFiles.size === 0)) {
     // New condition for specific filter state: if filters were interacted with and either node types or source files are empty
     alertMessage = "Please select node types and/or source files to display the graph.";
-  } else if (filteredNodes.length === 0 && (hasFiltersBeenInteracted || nodeSearchQuery || selectedNodeTypes.size > 0 || selectedSourceFiles.size > 0)) { // Corrected variable name
+  } else if (filteredNodes.length === 0 && (hasFiltersBeenInteracted || nodeSearchQuery || selectedNodeTypes.size > 0 || selectedSourceFiles.size > 0)) {
     alertMessage = "No graph data matches your current filters. Adjust your filters or clear them to see the full graph.";
   } else if (filteredNodes.length === 0) {
     alertMessage = "No graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
@@ -414,8 +418,8 @@ const KnowledgeBase = () => {
             <SourceFilesPanel
               nodes={allNodes}
               edges={allEdges}
-              selectedSourceFiles={selectedSourceFiles} // Corrected prop name
-              onSelectedSourceFilesChange={setSelectedSourceFiles} // Corrected setter usage
+              selectedSourceFiles={selectedSourceFiles}
+              onSelectedSourceFilesChange={setSelectedSourceFiles}
               onClose={() => setShowSourceFilesPanel(false)}
               onFilterInteraction={onFilterInteraction}
             />
