@@ -60,8 +60,8 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            To confirm deletion of <span className={cn("font-semibold text-foreground inline-block max-w-full break-words")}>{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
+          <p className="text-sm text-muted-foreground max-w-full break-words">
+            To confirm deletion of <span className="font-semibold text-foreground">{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
           </p>
           <div>
             <Label htmlFor="delete-confirm" className="sr-only">
