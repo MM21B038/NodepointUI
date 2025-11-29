@@ -1,23 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { FolderCog, Info, Loader2, Trash2 } from "lucide-react"; // Added Trash2
+import { FolderCog, Info, Loader2, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, deleteWorkspace } from "@/database/workspaceStorage"; // Added deleteWorkspace
+import { getWorkspaces, deleteWorkspace } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog"; // Added DeleteConfirmationDialog
+import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // State for delete confirmation dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -26,7 +25,7 @@ const WorkspaceManagement = () => {
     setIsLoading(true);
     try {
       const list = await getWorkspaces();
-      list.sort((a, b) => b.localeCompare(a)); // Sort in descending order
+      list.sort((a, b) => b.localeCompare(a));
       setWorkspaces(list);
 
       if (currentWorkspace && !list.includes(currentWorkspace)) {
@@ -35,7 +34,7 @@ const WorkspaceManagement = () => {
       if (!currentWorkspace && list.length > 0) {
         setCurrentWorkspace(list[0]);
       } else if (list.length === 0) {
-        setCurrentWorkspace(null); // Ensure current workspace is null if no workspaces exist
+        setCurrentWorkspace(null);
       }
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
@@ -68,7 +67,6 @@ const WorkspaceManagement = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully.`, { id: loadingToastId });
-      // After deletion, refetch workspaces to update the list and currentWorkspace state
       fetchWorkspaces();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
@@ -109,36 +107,46 @@ const WorkspaceManagement = () => {
                   <li
                     key={workspace}
                     className={cn(
-                      "flex items-center justify-between p-3 transition-colors",
+                      "flex items-center justify-between p-2 transition-colors", // Reduced padding to p-2
                       currentWorkspace === workspace ? "bg-primary text-primary-foreground" : "hover:bg-accent/50",
                     )}
                   >
                     <span
                       className={cn(
-                        "font-medium truncate flex-grow cursor-pointer", // Added cursor-pointer
-                        currentWorkspace === workspace && "text-primary-foreground" // Ensure text color is correct for current
+                        "font-medium truncate flex-grow",
+                        currentWorkspace === workspace && "text-primary-foreground"
                       )}
-                      onClick={() => handleSelectWorkspace(workspace)} // Make the name clickable to select
                     >
                       {workspace}
                       {currentWorkspace === workspace && " (Current)"}
                     </span>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent selecting workspace when clicking delete
-                        handleDeleteClick(workspace);
-                      }}
-                      disabled={isDeleting}
-                      className="ml-4" // Add some margin
-                    >
-                      {isDeleting && workspaceToDelete === workspace ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
+                    <div className="flex items-center space-x-2 ml-4"> {/* Added space-x-2 for button spacing */}
+                      {currentWorkspace !== workspace && ( // Only show select button if not current workspace
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleSelectWorkspace(workspace)}
+                          disabled={isDeleting}
+                        >
+                          Select
+                        </Button>
                       )}
-                    </Button>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(workspace);
+                        }}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting && workspaceToDelete === workspace ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -147,7 +155,6 @@ const WorkspaceManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       {workspaceToDelete && (
         <DeleteConfirmationDialog
           isOpen={isDeleteDialogOpen}
