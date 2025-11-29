@@ -154,7 +154,7 @@ const WorkspaceManagement = () => {
     <div className="flex-grow h-full p-4 bg-gradient-to-br from-background to-muted/20">
       <ResizablePanelGroup
         direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 32px)] rounded-xl border shadow-lg bg-card"
+        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 8px - 24px - 16px - 16px)] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
