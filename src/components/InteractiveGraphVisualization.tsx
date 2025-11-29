@@ -8,27 +8,15 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-// --- Color Mapping for React Components (DetailPanel & Filters) ---
-// This is kept simple for Tailwind classes in the React UI
-const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500',
-  'Organization': 'bg-green-500',
-  'Concept': 'bg-purple-500',
-  'Date': 'bg-yellow-500',
-  'Location': 'bg-red-500',
-  'default': 'bg-gray-400',
-};
-
-export const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
-
 // --- D3 Color Scale for Visualization ---
 // Using d3.schemeSet3 which provides 12 bright, distinct colors.
 const colorScale = d3.scaleOrdinal(d3.schemeSet3);
 
-// Function to get D3 colors based on node type and saturation state
-const getNodeD3Colors = (type: string, isDesaturated: boolean) => {
-  if (isDesaturated) {
-    return { fill: "transparent", stroke: "transparent" }; // Completely transparent
+// Function to get D3 colors based on node type and faded state
+const getNodeD3Colors = (type: string, isFaded: boolean) => {
+  if (isFaded) {
+    // Faded gray for non-highlighted nodes
+    return { fill: "hsl(var(--muted))", stroke: "hsl(var(--muted-foreground))" };
   }
   const fill = colorScale(type);
   // Calculate a darker stroke color for contrast
@@ -36,9 +24,10 @@ const getNodeD3Colors = (type: string, isDesaturated: boolean) => {
   return { fill, stroke };
 };
 
-// Function to get D3 color for edges based on saturation state
-const getEdgeD3Color = (isDesaturated: boolean) => {
-  return isDesaturated ? "transparent" : "hsl(var(--muted-foreground))"; // Completely transparent
+// Function to get D3 color for edges based on faded state
+const getEdgeD3Color = (isFaded: boolean) => {
+  // Faded muted-foreground for non-highlighted edges, primary for highlighted
+  return isFaded ? "hsl(var(--muted-foreground))" : "hsl(var(--primary))";
 };
 
 
@@ -197,12 +186,12 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     link
       .attr("stroke-width", d => isEdgeHighlighted(d) ? 2 : 1)
       .attr("stroke", d => getEdgeD3Color(!isEdgeHighlighted(d)))
-      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 0.8 : 0);
+      .attr("stroke-opacity", d => isEdgeHighlighted(d) ? 0.8 : 0.2); // Higher opacity for highlighted, lower for faded
 
     node
       .attr("fill", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).fill)
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
-      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0)
+      .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0.3) // Higher opacity for highlighted, lower for faded
       .attr("class", d => cn(
         "cursor-pointer transition-all",
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
@@ -233,7 +222,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .attr("height", bbox.height + 2 * padding);
 
       if (!isNodeHighlighted(d)) {
-        currentLabelGroup.attr("opacity", 0);
+        currentLabelGroup.attr("opacity", 0); // Keep labels hidden for non-highlighted nodes to avoid clutter
         return;
       }
 
@@ -422,8 +411,8 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
     return (
       <div className="p-4 space-y-3">
         <div className="flex items-center space-x-2">
-          {/* Note: DetailPanel still uses the simple Tailwind color mapping */}
-          <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
+          {/* Use D3 color scale for consistency */}
+          <span className={cn("h-4 w-4 rounded-full")} style={{ backgroundColor: colorScale(item.type) }}></span>
           {/* Ensure node label wraps aggressively */}
           <h4 className="text-lg font-semibold break-words flex-1 min-w-0 max-w-[65%]">{item.label}</h4>
           <Badge variant="secondary" className="absolute top-0 right-[5%] mt-4">{item.type}</Badge>
