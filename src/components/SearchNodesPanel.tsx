@@ -61,7 +61,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4">
+      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-y-auto"> {/* Added overflow-y-auto */}
         <Label htmlFor="node-search" className="sr-only">Search Nodes</Label>
         <Input
           id="node-search"
@@ -84,13 +84,13 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="w-full justify-between bg-background/50 border-primary/20 whitespace-normal" // Added whitespace-normal here
+                className="w-full justify-between bg-background/50 border-primary/20 whitespace-normal"
                 disabled={!searchQuery}
               >
-                <span className="flex-1 text-left truncate"> {/* Added flex-1 text-left truncate */}
+                <span className="flex-1 text-left truncate">
                   {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
                 </span>
-                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /> {/* Added shrink-0 */}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content">
@@ -111,7 +111,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <p className="text-xs text-muted-foreground break-words max-w-full"> {/* Added max-w-full */}
+          <p className="text-xs text-muted-foreground break-words max-w-full">
             Controls how many "hops" away from the searched node(s) are displayed.
           </p>
         </div>
