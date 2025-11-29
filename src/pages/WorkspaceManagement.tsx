@@ -238,7 +238,7 @@ const WorkspaceManagement = () => {
                 </div>
               ) : (
                 <div className="relative flex-grow"> {/* New wrapper for grid and overlays */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch"> {/* Added items-stretch */}
                     {currentWorkspacesToDisplay.map((workspace) => (
                       <WorkspaceCard
                         key={workspace}
