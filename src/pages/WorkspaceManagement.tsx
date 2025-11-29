@@ -138,30 +138,26 @@ const WorkspaceManagement = () => {
         className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 32px)] rounded-xl border shadow-lg bg-card"
       >
         {/* Left Panel: Create and Search */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-6"> {/* Reduced padding and space-y */}
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4"> {/* Reduced padding and space-y */}
           {/* Create Workspace Section */}
-          <Card className="flex-shrink-0">
-            <CardHeader className="pb-3"> {/* Reduced padding */}
-              <CardTitle className="flex items-center text-xl">
-                <Plus className="h-5 w-5 mr-2 text-primary" /> Create New Workspace
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3"> {/* Reduced padding and space-y */}
-              <div>
-                <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
-                <Input
-                  id="new-workspace-name"
-                  placeholder="Enter new workspace name"
-                  value={newWorkspaceName}
-                  onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  disabled={isCreating}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleCreateWorkspace();
-                    }
-                  }}
-                />
-              </div>
+          <div className="space-y-3"> {/* Reduced space-y */}
+            <h2 className="text-xl font-bold flex items-center text-primary"> {/* Reduced text size */}
+              <Plus className="h-5 w-5 mr-2" /> Create New Workspace {/* Reduced icon size */}
+            </h2>
+            <div className="space-y-2"> {/* Reduced space-y */}
+              <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
+              <Input
+                id="new-workspace-name"
+                placeholder="Enter new workspace name"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                disabled={isCreating}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCreateWorkspace();
+                  }
+                }}
+              />
               <Button
                 onClick={handleCreateWorkspace}
                 disabled={isCreating || !newWorkspaceName.trim()}
@@ -174,19 +170,17 @@ const WorkspaceManagement = () => {
                 )}
                 Create
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <Separator />
 
           {/* Search Workspaces Section */}
-          <Card className="flex-shrink-0">
-            <CardHeader className="pb-3"> {/* Reduced padding */}
-              <CardTitle className="flex items-center text-xl">
-                <Search className="h-5 w-5 mr-2 text-primary" /> Search Workspaces
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3"> {/* Reduced padding and space-y */}
+          <div className="space-y-3"> {/* Reduced space-y */}
+            <h2 className="text-xl font-bold flex items-center text-primary"> {/* Reduced text size */}
+              <Search className="h-5 w-5 mr-2" /> Search Workspaces {/* Reduced icon size */}
+            </h2>
+            <div className="space-y-2"> {/* Reduced space-y */}
               <Label htmlFor="search-workspace" className="sr-only">Search</Label>
               <Input
                 id="search-workspace"
@@ -194,8 +188,8 @@ const WorkspaceManagement = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
@@ -224,7 +218,7 @@ const WorkspaceManagement = () => {
                   <p>No workspaces match your search term.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> {/* Reduced gap */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"> {/* Reduced gap */}
                   {filteredWorkspaces.map((workspace) => (
                     <WorkspaceCard
                       key={workspace}
