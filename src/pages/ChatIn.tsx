@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react"; // Removed ArrowDown
+import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, Tag, X, Bot, User } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getChatHistory, ProvenanceEntry, ChatMessage, listFiles, performSearch, SearchEngineType } from "@/database/workspaceStorage";
@@ -26,20 +26,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
 
 interface ChatInProps {
-  onShowScrollToBottomChange?: (show: boolean) => void;
-  onScrollToBottom?: () => void;
-  chatScrollViewportRef?: React.RefObject<HTMLDivElement>;
+  // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
 }
 
 const ChatIn: React.FC<ChatInProps> = ({
-  onShowScrollToBottomChange,
-  onScrollToBottom,
-  chatScrollViewportRef,
+  // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
 }) => {
   const { currentWorkspace } = useWorkspace();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Still used for internal scrolling
 
   const [currentInput, setCurrentInput] = useState("");
   const [selectedEngine, setSelectedEngine] = useState<string>("agent_search");
@@ -183,13 +179,7 @@ const ChatIn: React.FC<ChatInProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, [messages, isLoadingHistory]);
 
-  // Effect for handling the visibility of the "scroll to bottom" button
-  useEffect(() => {
-    if (onShowScrollToBottomChange) {
-      onShowScrollToBottomChange(true); // Always show for debugging
-      console.log("ChatIn Debug: Calling onShowScrollToBottomChange(true)");
-    }
-  }, [onShowScrollToBottomChange]); // Only re-run if the callback itself changes
+  // Removed Effect for handling the visibility of the "scroll to bottom" button
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCurrentInput(e.target.value);
@@ -302,7 +292,7 @@ const ChatIn: React.FC<ChatInProps> = ({
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <div className="flex-grow flex flex-col border rounded-lg shadow-sm z-[0]">
-            <ScrollArea className="flex-grow h-0 w-full !transform-none" viewportRef={chatScrollViewportRef}>
+            <ScrollArea className="flex-grow h-0 w-full !transform-none" viewportRef={messagesEndRef}> {/* Changed to messagesEndRef */}
               <div className={cn(
                 "p-4 space-y-6 relative",
                 (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
