@@ -194,7 +194,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .attr("stroke", d => getNodeD3Colors(d.type, !isNodeHighlighted(d)).stroke)
       .attr("opacity", d => isNodeHighlighted(d) ? 1 : 0) // Full opacity for highlighted, 0 for hidden
       .attr("class", d => cn(
-        "cursor-pointer transition-all",
+        "cursor-pointer", // Removed transition-all
         selectedItem && 'id' in selectedItem && selectedItem.id === d.id ? "ring-4 ring-offset-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"
       ));
 
@@ -285,7 +285,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .selectAll("line")
       .data(graphData.edges)
       .join("line")
-      .attr("class", "cursor-pointer transition-all")
+      .attr("class", "cursor-pointer") // Removed transition-all
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanEdgeData(d));
@@ -300,7 +300,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .data(graphData.nodes)
       .join("circle")
       .attr("r", 10)
-      .attr("class", "transition-all") // Add transition for smoother highlighting
+      // Removed transition-all
       .on("click", (event, d) => {
         event.stopPropagation();
         onSelect(cleanNodeData(d));
