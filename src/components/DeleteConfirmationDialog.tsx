@@ -52,7 +52,13 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleClose}>
-      <AlertDialogContent className="w-full sm:max-w-md">
+      <AlertDialogContent 
+        className={cn(
+          "w-full sm:max-w-md",
+          "bg-card/80 backdrop-blur-sm", // Translucent background with blur
+          "border-t-4 border-b-4 border-destructive" // Red top and bottom borders
+        )}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle className="text-red-600">{title}</AlertDialogTitle>
           <AlertDialogDescription className="w-full break-words">
@@ -88,7 +94,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
               onClick={handleConfirm}
               disabled={!isConfirmationValid}
             >
-              I understand, Delete {/* Changed button text here */}
+              I understand, Delete
             </Button>
           </AlertDialogAction>
         </AlertDialogFooter>
