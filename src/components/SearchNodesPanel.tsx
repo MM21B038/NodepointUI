@@ -40,18 +40,13 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
 
   const handleDepthSelect = (depth: number) => {
     onSearchDepthChange(depth);
-    onDepthDropdownOpen(false); // Close dropdown after selection
+    setIsDepthDropdownOpen(false); // Close dropdown after selection
   };
 
   const depthOptions = Array.from({ length: 6 }, (_, i) => i);
 
-  // Add onMouseDown to stop propagation for clicks within the panel
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
-
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onMouseDown={handleMouseDown}>
+    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg" onClick={e => e.stopPropagation()}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
