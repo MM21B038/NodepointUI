@@ -31,7 +31,7 @@ const PieChartLegendDropdown: React.FC<PieChartLegendDropdownProps> = ({ data, c
         side="bottom" // Always open downwards
         sideOffset={5} // Small gap from trigger
         collisionPadding={10} // Ensure dropdown stays within viewport with padding
-        className="z-50 w-auto max-w-[min(300px, calc(100vw - 32px))] max-h-[140px] overflow-y-auto hide-scrollbar p-2" // Adjusted max-h
+        className="z-50 w-auto max-w-[min(300px, calc(100vw - 32px))] max-h-[196px] overflow-y-auto hide-scrollbar p-2" // Adjusted max-h to 196px for 7 items
       >
         {data.length === 0 ? (
           <DropdownMenuItem disabled>No node types</DropdownMenuItem>
