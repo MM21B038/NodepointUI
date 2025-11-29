@@ -28,13 +28,13 @@ const PieChartLegendDropdown: React.FC<PieChartLegendDropdownProps> = ({ data, c
       </DropdownMenuTrigger>
       <DropdownMenuContent 
         align="end" 
-        className="w-auto min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[300px] max-h-[300px] overflow-y-auto hide-scrollbar p-1"
+        className="w-auto min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[300px] max-h-[250px] overflow-y-auto hide-scrollbar p-2"
       >
         {data.length === 0 ? (
           <DropdownMenuItem disabled>No node types</DropdownMenuItem>
         ) : (
           data.map((entry, index) => (
-            <DropdownMenuItem key={`legend-item-${entry.name}`} className="flex items-center justify-between w-full overflow-hidden">
+            <DropdownMenuItem key={`legend-item-${entry.name}`} className="flex items-center justify-between w-full overflow-hidden py-1 px-2">
               <div className="flex items-center flex-grow min-w-0">
                 <span
                   className={cn("h-3 w-3 rounded-full mr-2 flex-shrink-0")}
