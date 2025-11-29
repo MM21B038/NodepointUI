@@ -208,7 +208,12 @@
 
 /* Apply hide-scrollbar to all Radix UI ScrollArea viewports */
 [data-radix-scroll-area-viewport] {
-  @apply hide-scrollbar;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 /* Custom classes for navbar background */
