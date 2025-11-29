@@ -87,7 +87,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                 variant="outline"
                 className="w-full justify-between bg-background/50 border-primary/20"
                 disabled={!searchQuery}
-                onClick={(e) => e.stopPropagation()} // Stop propagation for clicks on the trigger
+                // Removed onClick={(e) => e.stopPropagation()}
               >
                 {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
                 <ChevronDown className="ml-2 h-4 w-4 opacity-50" />

@@ -148,39 +148,52 @@ const KnowledgeBase = () => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      // Check if the click is inside any of the panel elements
-      const isClickInsidePanel = (
-        (searchPanelRef.current && searchPanelRef.current.contains(target)) ||
-        (nodeTypesPanelRef.current && nodeTypesPanelRef.current.contains(target)) ||
-        (sourceFilesPanelRef.current && sourceFilesPanelRef.current.contains(target))
-      );
-
-      // Check if the click is inside the filter buttons container
+      // Check if the click is inside any of the filter buttons
       const isClickInsideFilterButtons = (
         filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)
       );
+      if (isClickInsideFilterButtons) return; // Don't close if clicking on a filter button
 
       // Check if the click is inside the main graph visualization container
       const isClickInsideGraphContainer = (
         graphContainerRef.current && graphContainerRef.current.contains(target)
       );
+      // If clicking inside the graph container, deselect item and close panels
+      if (isClickInsideGraphContainer) {
+        setSelectedItem(null);
+        closeAllFilterPanels();
+        return;
+      }
 
       // Check if the click is inside any Radix UI portal content (e.g., dropdowns, popovers)
+      // This is crucial for dropdowns like the search depth selector
       const isClickInsideRadixPortal = target.closest(
         '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
       );
+      if (isClickInsideRadixPortal) return; // Don't close if clicking inside a Radix portal
 
-      // If the click is outside all panels, their buttons, Radix portals, AND the graph container, close any open panels.
-      if (!isClickInsidePanel && !isClickInsideFilterButtons && !isClickInsideRadixPortal && !isClickInsideGraphContainer) {
-        closeAllFilterPanels();
+      // Now, check if the click is outside any *open* panel
+      if (showSearchPanel && searchPanelRef.current && !searchPanelRef.current.contains(target)) {
+        setShowSearchPanel(false);
+      }
+      if (showNodeTypesPanel && nodeTypesPanelRef.current && !nodeTypesPanelRef.current.contains(target)) {
+        setShowNodeTypesPanel(false);
+      }
+      if (showSourceFilesPanel && sourceFilesPanelRef.current && !sourceFilesPanelRef.current.contains(target)) {
+        setShowSourceFilesPanel(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside); // Use mousedown for better event order
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showSearchPanel, showNodeTypesPanel, showSourceFilesPanel, closeAllFilterPanels]);
+  }, [
+    showSearchPanel, setShowSearchPanel,
+    showNodeTypesPanel, setShowNodeTypesPanel,
+    showSourceFilesPanel, setShowSourceFilesPanel,
+    setSelectedItem, closeAllFilterPanels,
+  ]);
 
 
   const handleRefreshGraph = () => {
