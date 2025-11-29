@@ -32,7 +32,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         "cursor-pointer group", // Added group for hover effects
         isCurrent
           ? "border-2 border-primary ring-2 ring-primary/50 shadow-lg scale-[1.02] bg-gradient-to-br from-primary/10 to-background"
-          : "border bg-card hover:shadow-lg hover:scale-[1.02] hover:border-accent",
+          : "border bg-card hover:shadow-lg hover:scale-[1.02] hover:border-accent hover:bg-secondary/20", // Added hover background
       )}
       onClick={() => onSelect(workspaceName)}
     >
@@ -50,20 +50,6 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex justify-end items-center space-x-2 mt-4">
-        {!isCurrent && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent selecting workspace when clicking select button
-              onSelect(workspaceName);
-            }}
-            disabled={isDeleting}
-            className="group-hover:opacity-100 opacity-0 transition-opacity duration-200" // Show on hover
-          >
-            Select
-          </Button>
-        )}
         <Button
           variant="destructive"
           size="icon"
@@ -73,8 +59,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           }}
           disabled={isDeleting}
           className={cn(
-            "group-hover:opacity-100 transition-opacity duration-200", // Always visible if current, show on hover if not
-            isCurrent ? "opacity-100" : "opacity-0"
+            "transition-opacity duration-200",
+            isCurrent ? "opacity-100" : "opacity-70 group-hover:opacity-100" // Always visible if current, more visible on hover if not
           )}
         >
           {isThisWorkspaceDeleting ? (
