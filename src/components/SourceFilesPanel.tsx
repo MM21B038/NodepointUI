@@ -88,8 +88,8 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
             Clear All
           </Button>
         </div>
-        <ScrollArea className="flex-grow pr-4 hide-scrollbar">
-          <div className="grid gap-2">
+        <ScrollArea className="flex-grow hide-scrollbar"> {/* Removed pr-4 */}
+          <div className="grid gap-2 p-4"> {/* Added p-4 here */}
             {uniqueSourceFiles.map((file) => (
               <div key={file} className="flex items-center space-x-2">
                 <Checkbox
