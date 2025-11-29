@@ -341,8 +341,8 @@ const KnowledgeBase = () => {
             </div>
           )}
 
-          {/* Filter/Refresh Buttons - now fixed on the left */}
-          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-1/2 left-4 -translate-y-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex flex-col space-y-2">
+          {/* Filter/Refresh Buttons - now fixed at top center */}
+          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 -translate-x-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex flex-row space-x-2">
             {currentWorkspace && (
               <>
                 <Button
