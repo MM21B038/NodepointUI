@@ -55,7 +55,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center">
           <Search className="h-5 w-5 mr-2" />
-          <CardTitle className="text-xl">Search Nodes</CardTitle>
+          <CardTitle className="text-xl flex-1 min-w-0">Search Nodes</CardTitle>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} title="Close Search Panel">
           <X className="h-4 w-4" />
@@ -79,7 +79,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
             open={isDepthDropdownOpen}
             onOpenChange={(isOpen) => {
               setIsDepthDropdownOpen(isOpen);
-              onFilterInteraction(); // Also trigger interaction on dropdown open/close
+              // Removed onFilterInteraction() from here as it's not a direct filter change
             }}
           >
             <DropdownMenuTrigger asChild>
@@ -87,6 +87,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
                 variant="outline"
                 className="w-full justify-between bg-background/50 border-primary/20"
                 disabled={!searchQuery}
+                onClick={(e) => e.stopPropagation()} // Stop propagation for clicks on the trigger
               >
                 {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
                 <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
@@ -110,7 +111,7 @@ const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground break-words">
             Controls how many "hops" away from the searched node(s) are displayed.
           </p>
         </div>
