@@ -76,7 +76,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
             </span>
             {/* Tick Icon for Current Workspace */}
             {isCurrent && (
-              <CheckCircle2 className="h-5 w-5 ml-2 text-primary flex-shrink-0" />
+              <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
             )}
           </CardTitle>
           {/* Removed the Badge for "Current" */}
