@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeGraph, GraphNode, GraphEdge, FileReference } from "@/database/workspaceStorage";
 import { showError } from "@/utils/toast";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } => "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
@@ -378,7 +378,7 @@ const KnowledgeBase = () => {
           {/* Filter Panels (absolutely positioned, relative to the new block) */}
           <div id="search-nodes-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "top-4 bottom-4", // Adjusted top and removed pl-8 as p-4 is already there
+            "h-[80vh] top-1/2 -translate-y-1/2", // Set vh height and center vertically
             showSearchPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SearchNodesPanel
@@ -392,7 +392,7 @@ const KnowledgeBase = () => {
           </div>
           <div id="node-types-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "top-4 bottom-4", // Adjusted top and removed pl-8
+            "h-[80vh] top-1/2 -translate-y-1/2", // Set vh height and center vertically
             showNodeTypesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <NodeTypesPanel
@@ -405,7 +405,7 @@ const KnowledgeBase = () => {
           </div>
           <div id="source-files-panel" className={cn(
             "absolute left-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-            "top-4 bottom-4", // Adjusted top and removed pl-8
+            "h-[80vh] top-1/2 -translate-y-1/2", // Set vh height and center vertically
             showSourceFilesPanel ? "translate-x-0" : "-translate-x-full"
           )}>
             <SourceFilesPanel
@@ -422,7 +422,7 @@ const KnowledgeBase = () => {
           {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
             <div className={cn(
               "absolute right-0 z-20 max-w-sm w-full p-4 transition-transform duration-300 ease-in-out",
-              "top-4 bottom-4", // Adjusted top and removed pr-8
+              "h-[80vh] top-1/2 -translate-y-1/2", // Set vh height and center vertically
               selectedItem ? "translate-x-0" : "translate-x-full"
             )}>
               <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">
