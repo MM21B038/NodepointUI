@@ -46,6 +46,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     chatScrollViewportRef: chatScrollViewportRef,
   } : {};
 
+  // Debugging logs
+  console.log("Layout Debug: location.pathname =", location.pathname);
+  console.log("Layout Debug: isChatInPage =", isChatInPage);
+  console.log("Layout Debug: showScrollToBottomButton (initial/current render) =", showScrollToBottomButton);
+
+  // New useEffect to log when showScrollToBottomButton state actually changes
+  useEffect(() => {
+    console.log("Layout Debug: showScrollToBottomButton state changed to =", showScrollToBottomButton);
+  }, [showScrollToBottomButton]);
+
   return (
     <div className="flex flex-col h-screen">
       <Navbar />
