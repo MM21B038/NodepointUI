@@ -309,127 +309,125 @@ const ChatIn: React.FC<ChatInProps> = ({
           </Alert>
         </div>
       ) : (
-        <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
-          <div className="flex-grow flex flex-col border rounded-lg shadow-sm z-[0]">
-            <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar" viewportRef={chatScrollViewportRef}>
-              <div className={cn(
-                "p-4 space-y-6 relative",
-                (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
-              )}>
-                {isLoadingHistory ? (
-                  <div className="text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
-                    <span>Loading chat history...</span>
-                  </div>
-                ) : messages.length === 0 && !isSending ? (
-                  <Alert className="max-w-lg text-center">
-                    <MessageCircle className="h-6 w-6 mx-auto mb-2" />
-                    <AlertTitle>No Chat History Yet!</AlertTitle>
-                    <AlertDescription>
-                      Start a conversation by typing a message below. Your chat history will appear here.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <>
-                    {messages.map((message) => (
+        <div className="flex flex-col h-full mt-4 border rounded-lg shadow-sm">
+          <ScrollArea className="flex-grow p-4" viewportRef={chatScrollViewportRef}>
+            <div className={cn(
+              "space-y-6",
+              (isLoadingHistory || (messages.length === 0 && !isSending)) && "h-full flex items-center justify-center"
+            )}>
+              {isLoadingHistory ? (
+                <div className="text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+                  <span>Loading chat history...</span>
+                </div>
+              ) : messages.length === 0 && !isSending ? (
+                <Alert className="max-w-lg text-center">
+                  <MessageCircle className="h-6 w-6 mx-auto mb-2" />
+                  <AlertTitle>No Chat History Yet!</AlertTitle>
+                  <AlertDescription>
+                    Start a conversation by typing a message below. Your chat history will appear here.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={cn(
+                        "flex gap-3",
+                        message.type === "user" ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      {message.type === "bot" && (
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-secondary text-secondary-foreground rounded-md">
+                            <BotIcon className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <div
-                        key={message.id}
                         className={cn(
-                          "flex gap-3",
-                          message.type === "user" ? "justify-end" : "justify-start"
+                          "max-w-[75%] p-3 rounded-xl flex flex-col gap-3",
+                          message.type === "user"
+                            ? "bg-primary text-primary-foreground rounded-br-none"
+                            : "bg-secondary text-secondary-foreground rounded-bl-none"
                         )}
                       >
-                        {message.type === "bot" && (
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-secondary text-secondary-foreground rounded-md">
-                              <BotIcon className="h-5 w-5" />
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
-                        <div
-                          className={cn(
-                            "max-w-[75%] p-3 rounded-xl flex flex-col gap-3",
-                            message.type === "user"
-                              ? "bg-primary text-primary-foreground rounded-br-none"
-                              : "bg-secondary text-secondary-foreground rounded-bl-none"
-                          )}
-                        >
-                          <div className="prose dark:prose-invert text-sm">
-                            <ReactMarkdown>
-                              {message.text}
-                            </ReactMarkdown>
-                          </div>
-                          
-                          {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
-                            <div className="border rounded-lg p-3 bg-card shadow-sm">
-                              <Accordion type="single" collapsible className="w-full">
-                                <AccordionItem value="provenance-item" className="border-none">
-                                  <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
-                                    <span className="flex items-center">
-                                      <FileText className="h-4 w-4 mr-2" />
-                                      Thinking Process | Provenance ({message.provenance.length})
-                                    </span>
-                                  </AccordionTrigger>
-                                  <AccordionContent className="pt-2 pb-0">
-                                    <div className="space-y-3">
-                                      {message.provenance.map((entry, index) => (
-                                        <div key={entry.id} className="border rounded-md p-3 bg-muted">
-                                          <div className="flex justify-between items-start mb-1">
-                                              <p className="text-xs font-semibold text-primary/80">
-                                                  Source: {entry.id}
-                                              </p>
-                                              <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => handleTagProvenance(entry)}
-                                                  className="h-6 px-2 py-1 text-xs"
-                                              >
-                                                  <Tag className="h-3 w-3 mr-1" /> Tag
-                                              </Button>
-                                          </div>
-                                          <p className="text-xs text-muted-foreground italic mb-2">
-                                            Reason: {entry.reason}
-                                          </p>
-                                          <Separator className="my-2" />
-                                          <p className="text-sm">
-                                            <ReactMarkdown>{entry.snippet}</ReactMarkdown>
-                                          </p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
-                            </div>
-                          )}
-                          <span className="block text-xs opacity-70 mt-1 text-right">
-                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                        <div className="prose dark:prose-invert text-sm">
+                          <ReactMarkdown>
+                            {message.text}
+                          </ReactMarkdown>
                         </div>
-                        {message.type === "user" && (
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary text-primary-foreground rounded-md">
-                              <UserIcon className="h-5 w-5" />
-                            </AvatarFallback>
-                          </Avatar>
+                        
+                        {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
+                          <div className="border rounded-lg p-3 bg-card shadow-sm">
+                            <Accordion type="single" collapsible className="w-full">
+                              <AccordionItem value="provenance-item" className="border-none">
+                                <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
+                                  <span className="flex items-center">
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    Thinking Process | Provenance ({message.provenance.length})
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-2 pb-0">
+                                  <div className="space-y-3">
+                                    {message.provenance.map((entry, index) => (
+                                      <div key={entry.id} className="border rounded-md p-3 bg-muted">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <p className="text-xs font-semibold text-primary/80">
+                                                Source: {entry.id}
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleTagProvenance(entry)}
+                                                className="h-6 px-2 py-1 text-xs"
+                                            >
+                                                <Tag className="h-3 w-3 mr-1" /> Tag
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground italic mb-2">
+                                          Reason: {entry.reason}
+                                        </p>
+                                        <Separator className="my-2" />
+                                        <p className="text-sm">
+                                          <ReactMarkdown>{entry.snippet}</ReactMarkdown>
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          </div>
                         )}
+                        <span className="block text-xs opacity-70 mt-1 text-right">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                    ))}
-                    {isSending && (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
-                        <span>Searching...</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
+                      {message.type === "user" && (
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-primary text-primary-foreground rounded-md">
+                            <UserIcon className="h-5 w-5" />
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                  ))}
+                  {isSending && (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+                      <span>Searching...</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </ScrollArea>
 
-          <div className="flex flex-col gap-2 border rounded-lg px-3 py-2 bg-background shadow-sm">
+          <div className="flex-shrink-0 p-4 border-t">
             {fileSelectionError && currentWorkspace && (
-              <Alert variant="destructive" className="w-full">
+              <Alert variant="destructive" className="w-full mb-2">
                 <Info className="h-4 w-4" />
                 <AlertTitle>File Selection Required</AlertTitle>
                 <AlertDescription>
@@ -490,7 +488,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="text-sm font-semibold">Source: {tag.id}</p>
-                                <p className className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     ))}
