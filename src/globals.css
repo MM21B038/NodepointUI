@@ -71,10 +71,10 @@
        KnowledgeBase page top padding: 16px (from p-4 on main content)
        Filter buttons container top offset: 16px (from top-4 on filter-buttons-container)
        Filter buttons height: ~40px (from h-10 on buttons)
-       Desired gap below buttons: 16px
-       Total: 76 + 16 + 16 + 40 + 16 = 164px
+       Desired gap below buttons: 8px (reduced from 16px)
+       Total: 76 + 16 + 16 + 40 + 8 = 156px
     */
-    --panel-top-offset: 164px;
+    --panel-top-offset: 156px;
     --panel-bottom-offset: 16px; /* Desired bottom padding */
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
@@ -130,7 +130,7 @@
     /* KnowledgeBase Panel Sizing */
     --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
-    --panel-top-offset: 164px;
+    --panel-top-offset: 156px;
     --panel-bottom-offset: 16px;
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
@@ -188,7 +188,7 @@
     /* KnowledgeBase Panel Sizing */
     --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
-    --panel-top-offset: 164px;
+    --panel-top-offset: 156px;
     --panel-bottom-offset: 16px;
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
