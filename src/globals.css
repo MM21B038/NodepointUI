@@ -66,15 +66,7 @@
     /* KnowledgeBase Panel Sizing */
     --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
-    /* Calculation for panel-top-offset:
-       Navbar height: 76px
-       KnowledgeBase page top padding: 16px (from p-4 on main content)
-       Filter buttons container top offset: 16px (from top-4 on filter-buttons-container)
-       Filter buttons height: ~40px (from h-10 on buttons)
-       Desired gap below buttons: 16px
-       Total: 76 + 16 + 16 + 40 + 16 = 164px
-    */
-    --panel-top-offset: 164px;
+    --panel-top-offset: 88px; /* 16px (graph container top padding) + 16px (filter buttons top) + 56px (filter buttons height) + 16px (gap) */
     --panel-bottom-offset: 16px; /* Desired bottom padding */
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
@@ -130,7 +122,7 @@
     /* KnowledgeBase Panel Sizing */
     --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
-    --panel-top-offset: 164px;
+    --panel-top-offset: 88px;
     --panel-bottom-offset: 16px;
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
@@ -188,7 +180,7 @@
     /* KnowledgeBase Panel Sizing */
     --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
     --detail-panel-width: min(35vw, 450px);
-    --panel-top-offset: 164px;
+    --panel-top-offset: 88px;
     --panel-bottom-offset: 16px;
     --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
   }
