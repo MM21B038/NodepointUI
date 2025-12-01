@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,6 +18,8 @@ interface WorkspaceCardProps {
   totalNodes?: number;
   totalEdges?: number;
   isLoadingStats?: boolean;
+  onExtract: (workspaceName: string) => void; // New prop for extract action
+  isExtracting: boolean; // New prop for extraction loading state
 }
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
@@ -31,6 +33,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   totalNodes,
   totalEdges,
   isLoadingStats,
+  onExtract, // Destructure new prop
+  isExtracting, // Destructure new prop
 }) => {
   const [isHovered, setIsHovered] = useState(false); // New state for hover
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
@@ -67,7 +71,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
               e.stopPropagation(); // Prevent card selection when clicking delete
               onDelete(workspaceName);
             }}
-            disabled={isDeleting}
+            disabled={isDeleting || isExtracting} // Disable if deleting or extracting
             className={cn(
               "ml-auto transition-all duration-200",
               "pointer-events-none", // Always disable pointer events by default
@@ -83,6 +87,25 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
+        {/* Extract Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent card selection
+            onExtract(workspaceName);
+          }}
+          disabled={isExtracting || isDeleting} // Disable if extracting or deleting
+          className="w-full flex items-center justify-center gap-2 text-primary hover:bg-primary/10"
+        >
+          {isExtracting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
+          <span>{isExtracting ? "Extracting..." : "Extract"}</span>
+        </Button>
+
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center">
             <FileStack className="h-4 w-4 mr-1" />
