@@ -368,17 +368,16 @@ const normalizeSourceEntry = (source: string | FileReference): string[] => {
     sourceString = String(source); // Ensure it's a string
   }
 
-  // Regex to identify the start of a filename pattern: digits_word_word_timestamp_part
-  // This is used for splitting, so it's a lookahead.
-  // The pattern is: digits, underscore, word chars (tool name), underscore, word chars (action like scan/crawl), underscore, timestamp.
-  const filenameStartPattern = /(?=\d+_\w+_\w+_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/;
+  // Regex to match the full pattern of a single filename:
+  // digits_word_word_YYYY-MM-DDTHH:MM:SS.microseconds
+  const filenamePattern = /\d+_\w+_\w+_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+/g;
   
-  const parts = sourceString.split(filenameStartPattern).filter(part => part.length > 0).map(part => part.trim());
+  const matches = sourceString.match(filenamePattern);
 
-  if (parts.length > 0) {
-    return parts;
+  if (matches && matches.length > 0) {
+    return matches;
   } else {
-    // Fallback: if split didn't work as expected, or no pattern found, treat the whole string as a single source.
+    // Fallback: if no pattern found, treat the whole string as a single source.
     return [sourceString.trim()];
   }
 };
@@ -498,14 +497,14 @@ export async function askQuestion(
  */
 export async function getChatHistory(workspaceName: string): Promise<ChatHistoryEntry[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/get_chat/${workspaceName}`);
+    const response = await fetch(`${API_BASE_URL}/get_chat/${workspace_name}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data: ChatHistoryEntry[] = await response.json();
     return data;
   } catch (error) {
-    console.error(`Error fetching chat history for ${workspaceName}:`, error);
+    console.error(`Error fetching chat history for ${workspace_name}:`, error);
     return [];
   }
 }
