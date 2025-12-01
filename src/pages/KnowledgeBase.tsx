@@ -315,8 +315,6 @@ const KnowledgeBase = () => {
     setActiveFilterPanel(prev => (prev === panelName ? 'none' : panelName));
   }, []);
 
-  const backgroundImageURL = "https://images.unsplash.com/photo-1557683316-973673baf923?q=80&w=2000&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"; // Dark gradient placeholder
-
   return (
     <div className="relative h-full w-full overflow-hidden p-4">
       {currentWorkspace && !loading && !error ? (
@@ -328,7 +326,6 @@ const KnowledgeBase = () => {
               onSelect={setSelectedItem}
               selectedItem={selectedItem}
               onGraphBackgroundClick={closeAllFilterPanels}
-              backgroundImage={backgroundImageURL} // Pass the background image URL
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-4">
