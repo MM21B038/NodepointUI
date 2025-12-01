@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
+import remarkGfm from 'remark-gfm'; // Import remark-gfm
 
 interface ChatInProps {
   // Removed onShowScrollToBottomChange, onScrollToBottom, chatScrollViewportRef
@@ -336,7 +337,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                           )}
                         >
                           <div className="prose dark:prose-invert text-sm">
-                            <ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {message.text}
                             </ReactMarkdown>
                           </div>
@@ -373,7 +374,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                                           </p>
                                           <Separator className="my-2" />
                                           <p className="text-sm">
-                                            <ReactMarkdown>{entry.snippet}</ReactMarkdown>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
                                           </p>
                                         </div>
                                       ))}
@@ -472,7 +473,7 @@ const ChatIn: React.FC<ChatInProps> = ({
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p className="text-sm font-semibold">Source: {tag.id}</p>
-                                <p className className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
                             </TooltipContent>
                         </Tooltip>
                     ))}

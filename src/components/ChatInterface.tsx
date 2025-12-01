@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ProvenanceEntry } from "@/database/workspaceStorage";
 import { Separator } from "@/components/ui/separator";
+import ReactMarkdown from "react-markdown"; // Import ReactMarkdown
+import remarkGfm from 'remark-gfm'; // Import remark-gfm
 
 export interface ChatMessage {
   id: string;
@@ -127,7 +129,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       : "bg-muted text-muted-foreground rounded-bl-none"
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                  <p className="text-sm whitespace-pre-wrap prose dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                  </p>
                   {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
                     <ProvenanceDisplay provenance={message.provenance} />
                   )}
@@ -206,7 +210,9 @@ const ProvenanceDisplay: React.FC<ProvenanceDisplayProps> = ({ provenance }) => 
             <div key={index} className="pb-2 border-b border-dashed border-secondary-foreground/10 last:border-b-0">
               <p className="font-semibold text-primary">Source ID: {entry.id}</p>
               <p className="text-muted-foreground italic mt-1">Reason: {entry.reason}</p>
-              <p className="text-foreground mt-1 line-clamp-3">{entry.snippet}</p>
+              <p className="text-foreground mt-1 line-clamp-3 prose dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
+              </p>
             </div>
           ))}
         </div>
