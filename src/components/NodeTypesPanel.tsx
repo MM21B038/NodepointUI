@@ -9,7 +9,7 @@ import { Network, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GraphNode } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
-import * as d3 from "d3"; // Import d3
+import { colorScale } from "./InteractiveGraphVisualization"; // Import the shared colorScale
 
 interface NodeTypesPanelProps {
   nodes: GraphNode[];
@@ -30,9 +30,6 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
     const types = new Set(nodes.map((node) => node.type));
     return Array.from(types).sort();
   }, [nodes]);
-
-  // Re-create the same D3 color scale used in InteractiveGraphVisualization
-  const colorScale = useMemo(() => d3.scaleOrdinal(d3.schemeSet3), []);
 
   const handleNodeTypeChange = (type: string, checked: boolean) => {
     onSelectedNodeTypesChange((prev) => {

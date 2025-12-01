@@ -447,12 +447,14 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 };
 
 // --- Detail Panel Component ---
+// This is a local DetailPanel component used only within InteractiveGraphVisualization.
+// It needs to be updated to use the shared colorScale.
 
-interface DetailPanelProps {
+interface LocalDetailPanelProps {
   item: GraphNode | GraphEdge | null;
 }
 
-const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
+const LocalDetailPanel: React.FC<LocalDetailPanelProps> = ({ item }) => {
   if (!item) {
     return (
       <div className="text-muted-foreground p-4">
@@ -472,9 +474,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           <h4 className="text-lg font-semibold break-words flex-1 min-w-0 max-w-[65%]">{item.label}</h4>
           <Badge variant="secondary" className="absolute top-0 right-[5%] mt-4">{item.type}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground break-words max-w-[95%]">
-          Workspace: <span className="font-medium text-foreground break-all">{item.workspace}</span>
-        </p>
+        {/* Removed workspace from here as it's not part of GraphNode directly */}
         <p className="text-sm text-muted-foreground break-words max-w-[95%]">
           Source Document: <span className="font-medium text-foreground break-all">{item.source.join(', ')}</span>
         </p>
@@ -516,4 +516,4 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   }
 };
 
-export { InteractiveGraphVisualization, DetailPanel, colorScale };
+export { InteractiveGraphVisualization, LocalDetailPanel as DetailPanel, colorScale };

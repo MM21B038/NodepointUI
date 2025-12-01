@@ -7,19 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CircleDot, Link, FileText, Hash, Info, FolderCog } from "lucide-react";
-
-// --- Color Mapping for React Components (DetailPanel & Filters) ---
-// This is kept simple for Tailwind classes in the React UI
-const TYPE_COLORS: Record<string, string> = {
-  'Person': 'bg-blue-500',
-  'Organization': 'bg-green-500',
-  'Concept': 'bg-purple-500',
-  'Date': 'bg-yellow-500',
-  'Location': 'bg-red-500',
-  'default': 'bg-gray-400',
-};
-
-export const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COLORS['default'];
+import { colorScale } from "./InteractiveGraphVisualization"; // Import the shared colorScale
 
 interface DetailPanelProps {
   item: GraphNode | GraphEdge | null;
@@ -46,7 +34,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item, workspaceName }) => {
             <span className="break-words flex-1 min-w-0">{item.label}</span>
           </CardTitle>
           <div className="flex items-center space-x-2 mt-2">
-            <span className={cn("h-4 w-4 rounded-full", getNodeColorClass(item.type))}></span>
+            <span className={cn("h-4 w-4 rounded-full")} style={{ backgroundColor: colorScale(item.type) }}></span>
             <Badge variant="secondary" className="text-sm font-medium">{item.type}</Badge>
           </div>
         </CardHeader>
