@@ -1,24 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText, X } from "lucide-react";
+import { BookOpen, Info, RefreshCw, Loader2, Search, Network, FileText, X, Filter, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { InteractiveGraphVisualization } from "@/components/InteractiveGraphVisualization";
-import SearchNodesPanel from "@/components/SearchNodesPanel";
-import NodeTypesPanel from "@/components/NodeTypesPanel";
-import SourceFilesPanel from "@/components/SourceFilesPanel";
-import DetailPanel from "@/components/DetailPanel"; // Import the dedicated DetailPanel component
+import { InteractiveGraphVisualization, getNodeColorClass } from "@/components/InteractiveGraphVisualization";
+import DetailPanel from "@/components/DetailPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeGraph, GraphNode, GraphEdge, FileReference } from "@/database/workspaceStorage";
 import { showError } from "@/utils/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty, CommandGroup } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
-
-type ActiveFilterPanel = 'none' | 'search' | 'nodeTypes' | 'sourceFiles';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const KnowledgeBase = () => {
   console.log("KnowledgeBase: Component rendered.");
@@ -30,8 +28,8 @@ const KnowledgeBase = () => {
   const [selectedItem, setSelectedItem] = useState<GraphNode | GraphEdge | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
-  // State for the single active filter panel
-  const [activeFilterPanel, setActiveFilterPanel] = useState<ActiveFilterPanel>('none');
+  // State to control the detail sidebar's open/close status
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(true); // Start open by default
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
@@ -115,10 +113,80 @@ const KnowledgeBase = () => {
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
+  // When an item is selected, ensure the detail panel is open
+  useEffect(() => {
+    if (selectedItem && !isDetailPanelOpen) {
+      setIsDetailPanelOpen(true);
+    }
+  }, [selectedItem, isDetailPanelOpen]);
+
   const handleRefreshGraph = () => {
     console.log("KnowledgeBase: handleRefreshGraph called.");
     setRefreshCounter(prev => prev + 1);
   };
+
+  // Helper function to get unique values for filtering
+  const getUniqueValues = (data: GraphNode[], key: keyof GraphNode): string[] => {
+    const values = data.flatMap(item => {
+      const val = item[key];
+      return Array.isArray(val) ? val.map(String) : [String(val)];
+    });
+    return Array.from(new Set(values)).sort();
+  };
+
+  const handleTypeToggle = (type: string, checked: boolean) => {
+    setSelectedNodeTypes(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(type);
+      } else {
+        newSet.delete(type);
+      }
+      return newSet;
+    });
+    onFilterInteraction();
+  };
+
+  const handleSourceToggle = (source: string, checked: boolean) => {
+    setSelectedSourceFiles(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(source);
+      } else {
+        newSet.delete(source);
+      }
+      return newSet;
+    });
+    onFilterInteraction();
+  };
+
+  const uniqueTypes = useMemo(() => {
+    return allNodes ? getUniqueValues(allNodes, 'type') : [];
+  }, [allNodes]);
+
+  const uniqueSources = useMemo(() => {
+    const allFileSources = new Set<string>();
+    allNodes.forEach(node => node.source.forEach(s => allFileSources.add(s)));
+    allEdges.forEach(edge => edge.source_file.forEach(s => allFileSources.add(s)));
+    return Array.from(allFileSources).sort();
+  }, [allNodes, allEdges]);
+
+  const filteredUniqueSources = useMemo(() => {
+    return uniqueSources.filter(source => 
+      source.toLowerCase().includes(nodeSearchQuery.toLowerCase())
+    );
+  }, [uniqueSources, nodeSearchQuery]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedNodeTypes.size > 0 && selectedNodeTypes.size < uniqueTypes.length) {
+      parts.push(`${selectedNodeTypes.size} type${selectedNodeTypes.size > 1 ? 's' : ''}`);
+    }
+    if (selectedSourceFiles.size > 0 && selectedSourceFiles.size < uniqueSources.length) {
+      parts.push(`${selectedSourceFiles.size} source${selectedSourceFiles.size > 1 ? 's' : ''}`);
+    }
+    return parts.join(', ');
+  }, [selectedNodeTypes, uniqueTypes, selectedSourceFiles, uniqueSources]);
 
   // Centralized filtering logic
   const { filteredNodes, filteredEdges } = useMemo(() => {
@@ -250,192 +318,243 @@ const KnowledgeBase = () => {
     alertMessage = "No graph data found for this workspace. Please ensure documents are uploaded and preprocessing is complete.";
   }
 
-
-  const handleTogglePanel = useCallback((panelName: ActiveFilterPanel) => {
-    setActiveFilterPanel(prev => (prev === panelName ? 'none' : panelName));
-    setSelectedItem(null); // Deselect item when changing filter panels
-  }, []);
-
   const handleGraphBackgroundClick = useCallback(() => {
     setSelectedItem(null);
   }, []);
 
   return (
-    <div className="flex-grow h-full p-4 bg-gradient-to-br from-background to-muted/20">
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
+    <div className="relative h-full w-full p-4 bg-gradient-to-br from-background to-muted/20">
+      {currentWorkspace && !loading && !error ? (
+        <div className={cn(
+          "relative h-full w-full rounded-xl border shadow-lg bg-card",
+          isDetailPanelOpen ? "mr-72" : "mr-10" // Adjust margin based on panel state
+        )}>
+          {filteredNodes.length > 0 ? (
+            <InteractiveGraphVisualization
+              nodes={filteredNodes}
+              edges={filteredEdges}
+              onSelect={setSelectedItem}
+              selectedItem={selectedItem}
+              onGraphBackgroundClick={handleGraphBackgroundClick}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <Alert className="max-w-lg">
+                <Info className="h-4 w-4" />
+                <AlertTitle>No Graph Data</AlertTitle>
+                <AlertDescription>
+                  {alertMessage}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-full p-4">
+          <Alert className="max-w-lg">
+            <Info className="h-4 w-4" />
+            <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
+            <AlertDescription>
+              {alertMessage}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+      
+      {/* Refresh Button (Top Center Overlay) */}
+      <Button 
+        variant="outline" 
+        size="icon" 
+        onClick={handleRefreshGraph} 
+        disabled={loading}
+        className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 shadow-lg"
       >
-        {/* Left Panel: Filter Controls */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <BookOpen className="h-5 w-5 mr-2 text-primary" />
-                Graph Filters
-              </CardTitle>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleTogglePanel('search')}
-                  title={activeFilterPanel === 'search' ? "Hide Search Panel" : "Show Search Panel"}
-                  className={cn(activeFilterPanel === 'search' && "bg-accent text-accent-foreground")}
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleTogglePanel('nodeTypes')}
-                  title={activeFilterPanel === 'nodeTypes' ? "Hide Node Types Panel" : "Show Node Types Panel"}
-                  className={cn(activeFilterPanel === 'nodeTypes' && "bg-accent text-accent-foreground")}
-                >
-                  <Network className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleTogglePanel('sourceFiles')}
-                  title={activeFilterPanel === 'sourceFiles' ? "Hide Source Files Panel" : "Show Source Files Panel"}
-                  className={cn(activeFilterPanel === 'sourceFiles' && "bg-accent text-accent-foreground")}
-                >
-                  <FileText className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleRefreshGraph}
-                  title="Refresh Graph"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              {activeFilterPanel === 'search' && (
-                <SearchNodesPanel
-                  searchQuery={nodeSearchQuery}
-                  onSearchQueryChange={setNodeSearchQuery}
-                  searchDepth={searchDepth}
-                  onSearchDepthChange={setSearchDepth}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'nodeTypes' && (
-                <NodeTypesPanel
-                  nodes={allNodes}
-                  selectedNodeTypes={selectedNodeTypes}
-                  onSelectedNodeTypesChange={setSelectedNodeTypes}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'sourceFiles' && (
-                <SourceFilesPanel
-                  nodes={allNodes}
-                  edges={allEdges}
-                  selectedSourceFiles={selectedSourceFiles}
-                  onSelectedSourceFilesChange={setSelectedSourceFiles}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'none' && (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-center p-4">
-                  <p>Select a filter option above to begin.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </ResizablePanel>
+        <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+      </Button>
 
-        <ResizableHandle withHandle />
+      {/* Main Filter Popover (Overlay) */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="outline" 
+            className="absolute top-8 left-8 z-10 shadow-lg flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Filter
+            {filterSummary && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                ({filterSummary})
+              </span>
+            )}
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-4 space-y-6">
+          {/* Node Search Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Node Search</h4>
+            <Input
+              placeholder="Search by label or ID..."
+              value={nodeSearchQuery}
+              onChange={(e) => { setNodeSearchQuery(e.target.value); onFilterInteraction(); }}
+              className="mb-3"
+            />
+            <div className="mt-2 space-y-1">
+              <Label htmlFor="search-depth" className="text-sm font-medium">
+                Search Depth: {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
+              </Label>
+              <input
+                id="search-depth"
+                type="range"
+                min="0"
+                max="5"
+                value={searchDepth}
+                onChange={(e) => { setSearchDepth(Number(e.target.value)); onFilterInteraction(); }}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls how many "hops" away from the searched node(s) are displayed.
+              </p>
+            </div>
+          </div>
 
-        {/* Middle Panel: Graph Visualization */}
-        <ResizablePanel defaultSize={50} minSize={30}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <BookOpen className="h-5 w-5 mr-2 text-primary" />
-                Knowledge Graph {currentWorkspace && `(${currentWorkspace})`}
-              </CardTitle>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              {currentWorkspace && !loading && !error ? (
-                <div className="relative h-full w-full">
-                  {filteredNodes.length > 0 ? (
-                    <InteractiveGraphVisualization
-                      nodes={filteredNodes}
-                      edges={filteredEdges}
-                      onSelect={setSelectedItem}
-                      selectedItem={selectedItem}
-                      onGraphBackgroundClick={handleGraphBackgroundClick}
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                      <Alert className="max-w-lg">
-                        <Info className="h-4 w-4" />
-                        <AlertTitle>No Graph Data</AlertTitle>
-                        <AlertDescription>
-                          {alertMessage}
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full p-4">
-                  <Alert className="max-w-lg">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
-                    <AlertDescription>
-                      {alertMessage}
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </ResizablePanel>
+          <Separator />
 
-        <ResizableHandle withHandle />
-
-        {/* Right Panel: Detail Panel */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <Info className="h-5 w-5 mr-2 text-primary" />
-                Details
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSelectedItem(null)}
-                title="Clear Selection"
-                disabled={!selectedItem}
+          {/* Node Type Filter Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Node Type ({selectedNodeTypes.size}/{uniqueTypes.length})</h4>
+            <div className="flex space-x-2 mb-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setSelectedNodeTypes(new Set(uniqueTypes)); onFilterInteraction(); }}
+                disabled={selectedNodeTypes.size === uniqueTypes.length}
               >
-                <X className="h-4 w-4" />
+                Select All
               </Button>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              <ScrollArea className="h-full hide-scrollbar">
-                <DetailPanel item={selectedItem} workspaceName={currentWorkspace} />
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setSelectedNodeTypes(new Set()); onFilterInteraction(); }}
+                disabled={selectedNodeTypes.size === 0}
+              >
+                Clear All
+              </Button>
+            </div>
+            <Popover> {/* Nested Popover for Node Types */}
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedNodeTypes.size === uniqueTypes.length ? "All Types" : `${selectedNodeTypes.size} Type(s) Selected`}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search types..." />
+                  <CommandList className="hide-scrollbar">
+                    <CommandEmpty>No types found.</CommandEmpty>
+                    <CommandGroup>
+                      {uniqueTypes.map(type => (
+                        <CommandItem key={type} className="p-0">
+                          <Label 
+                            htmlFor={`type-${type}`} 
+                            className="flex items-center space-x-2 p-2 w-full cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm"
+                          >
+                            <Checkbox
+                              id={`type-${type}`}
+                              checked={selectedNodeTypes.has(type)}
+                              onCheckedChange={(checked) => handleTypeToggle(type, Boolean(checked))}
+                            />
+                            <span className={cn("h-3 w-3 rounded-full", getNodeColorClass(type))}></span>
+                            <span className="text-sm font-normal flex-1">{type}</span>
+                          </Label>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <Separator />
+
+          {/* Source Document Filter Section */}
+          <div>
+            <h4 className="font-semibold mb-2 text-sm">Source Document ({selectedSourceFiles.size}/{uniqueSources.length})</h4>
+            <div className="flex space-x-2 mb-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setSelectedSourceFiles(new Set(uniqueSources)); onFilterInteraction(); }}
+                disabled={selectedSourceFiles.size === uniqueSources.length}
+              >
+                Select All
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setSelectedSourceFiles(new Set()); onFilterInteraction(); }}
+                disabled={selectedSourceFiles.size === 0}
+              >
+                Clear All
+              </Button>
+            </div>
+            <Input
+              placeholder="Search source documents..."
+              value={nodeSearchQuery} // Reusing nodeSearchQuery for source search for simplicity
+              onChange={(e) => { setNodeSearchQuery(e.target.value); onFilterInteraction(); }}
+              className="mb-3"
+            />
+            <ScrollArea className="h-48 border rounded-md p-2 hide-scrollbar">
+              <div className="space-y-2">
+                {filteredUniqueSources.length === 0 && (
+                  <p className="text-muted-foreground text-sm text-center py-4">No matching sources.</p>
+                )}
+                {filteredUniqueSources.map(source => (
+                  <div key={source} className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent/50">
+                    <Checkbox
+                      id={`source-${source}`}
+                      checked={selectedSourceFiles.has(source)}
+                      onCheckedChange={(checked) => handleSourceToggle(source, Boolean(checked))}
+                    />
+                    <Label htmlFor={`source-${source}`} className="text-sm font-normal cursor-pointer flex-1 max-w-[calc(100%-2rem)] truncate">
+                      {source}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Right Detail Sidebar Panel */}
+      <div 
+        className={cn(
+          "absolute top-4 right-4 z-10 transition-all duration-300",
+          "bg-card border shadow-xl flex flex-col h-[calc(100%-2rem)] rounded-xl", // Full height minus padding
+          isDetailPanelOpen ? "w-72" : "w-10" // Width based on open state
+        )}
+      >
+        <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
+          {isDetailPanelOpen && <h3 className="text-lg font-semibold">Details</h3>}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsDetailPanelOpen(!isDetailPanelOpen)}
+            className="ml-auto" // Push to the right
+          >
+            {isDetailPanelOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        </div>
+        
+        {isDetailPanelOpen && (
+          <ScrollArea className="overflow-y-auto flex-grow hide-scrollbar">
+            <DetailPanel item={selectedItem} workspaceName={currentWorkspace} />
+          </ScrollArea>
+        )}
+      </div>
     </div>
   );
 };
