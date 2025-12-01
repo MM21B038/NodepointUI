@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://192.168.1.2:3366";
+const API_BASE_URL = "http://10.10.112.72:3366";
 
 // Updated interface for a single workspace entry
 export interface WorkspaceEntry {
