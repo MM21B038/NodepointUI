@@ -452,22 +452,6 @@ interface DetailPanelProps {
   item: GraphNode | GraphEdge | null;
 }
 
-// Export getNodeColorClass here
-export const getNodeColorClass = (type: string) => {
-  const TYPE_COLORS: Record<string, string> = {
-    'URL': 'bg-blue-500',
-    'TECH': 'bg-green-500',
-    'SUBDOMAIN': 'bg-purple-500',
-    'IP': 'bg-yellow-500',
-    'PORT': 'bg-red-500',
-    'TOOL': 'bg-indigo-500',
-    'VUL': 'bg-orange-500',
-    'default': 'bg-gray-400',
-  };
-  return TYPE_COLORS[type] || TYPE_COLORS['default'];
-};
-
-
 const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
   if (!item) {
     return (
