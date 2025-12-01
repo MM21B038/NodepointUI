@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText } from "lucide-react";
+import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText } from "lucide-react"; // Added ChevronLeft, ChevronRight
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { InteractiveGraphVisualization, DetailPanel } from "@/components/InteractiveGraphVisualization";
 import SearchNodesPanel from "@/components/SearchNodesPanel";
@@ -62,41 +62,26 @@ const KnowledgeBase = () => {
       const rawNodes = data.nodes || [];
       const rawEdges = data.edges || [];
 
-      // Normalize node.source to always be a string
-      const normalizedNodes: GraphNode[] = rawNodes.map(node => {
-        const normalizedSource = typeof node.source === 'object' && node.source !== null && 'file_name' in node.source
-          ? (node.source as FileReference).file_name
-          : String(node.source);
-        return { ...node, source: normalizedSource };
-      });
-
-      const uniqueNodesMap = new Map<string, GraphNode>();
-      normalizedNodes.forEach(node => {
-        if (!uniqueNodesMap.has(node.id)) {
-          uniqueNodesMap.set(node.id, node);
-        }
-      });
-      const processedNodes: GraphNode[] = Array.from(uniqueNodesMap.values());
+      // The normalization to string[] is now handled in getKnowledgeGraph in workspaceStorage.ts
+      const processedNodes: GraphNode[] = rawNodes;
       const nodeIds = new Set(processedNodes.map(node => node.id));
 
-      // Normalize edge.source_file to always be a string
-      const normalizedEdges: GraphEdge[] = rawEdges.map(edge => {
-        const normalizedSourceFile = typeof edge.source_file === 'object' && edge.source_file !== null && 'file_name' in edge.source_file
-          ? (edge.source_file as FileReference).file_name
-          : String(edge.source_file);
-        return { ...edge, source_file: normalizedSourceFile };
-      });
-
-      const processedEdges: GraphEdge[] = normalizedEdges.filter(edge =>
+      const processedEdges: GraphEdge[] = rawEdges.filter(edge =>
         nodeIds.has(edge.source as string) && nodeIds.has(edge.target as string)
       );
 
       setAllNodes(processedNodes);
       setAllEdges(processedEdges);
+      
       // On initial load or refresh, if there are nodes, select all by default
       if (processedNodes.length > 0) {
         setSelectedNodeTypes(new Set(processedNodes.map(node => node.type)));
-        setSelectedSourceFiles(new Set(processedNodes.map(node => node.source as string)));
+        
+        const allFileSources = new Set<string>();
+        processedNodes.forEach(node => node.source.forEach(s => allFileSources.add(s)));
+        processedEdges.forEach(edge => edge.source_file.forEach(s => allFileSources.add(s)));
+        setSelectedSourceFiles(allFileSources);
+
       } else {
         setSelectedNodeTypes(new Set());
         setSelectedSourceFiles(new Set());
@@ -212,7 +197,9 @@ const KnowledgeBase = () => {
       tempNodes = tempNodes.filter((node) => selectedNodeTypes.has(node.type));
     }
     if (selectedSourceFiles.size > 0) {
-      tempNodes = tempNodes.filter((node) => selectedSourceFiles.has(node.source as string));
+      tempNodes = tempNodes.filter((node) => 
+        node.source.some(s => selectedSourceFiles.has(s))
+      );
     }
 
     // Filter edges based on the already filtered nodes and source files
@@ -221,7 +208,7 @@ const KnowledgeBase = () => {
       (edge) =>
         preFilteredNodeIds.has(edge.source as string) &&
         preFilteredNodeIds.has(edge.target as string) &&
-        (selectedSourceFiles.size === 0 || selectedSourceFiles.has(edge.source_file as string))
+        (selectedSourceFiles.size === 0 || edge.source_file.some(s => selectedSourceFiles.has(s)))
     );
 
     // If there's a search query, apply depth filtering

@@ -65,7 +65,7 @@ export interface GraphNode {
   id: string;
   label: string;
   type: string; // e.g., "Person", "Concept"
-  source: string | FileReference; // Can be a string (file.stem) or an object
+  source: (string | FileReference)[]; // Now an array of strings or FileReference
   attributes: Record<string, any>;
 }
 
@@ -74,7 +74,7 @@ export interface GraphEdge {
   target: string; // Target Node ID
   label: string; // Relationship description (was 'description')
   score: number; // Relationship score/weight
-  source_file: string | FileReference; // Can be a string (document name) or an object
+  source_file: (string | FileReference)[]; // Now an array of strings or FileReference
 }
 
 export interface KnowledgeGraphResponse {
@@ -353,6 +353,15 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
 }
 
 /**
+ * Normalizes a single source entry (string or FileReference) into a string filename.
+ */
+const normalizeSingleSource = (source: string | FileReference): string => {
+  return typeof source === 'object' && source !== null && 'file_name' in source
+    ? source.file_name
+    : String(source);
+};
+
+/**
  * Retrieves the knowledge graph data for a specific workspace.
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves to the KnowledgeGraphResponse.
@@ -373,7 +382,22 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
         throw new Error(data.error);
     }
 
-    return data;
+    // Normalize source fields to always be arrays of strings
+    const normalizedNodes: GraphNode[] = data.nodes.map(node => ({
+      ...node,
+      source: Array.isArray(node.source)
+        ? node.source.map(normalizeSingleSource)
+        : [normalizeSingleSource(node.source)],
+    }));
+
+    const normalizedEdges: GraphEdge[] = data.edges.map(edge => ({
+      ...edge,
+      source_file: Array.isArray(edge.source_file)
+        ? edge.source_file.map(normalizeSingleSource)
+        : [normalizeSingleSource(edge.source_file)],
+    }));
+
+    return { ...data, nodes: normalizedNodes, edges: normalizedEdges };
   } catch (error) {
     console.error(`Error fetching knowledge graph for ${workspaceName}:`, error);
     throw error;

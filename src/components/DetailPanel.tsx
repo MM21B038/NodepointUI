@@ -52,11 +52,19 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <CardContent className="space-y-4 px-0 pb-0">
           <div>
             <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
-              <FileText className="h-4 w-4 mr-1" /> Source Document
+              <FileText className="h-4 w-4 mr-1" /> Source Document{item.source.length > 1 ? 's' : ''}
             </h5>
-            <p className="text-sm text-foreground break-all bg-secondary/50 p-2 rounded-md">
-              {item.source}
-            </p>
+            <div className="bg-secondary/50 p-2 rounded-md">
+              {item.source.length > 0 ? (
+                <ul className="list-disc list-inside text-sm text-foreground break-all">
+                  {item.source.map((src, index) => (
+                    <li key={index}>{src}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No source documents.</p>
+              )}
+            </div>
           </div>
           <Separator />
           <div>
@@ -118,9 +126,19 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
             </div>
             <div>
               <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
-                <FileText className="h-4 w-4 mr-1" /> Source Document
+                <FileText className="h-4 w-4 mr-1" /> Source Document{item.source_file.length > 1 ? 's' : ''}
               </h5>
-              <p className="bg-secondary/50 p-2 rounded-md break-all">{item.source_file}</p>
+              <div className="bg-secondary/50 p-2 rounded-md">
+                {item.source_file.length > 0 ? (
+                  <ul className="list-disc list-inside text-sm text-foreground break-all">
+                    {item.source_file.map((src, index) => (
+                      <li key={index}>{src}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No source documents.</p>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>

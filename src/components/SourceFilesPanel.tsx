@@ -28,8 +28,8 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
 }) => {
   const uniqueSourceFiles = useMemo(() => {
     const files = new Set<string>();
-    nodes.forEach(node => files.add(node.source as string));
-    edges.forEach(edge => edge.source_file && files.add(edge.source_file as string));
+    nodes.forEach(node => node.source.forEach(s => files.add(s)));
+    edges.forEach(edge => edge.source_file.forEach(s => files.add(s)));
     return Array.from(files).sort();
   }, [nodes, edges]);
 
