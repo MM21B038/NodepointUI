@@ -449,7 +449,7 @@ const KnowledgeBase = () => {
                   </Button>
                 </h3>
                 <ScrollArea className="h-[calc(100%-57px)]">
-                  <DetailPanel item={selectedItem} />
+                  <DetailPanel item={selectedItem} workspaceName={currentWorkspace} />
                 </ScrollArea>
               </div>
             </div>

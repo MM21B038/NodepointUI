@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CircleDot, Link, FileText, Hash, Info } from "lucide-react";
+import { CircleDot, Link, FileText, Hash, Info, FolderCog } from "lucide-react"; // Added FolderCog
 
 // --- Color Mapping for React Components (DetailPanel & Filters) ---
 // This is kept simple for Tailwind classes in the React UI
@@ -23,9 +23,10 @@ export const getNodeColorClass = (type: string) => TYPE_COLORS[type] || TYPE_COL
 
 interface DetailPanelProps {
   item: GraphNode | GraphEdge | null;
+  workspaceName: string | null; // New prop for workspace name
 }
 
-const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
+const DetailPanel: React.FC<DetailPanelProps> = ({ item, workspaceName }) => {
   if (!item) {
     return (
       <div className="text-muted-foreground p-4 text-center">
@@ -50,15 +51,29 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-0 pb-0">
+          {/* New: Workspace Name */}
+          {workspaceName && (
+            <div>
+              <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
+                <FolderCog className="h-4 w-4 mr-1" /> Workspace
+              </h5>
+              <p className="bg-secondary/50 p-2 rounded-md text-sm text-foreground break-all">
+                {workspaceName}
+              </p>
+            </div>
+          )}
+          <Separator />
+
+          {/* Existing: Source Documents */}
           <div>
             <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
               <FileText className="h-4 w-4 mr-1" /> Source Document{item.source.length > 1 ? 's' : ''}
             </h5>
             <div className="bg-secondary/50 p-2 rounded-md">
               {item.source.length > 0 ? (
-                <ul className="list-disc list-inside text-sm text-foreground break-all">
+                <ul className="list-disc list-inside text-sm text-foreground">
                   {item.source.map((src, index) => (
-                    <li key={index}>{src}</li>
+                    <li key={index} className="break-all">{src}</li>
                   ))}
                 </ul>
               ) : (
@@ -130,9 +145,9 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
               </h5>
               <div className="bg-secondary/50 p-2 rounded-md">
                 {item.source_file.length > 0 ? (
-                  <ul className="list-disc list-inside text-sm text-foreground break-all">
+                  <ul className="list-disc list-inside text-sm text-foreground">
                     {item.source_file.map((src, index) => (
-                      <li key={index}>{src}</li>
+                      <li key={index} className="break-all">{src}</li>
                     ))}
                   </ul>
                 ) : (
