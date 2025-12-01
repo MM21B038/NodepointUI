@@ -36,11 +36,11 @@ const KnowledgeBase = () => {
   const filterButtonsContainerRef = useRef<HTMLDivElement>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
 
-  // State for filter values
+  // State for filter values - CORRECTED TO USE useState
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [searchDepth, setSearchDepth] = useState<number>(0);
-  const [selectedNodeTypes, setSelectedNodeTypes] = new Set<string>(); // Initialize as empty set
-  const [selectedSourceFiles, setSelectedSourceFiles] = new Set<string>(); // Initialize as empty set
+  const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
+  const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set());
 
   // New state to track if filters have been interacted with
   const [hasFiltersBeenInteracted, setHasFiltersBeenInteracted] = useState(false);
