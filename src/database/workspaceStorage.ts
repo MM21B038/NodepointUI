@@ -65,7 +65,7 @@ export interface GraphNode {
   id: string;
   label: string;
   type: string; // e.g., "Person", "Concept"
-  source: (string | FileReference)[]; // Now an array of strings or FileReference
+  source: string[]; // Changed to string[]
   attributes: Record<string, any>;
 }
 
@@ -74,7 +74,7 @@ export interface GraphEdge {
   target: string; // Target Node ID
   label: string; // Relationship description (was 'description')
   score: number; // Relationship score/weight
-  source_file: (string | FileReference)[]; // Now an array of strings or FileReference
+  source_file: string[]; // Changed to string[]
 }
 
 export interface KnowledgeGraphResponse {
@@ -353,12 +353,37 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
 }
 
 /**
- * Normalizes a single source entry (string or FileReference) into a string filename.
+ * Normalizes a single source entry (string or FileReference) into an array of string filenames.
+ * This function attempts to split concatenated filenames based on a heuristic pattern.
+ *
+ * IMPORTANT: This is a fragile heuristic based on observed API output (e.g., "file1_timestampfile2_timestamp").
+ * The most robust solution is for the backend to provide source fields as proper arrays of strings.
  */
-const normalizeSingleSource = (source: string | FileReference): string => {
-  return typeof source === 'object' && source !== null && 'file_name' in source
-    ? source.file_name
-    : String(source);
+const normalizeSourceEntry = (source: string | FileReference): string[] => {
+  if (typeof source === 'object' && source !== null && 'file_name' in source) {
+    return [source.file_name];
+  }
+
+  const sourceString = String(source);
+  // Heuristic regex to identify potential concatenated filenames.
+  // This pattern looks for a sequence of digits, underscore, word characters, '_scan_',
+  // and then a timestamp. This is based on the example provided.
+  const filenamePattern = /(\d+_\w+_scan_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/g;
+  
+  const matches = [...sourceString.matchAll(filenamePattern)];
+
+  if (matches.length > 1) {
+    // If multiple distinct filename patterns are found, extract them.
+    return matches.map(match => match[1]);
+  } else if (matches.length === 1 && matches[0][0] === sourceString) {
+    // If only one match and it covers the entire string, it's a single filename.
+    return [sourceString];
+  } else {
+    // Fallback: if no specific pattern or partial match, treat the whole string as a single source.
+    // This handles cases where the string might be a simple filename without the complex pattern,
+    // or if the concatenation pattern is different.
+    return [sourceString];
+  }
 };
 
 /**
@@ -382,19 +407,21 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
         throw new Error(data.error);
     }
 
-    // Normalize source fields to always be arrays of strings
+    // Normalize source fields to always be arrays of strings using the new helper
     const normalizedNodes: GraphNode[] = data.nodes.map(node => ({
       ...node,
+      // Ensure node.source is always an array before mapping
       source: Array.isArray(node.source)
-        ? node.source.map(normalizeSingleSource)
-        : [normalizeSingleSource(node.source)],
+        ? node.source.flatMap(normalizeSourceEntry) // Use flatMap to handle potential arrays from normalizeSourceEntry
+        : normalizeSourceEntry(node.source), // If it's a single item, normalize it
     }));
 
     const normalizedEdges: GraphEdge[] = data.edges.map(edge => ({
       ...edge,
+      // Ensure edge.source_file is always an array before mapping
       source_file: Array.isArray(edge.source_file)
-        ? edge.source_file.map(normalizeSingleSource)
-        : [normalizeSingleSource(edge.source_file)],
+        ? edge.source_file.flatMap(normalizeSourceEntry) // Use flatMap
+        : normalizeSourceEntry(edge.source_file), // If it's a single item, normalize it
     }));
 
     return { ...data, nodes: normalizedNodes, edges: normalizedEdges };
