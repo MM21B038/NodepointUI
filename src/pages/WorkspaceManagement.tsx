@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry } from "@/database/workspaceStorage"; // Import WorkspaceEntry
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess } from "@/database/workspaceStorage"; // Import WorkspaceEntry and startPreprocess
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -35,6 +35,7 @@ const WorkspaceManagement = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(new Map()); // New state for extraction loading
 
   const [currentPage, setCurrentPage] = useState(0);
 
@@ -199,6 +200,35 @@ const WorkspaceManagement = () => {
     }
   }, [workspaceToDelete, fetchWorkspaces]);
 
+  const handleExtract = useCallback(async (workspaceName: string) => {
+    setIsExtractingMap(prev => new Map(prev).set(workspaceName, true));
+    const loadingToastId = toast.loading(`Starting knowledge extraction for "${workspaceName}"...`);
+
+    try {
+      await startPreprocess(workspaceName);
+      toast.success(`Knowledge extraction started for "${workspaceName}"!`, { id: loadingToastId });
+      // Refresh stats for this workspace after starting extraction
+      // This will trigger a re-fetch of files and graph data for the specific workspace
+      setCachedWorkspaceStats(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(workspaceName); // Invalidate cache for this workspace
+        return newMap;
+      });
+      setStatsLoadingMap(prev => new Map(prev).set(workspaceName, false)); // Reset loading state immediately
+      fetchAndCacheStatsForWorkspace(workspaceName); // Re-fetch stats to show updated status
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(`Failed to start extraction: ${errorMessage}`, { id: loadingToastId });
+      console.error("Extraction error:", error);
+    } finally {
+      setIsExtractingMap(prev => {
+        const newMap = new Map(prev);
+        newMap.set(workspaceName, false);
+        return newMap;
+      });
+    }
+  }, [fetchAndCacheStatsForWorkspace]);
+
   const filteredWorkspaces = useMemo(() => {
     if (!searchTerm) {
       return allWorkspaces;
@@ -321,8 +351,10 @@ const WorkspaceManagement = () => {
                           isCurrent={currentWorkspace === workspace}
                           onSelect={handleSelectWorkspace}
                           onDelete={handleDeleteClick}
+                          onExtract={handleExtract} // Pass the new handler
                           isDeleting={isDeleting}
                           deletingWorkspaceName={workspaceToDelete}
+                          isExtracting={isExtractingMap.get(workspace) || false} // Pass extraction status
                           totalFiles={stats.files}
                           totalNodes={stats.nodes}
                           totalEdges={stats.edges}
