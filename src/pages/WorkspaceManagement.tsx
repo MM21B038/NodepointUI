@@ -363,10 +363,14 @@ const WorkspaceManagement = () => {
                   {totalPages > 1 && currentPage > 0 && (
                     <button
                       onClick={handlePreviousPage}
-                      className="absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center
-                                 bg-gradient-to-r from-background/70 to-transparent
-                                 opacity-0 group-hover:opacity-100 transition-opacity duration-300
-                                 cursor-pointer z-10 text-foreground hover:text-primary"
+                      className={cn(
+                        "absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center",
+                        "bg-gradient-to-r from-background/70 to-transparent",
+                        "transition-all duration-300",
+                        "z-10 text-foreground hover:text-primary",
+                        "opacity-0 pointer-events-none", // Default: hidden and no pointer events
+                        "group-hover:opacity-100 group-hover:pointer-events-auto" // On group hover: visible and active pointer events
+                      )}
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="h-8 w-8" />
@@ -377,10 +381,14 @@ const WorkspaceManagement = () => {
                   {totalPages > 1 && currentPage < totalPages - 1 && (
                     <button
                       onClick={handleNextPage}
-                      className="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center
-                                 bg-gradient-to-l from-background/70 to-transparent
-                                 opacity-0 group-hover:opacity-100 transition-opacity duration-300
-                                 cursor-pointer z-10 text-foreground hover:text-primary"
+                      className={cn(
+                        "absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center",
+                        "bg-gradient-to-l from-background/70 to-transparent",
+                        "transition-all duration-300",
+                        "z-10 text-foreground hover:text-primary",
+                        "opacity-0 pointer-events-none", // Default: hidden and no pointer events
+                        "group-hover:opacity-100 group-hover:pointer-events-auto" // On group hover: visible and active pointer events
+                      )}
                       aria-label="Next page"
                     >
                       <ChevronRight className="h-8 w-8" />
