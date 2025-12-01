@@ -353,33 +353,14 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
 }
 
 /**
- * Normalizes a single source entry (string or FileReference) into an array of string filenames.
- * This function attempts to split concatenated filenames based on a heuristic pattern.
- *
- * IMPORTANT: This is a fragile heuristic based on observed API output (e.g., "file1_timestampfile2_timestamp").
- * The most robust solution is for the backend to provide source fields as proper arrays of strings.
+ * Normalizes a single source entry (string or FileReference) into an array containing a single string filename.
+ * This function now explicitly avoids splitting and treats the entire input as one filename.
  */
 const normalizeSourceEntry = (source: string | FileReference): string[] => {
-  let sourceString: string;
-
   if (typeof source === 'object' && source !== null && 'file_name' in source) {
-    sourceString = source.file_name; // Extract the string from the object
-  } else {
-    sourceString = String(source); // Ensure it's a string
+    return [source.file_name.trim()]; // Return the file_name as a single string
   }
-
-  // Regex to match the full pattern of a single filename:
-  // digits_word_word_YYYY-MM-DDTHH:MM:SS.microseconds
-  const filenamePattern = /\d+_\w+_\w+_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+/g;
-  
-  const matches = sourceString.match(filenamePattern);
-
-  if (matches && matches.length > 0) {
-    return matches;
-  } else {
-    // Fallback: if no pattern found, treat the whole string as a single source.
-    return [sourceString.trim()];
-  }
+  return [String(source).trim()]; // Return the string representation as a single string
 };
 
 /**
@@ -497,14 +478,14 @@ export async function askQuestion(
  */
 export async function getChatHistory(workspaceName: string): Promise<ChatHistoryEntry[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/get_chat/${workspace_name}`);
+    const response = await fetch(`${API_BASE_URL}/get_chat/${workspaceName}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data: ChatHistoryEntry[] = await response.json();
     return data;
   } catch (error) {
-    console.error(`Error fetching chat history for ${workspace_name}:`, error);
+    console.error(`Error fetching chat history for ${workspaceName}:`, error);
     return [];
   }
 }
