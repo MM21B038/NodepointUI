@@ -360,11 +360,14 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
  * The most robust solution is for the backend to provide source fields as proper arrays of strings.
  */
 const normalizeSourceEntry = (source: string | FileReference): string[] => {
+  let sourceString: string;
+
   if (typeof source === 'object' && source !== null && 'file_name' in source) {
-    return [source.file_name];
+    sourceString = source.file_name; // Extract the string from the object
+  } else {
+    sourceString = String(source); // Ensure it's a string
   }
 
-  const sourceString = String(source);
   // Regex to identify the start of a filename pattern: digits_word_word_timestamp_part
   // This is used for splitting, so it's a lookahead.
   // The pattern is: digits, underscore, word chars (tool name), underscore, word chars (action like scan/crawl), underscore, timestamp.
@@ -404,18 +407,20 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
     // Normalize source fields to always be arrays of strings using the new helper
     const normalizedNodes: GraphNode[] = data.nodes.map(node => ({
       ...node,
-      // Ensure node.source is always an array before mapping
+      // node.source is already an array of strings from the backend, so we map over it.
+      // Each string element is then passed to normalizeSourceEntry for potential splitting.
       source: Array.isArray(node.source)
-        ? node.source.flatMap(normalizeSourceEntry) // Use flatMap to handle potential arrays from normalizeSourceEntry
-        : normalizeSourceEntry(node.source), // If it's a single item, normalize it
+        ? node.source.flatMap(s => normalizeSourceEntry(s))
+        : normalizeSourceEntry(node.source), // Fallback if it's somehow not an array
     }));
 
     const normalizedEdges: GraphEdge[] = data.edges.map(edge => ({
       ...edge,
-      // Ensure edge.source_file is always an array before mapping
+      // edge.source_file from the backend is a FileReference object.
+      // We pass it directly to normalizeSourceEntry, which will extract the file_name string and then split it.
       source_file: Array.isArray(edge.source_file)
-        ? edge.source_file.flatMap(normalizeSourceEntry) // Use flatMap
-        : normalizeSourceEntry(edge.source_file), // If it's a single item, normalize it
+        ? edge.source_file.flatMap(s => normalizeSourceEntry(s)) // Fallback if it's somehow an array
+        : normalizeSourceEntry(edge.source_file),
     }));
 
     return { ...data, nodes: normalizedNodes, edges: normalizedEdges };
