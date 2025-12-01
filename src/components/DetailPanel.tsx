@@ -69,15 +69,15 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item, workspaceName }) => {
             <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
               <FileText className="h-4 w-4 mr-1" /> Source Document{item.source.length > 1 ? 's' : ''}
             </h5>
-            <div className="bg-secondary/50 p-2 rounded-md">
+            <div className="space-y-2"> {/* Added space-y-2 for spacing between source boxes */}
               {item.source.length > 0 ? (
-                <ul className="list-disc list-inside text-sm text-foreground">
-                  {item.source.map((src, index) => (
-                    <li key={index} className="break-all">{src}</li>
-                  ))}
-                </ul>
+                item.source.map((src, index) => (
+                  <div key={index} className="bg-muted p-2 rounded-md text-sm text-foreground break-all">
+                    {src}
+                  </div>
+                ))
               ) : (
-                <p className="text-sm text-muted-foreground">No source documents.</p>
+                <p className="text-sm text-muted-foreground bg-secondary/50 p-2 rounded-md">No source documents.</p>
               )}
             </div>
           </div>
@@ -143,15 +143,15 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item, workspaceName }) => {
               <h5 className="font-semibold text-sm flex items-center text-muted-foreground mb-1">
                 <FileText className="h-4 w-4 mr-1" /> Source Document{item.source_file.length > 1 ? 's' : ''}
               </h5>
-              <div className="bg-secondary/50 p-2 rounded-md">
+              <div className="space-y-2"> {/* Added space-y-2 for spacing between source boxes */}
                 {item.source_file.length > 0 ? (
-                  <ul className="list-disc list-inside text-sm text-foreground">
-                    {item.source_file.map((src, index) => (
-                      <li key={index} className="break-all">{src}</li>
-                    ))}
-                  </ul>
+                  item.source_file.map((src, index) => (
+                    <div key={index} className="bg-muted p-2 rounded-md text-sm text-foreground break-all">
+                      {src}
+                    </div>
+                  ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No source documents.</p>
+                  <p className="text-sm text-muted-foreground bg-secondary/50 p-2 rounded-md">No source documents.</p>
                 )}
               </div>
             </div>
