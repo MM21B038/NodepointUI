@@ -35,6 +35,7 @@ interface InteractiveGraphVisualizationProps {
   onSelect: (item: GraphNode | GraphEdge | null) => void;
   selectedItem: GraphNode | GraphEdge | null;
   onGraphBackgroundClick: () => void; // New prop
+  backgroundImage?: string; // New prop for background image URL
 }
 
 // D3 requires nodes to have x, y, vx, vy properties, and we add 'degree'
@@ -67,6 +68,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   onSelect,
   selectedItem,
   onGraphBackgroundClick, // Destructure new prop
+  backgroundImage, // Destructure new prop
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
@@ -441,14 +443,23 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
   return (
     <div className="w-full h-full relative bg-background rounded-lg">
-      <svg ref={svgRef} width="100%" height="100%" className="bg-background"></svg>
+      <svg
+        ref={svgRef}
+        width="100%"
+        height="100%"
+        className="bg-background"
+        style={{
+          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center center',
+        }}
+      ></svg>
     </div>
   );
 };
 
 // --- Detail Panel Component ---
-// This is a local DetailPanel component used only within InteractiveGraphVisualization.
-// It needs to be updated to use the shared colorScale.
 
 interface LocalDetailPanelProps {
   item: GraphNode | GraphEdge | null;

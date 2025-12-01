@@ -39,8 +39,8 @@ const KnowledgeBase = () => {
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [searchDepth, setSearchDepth] = useState<number>(0);
-  const [selectedNodeTypes, setSelectedNodeTypes] = useState<Set<string>>(new Set());
-  const [selectedSourceFiles, setSelectedSourceFiles] = useState<Set<string>>(new Set());
+  const [selectedNodeTypes, setSelectedNodeTypes] = new Set<string>(); // Initialize as empty set
+  const [selectedSourceFiles, setSelectedSourceFiles] = new Set<string>(); // Initialize as empty set
 
   // New state to track if filters have been interacted with
   const [hasFiltersBeenInteracted, setHasFiltersBeenInteracted] = useState(false);
@@ -315,6 +315,8 @@ const KnowledgeBase = () => {
     setActiveFilterPanel(prev => (prev === panelName ? 'none' : panelName));
   }, []);
 
+  const backgroundImageURL = "https://images.unsplash.com/photo-1557683316-973673baf923?q=80&w=2000&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"; // Dark gradient placeholder
+
   return (
     <div className="relative h-full w-full overflow-hidden p-4">
       {currentWorkspace && !loading && !error ? (
@@ -326,6 +328,7 @@ const KnowledgeBase = () => {
               onSelect={setSelectedItem}
               selectedItem={selectedItem}
               onGraphBackgroundClick={closeAllFilterPanels}
+              backgroundImage={backgroundImageURL} // Pass the background image URL
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-4">
