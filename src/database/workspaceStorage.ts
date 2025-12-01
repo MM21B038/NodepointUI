@@ -365,23 +365,18 @@ const normalizeSourceEntry = (source: string | FileReference): string[] => {
   }
 
   const sourceString = String(source);
-  // Heuristic regex to identify potential concatenated filenames.
-  // This pattern looks for a sequence of digits, underscore, word characters, '_scan_',
-  // and then a timestamp. This is based on the example provided.
-  const filenamePattern = /(\d+_\w+_scan_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/g;
+  // Regex to identify the start of a filename pattern: digits_word_scan_timestamp_part
+  // This is used for splitting, so it's a lookahead.
+  // The pattern is: digits, underscore, word chars, underscore, 'scan', underscore, digits-digits-digitsTdigits:digits:digits.digits
+  // We want to split *before* the next occurrence of this pattern.
+  const filenameStartPattern = /(?=\d+_\w+_scan_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/;
   
-  const matches = [...sourceString.matchAll(filenamePattern)];
+  const parts = sourceString.split(filenameStartPattern).filter(part => part.length > 0);
 
-  if (matches.length > 1) {
-    // If multiple distinct filename patterns are found, extract them.
-    return matches.map(match => match[1]);
-  } else if (matches.length === 1 && matches[0][0] === sourceString) {
-    // If only one match and it covers the entire string, it's a single filename.
-    return [sourceString];
+  if (parts.length > 0) {
+    return parts;
   } else {
-    // Fallback: if no specific pattern or partial match, treat the whole string as a single source.
-    // This handles cases where the string might be a simple filename without the complex pattern,
-    // or if the concatenation pattern is different.
+    // Fallback: if split didn't work as expected, or no pattern found, treat the whole string as a single source.
     return [sourceString];
   }
 };
