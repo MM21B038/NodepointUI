@@ -476,7 +476,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
           Workspace: <span className="font-medium text-foreground break-all">{item.workspace}</span>
         </p>
         <p className="text-sm text-muted-foreground break-words max-w-[95%]">
-          Source Document: <span className="font-medium text-foreground break-all">{item.source as string}</span>
+          Source Document: <span className="font-medium text-foreground break-all">{item.source.join(', ')}</span>
         </p>
         <Separator />
         <h5 className="font-medium text-sm max-w-[95%]">Attributes:</h5>
@@ -509,7 +509,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item }) => {
         <div className="text-sm space-y-1">
           <p className="break-words"><strong>Relationship Type:</strong> {item.label}</p>
           <p><strong>Score/Weight:</strong> {(item.score || 0).toFixed(2)}</p> {/* Safely access score */}
-          <p className="break-words"><strong>Source Document:</strong> <span className="break-all">{item.source_file as string}</span></p>
+          <p className="break-words"><strong>Source Document:</strong> <span className="break-all">{item.source_file.join(', ')}</span></p>
         </div>
       </div>
     );
