@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Play } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -12,10 +12,8 @@ interface WorkspaceCardProps {
   isCurrent: boolean;
   onSelect: (workspaceName: string) => void;
   onDelete: (workspaceName: string) => void;
-  onExtract: (workspaceName: string) => void; // New prop for extract action
   isDeleting: boolean;
   deletingWorkspaceName: string | null;
-  isExtracting: boolean; // New prop for extract loading state
   totalFiles?: number;
   totalNodes?: number;
   totalEdges?: number;
@@ -27,31 +25,29 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   isCurrent,
   onSelect,
   onDelete,
-  onExtract, // Destructure new prop
   isDeleting,
   deletingWorkspaceName,
-  isExtracting, // Destructure new prop
   totalFiles,
   totalNodes,
   totalEdges,
   isLoadingStats,
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState(false); // New state for hover
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
 
   return (
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer",
+        "cursor-pointer", // Removed 'group' class as we're using local state
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
           : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
       )}
       onClick={() => onSelect(workspaceName)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => setIsHovered(true)} // Set hovered state on mouse enter
+      onMouseLeave={() => setIsHovered(false)} // Clear hovered state on mouse leave
     >
       <CardHeader className="p-0 flex flex-col space-y-2">
         <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
@@ -59,50 +55,31 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
             {workspaceName}
           </span>
+          {/* Tick Icon for Current Workspace */}
           {isCurrent && (
             <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
           )}
-          {/* Action Buttons - now grouped and conditionally visible */}
-          <div className={cn(
-            "ml-auto flex space-x-2 transition-all duration-200",
-            (isHovered || isThisWorkspaceDeleting || isExtracting) ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-          )}>
-            {/* Extract Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onExtract(workspaceName);
-              }}
-              disabled={isDeleting || isExtracting}
-              title="Extract Knowledge"
-            >
-              {isExtracting ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-              ) : (
-                <Play className="h-6 w-6" />
-              )}
-            </Button>
-
-            {/* Delete Button */}
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(workspaceName);
-              }}
-              disabled={isDeleting || isExtracting}
-              title="Delete Workspace"
-            >
-              {isThisWorkspaceDeleting ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-              ) : (
-                <Trash2 className="h-6 w-6" />
-              )}
-            </Button>
-          </div>
+          {/* Delete Button - now controlled by local isHovered state */}
+          <Button
+            variant="destructive"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent card selection when clicking delete
+              onDelete(workspaceName);
+            }}
+            disabled={isDeleting}
+            className={cn(
+              "ml-auto transition-all duration-200",
+              "pointer-events-none", // Always disable pointer events by default
+              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0" // Show if hovered or deleting
+            )}
+          >
+            {isThisWorkspaceDeleting ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Trash2 className="h-6 w-6" />
+            )}
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
