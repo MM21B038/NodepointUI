@@ -356,7 +356,7 @@ const WorkspaceManagement = () => {
                                  cursor-pointer z-10 text-foreground hover:text-primary"
                       aria-label="Next page"
                     >
-                      ChevronRight className="h-8 w-8" />
+                      <ChevronRight className="h-8 w-8" />
                     </button>
                   )}
                 </div>
