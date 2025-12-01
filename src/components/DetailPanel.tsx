@@ -80,10 +80,10 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ item, workspaceName }) => {
               {Object.keys(item.attributes).length > 0 ? (
                 <div className="grid grid-cols-1 gap-y-2">
                   {Object.entries(item.attributes).map(([key, value]) => (
-                    <div key={key} className="flex flex-col">
-                      <span className="font-semibold text-sm text-muted-foreground">{key}:</span> 
-                      <span className="text-foreground text-sm break-words">{String(value)}</span>
-                    </div>
+                    <p key={key} className="flex items-baseline text-sm">
+                      <span className="font-semibold text-muted-foreground mr-1">{key}:</span>
+                      <span className="text-foreground break-words flex-1 min-w-0">{String(value)}</span>
+                    </p>
                   ))}
                 </div>
               ) : (
