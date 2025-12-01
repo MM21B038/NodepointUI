@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 
-const WorkspacesPerPage = 4;
+const WorkspacesPerPage = 12; // Changed from 4 to 12
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
@@ -38,9 +38,51 @@ const WorkspaceManagement = () => {
 
   const [currentPage, setCurrentPage] = useState(0);
 
-  // New state for workspace statistics and their loading status
+  // State for workspace statistics and their loading status
   const [workspaceStats, setWorkspaceStats] = useState<Record<string, { files: number; nodes: number; edges: number }>>({});
   const [statsLoading, setStatsLoading] = useState<Record<string, boolean>>({});
+
+  // Function to fetch stats for a given set of workspace names
+  const fetchStatsForSpecificWorkspaces = useCallback(async (namesToFetch: string[]) => {
+    const newStatsLoading: Record<string, boolean> = {};
+    namesToFetch.forEach(name => {
+        // Only fetch if not already loading or loaded
+        if (!statsLoading[name] && !workspaceStats[name]) {
+            newStatsLoading[name] = true;
+        }
+    });
+    setStatsLoading(prev => ({ ...prev, ...newStatsLoading }));
+
+    const statsPromises = namesToFetch.map(async (name) => {
+        // If already loaded and not currently loading, return existing stats
+        if (workspaceStats[name] && !statsLoading[name]) {
+            return { name, ...workspaceStats[name] };
+        }
+        try {
+            const files = await listFiles(name);
+            const graph = await getKnowledgeGraph(name);
+            return {
+                name,
+                files: files.length,
+                nodes: graph.nodes?.length || 0,
+                edges: graph.edges?.length || 0,
+            };
+        } catch (error) {
+            console.error(`Failed to fetch stats for workspace ${name}:`, error);
+            return { name, files: 0, nodes: 0, edges: 0 }; // Return default on error
+        } finally {
+            setStatsLoading(prev => ({ ...prev, [name]: false }));
+        }
+    });
+
+    const results = await Promise.all(statsPromises);
+    const newStats: Record<string, { files: number; nodes: number; edges: number }> = {};
+    results.forEach(stat => {
+        newStats[stat.name] = { files: stat.files, nodes: stat.nodes, edges: stat.edges };
+    });
+    setWorkspaceStats(prev => ({ ...prev, ...newStats }));
+  }, [statsLoading, workspaceStats]);
+
 
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
@@ -53,33 +95,6 @@ const WorkspaceManagement = () => {
       const workspaceNames = list.map(ws => ws.workspace_name);
       setAllWorkspaces(workspaceNames);
 
-      // Fetch stats for each workspace in parallel
-      const statsPromises = list.map(async (wsEntry) => { // Use wsEntry for name
-        setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: true }));
-        try {
-          const files = await listFiles(wsEntry.workspace_name);
-          const graph = await getKnowledgeGraph(wsEntry.workspace_name);
-          return {
-            name: wsEntry.workspace_name,
-            files: files.length,
-            nodes: graph.nodes?.length || 0,
-            edges: graph.edges?.length || 0,
-          };
-        } catch (error) {
-          console.error(`Failed to fetch stats for workspace ${wsEntry.workspace_name}:`, error);
-          return { name: wsEntry.workspace_name, files: 0, nodes: 0, edges: 0 }; // Return default on error
-        } finally {
-          setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: false }));
-        }
-      });
-
-      const results = await Promise.all(statsPromises);
-      const newStats: Record<string, { files: number; nodes: number; edges: number }> = {};
-      results.forEach(stat => {
-        newStats[stat.name] = { files: stat.files, nodes: stat.nodes, edges: stat.edges };
-      });
-      setWorkspaceStats(newStats);
-
       if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
       }
@@ -88,7 +103,7 @@ const WorkspaceManagement = () => {
       } else if (workspaceNames.length === 0) {
         setCurrentWorkspace(null);
       }
-      setCurrentPage(0);
+      setCurrentPage(0); // Reset to first page on refresh
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
       toast.error("Failed to load workspaces.");
@@ -100,6 +115,38 @@ const WorkspaceManagement = () => {
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
+
+  const filteredWorkspaces = useMemo(() => {
+    if (!searchTerm) {
+      return allWorkspaces;
+    }
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    return allWorkspaces.filter(workspace =>
+      workspace.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+  }, [allWorkspaces, searchTerm]);
+
+  const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
+  const startIndex = currentPage * WorkspacesPerPage;
+  const endIndex = startIndex + WorkspacesPerPage;
+  const currentWorkspacesToDisplay = useMemo(() => {
+    return filteredWorkspaces.slice(startIndex, endIndex);
+  }, [filteredWorkspaces, startIndex, endIndex]);
+
+  // Effect to fetch stats for visible workspaces
+  useEffect(() => {
+    if (currentWorkspacesToDisplay.length > 0) {
+        fetchStatsForSpecificWorkspaces(currentWorkspacesToDisplay);
+    }
+  }, [currentWorkspacesToDisplay, fetchStatsForSpecificWorkspaces]);
+
+  // Also, if the currentWorkspace is not in the displayed list, ensure its stats are fetched.
+  useEffect(() => {
+      if (currentWorkspace && !workspaceStats[currentWorkspace] && !statsLoading[currentWorkspace]) {
+          fetchStatsForSpecificWorkspaces([currentWorkspace]);
+      }
+  }, [currentWorkspace, workspaceStats, statsLoading, fetchStatsForSpecificWorkspaces]);
+
 
   const handleCreateWorkspace = async () => {
     const name = newWorkspaceName.trim();
@@ -160,21 +207,6 @@ const WorkspaceManagement = () => {
       setWorkspaceToDelete(null);
     }
   }, [workspaceToDelete, fetchWorkspaces]);
-
-  const filteredWorkspaces = useMemo(() => {
-    if (!searchTerm) {
-      return allWorkspaces;
-    }
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    return allWorkspaces.filter(workspace =>
-      workspace.toLowerCase().includes(lowerCaseSearchTerm)
-    );
-  }, [allWorkspaces, searchTerm]);
-
-  const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
-  const startIndex = currentPage * WorkspacesPerPage;
-  const endIndex = startIndex + WorkspacesPerPage;
-  const currentWorkspacesToDisplay = filteredWorkspaces.slice(startIndex, endIndex);
 
   const handleNextPage = () => {
     setCurrentPage(prev => Math.min(prev + 1, totalPages - 1));
@@ -249,7 +281,7 @@ const WorkspaceManagement = () => {
 
         {/* Right Panel: Workspace List with Hover Navigation */}
         <ResizablePanel defaultSize={75} className="p-4 flex flex-col group">
-          {isLoading ? (
+          {isLoading && allWorkspaces.length === 0 ? ( // Show loading only if no workspaces are loaded yet
             <div className="flex-grow flex flex-col items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="mt-4 text-lg text-muted-foreground">Loading workspaces...</span>
