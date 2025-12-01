@@ -322,7 +322,7 @@ const Documents = () => {
                 </Button>
                 <Button
                   onClick={handleStartPreprocess}
-                  disabled={isPreprocessing || files.length === 0}
+                  disabled={isPreprocessing}
                   size="icon"
                   title={isPreprocessing ? "Processing..." : "Start Preprocessing"}
                 >
