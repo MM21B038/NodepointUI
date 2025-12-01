@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText, X } from "lucide-react";
+import { BookOpen, Info, RefreshCw, Loader2, PanelRightClose, PanelLeftOpen, Search, Network, FileText } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { InteractiveGraphVisualization } from "@/components/InteractiveGraphVisualization";
+import { InteractiveGraphVisualization, DetailPanel } from "@/components/InteractiveGraphVisualization";
 import SearchNodesPanel from "@/components/SearchNodesPanel";
 import NodeTypesPanel from "@/components/NodeTypesPanel";
 import SourceFilesPanel from "@/components/SourceFilesPanel";
-import DetailPanel from "@/components/DetailPanel"; // Import the dedicated DetailPanel component
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getKnowledgeGraph, GraphNode, GraphEdge, FileReference } from "@/database/workspaceStorage";
@@ -15,8 +14,6 @@ import { showError } from "@/utils/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 
 type ActiveFilterPanel = 'none' | 'search' | 'nodeTypes' | 'sourceFiles';
 
@@ -32,6 +29,11 @@ const KnowledgeBase = () => {
 
   // State for the single active filter panel
   const [activeFilterPanel, setActiveFilterPanel] = useState<ActiveFilterPanel>('none');
+
+  // Refs for the panels and filter buttons container
+  const rotatingFilterPanelRef = useRef<HTMLDivElement>(null); // Ref for the single rotating panel container
+  const filterButtonsContainerRef = useRef<HTMLDivElement>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
 
   // State for filter values
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
@@ -60,25 +62,41 @@ const KnowledgeBase = () => {
       const rawNodes = data.nodes || [];
       const rawEdges = data.edges || [];
 
-      const processedNodes: GraphNode[] = rawNodes;
+      // Normalize node.source to always be a string
+      const normalizedNodes: GraphNode[] = rawNodes.map(node => {
+        const normalizedSource = typeof node.source === 'object' && node.source !== null && 'file_name' in node.source
+          ? (node.source as FileReference).file_name
+          : String(node.source);
+        return { ...node, source: normalizedSource };
+      });
+
+      const uniqueNodesMap = new Map<string, GraphNode>();
+      normalizedNodes.forEach(node => {
+        if (!uniqueNodesMap.has(node.id)) {
+          uniqueNodesMap.set(node.id, node);
+        }
+      });
+      const processedNodes: GraphNode[] = Array.from(uniqueNodesMap.values());
       const nodeIds = new Set(processedNodes.map(node => node.id));
 
-      const processedEdges: GraphEdge[] = rawEdges.filter(edge =>
+      // Normalize edge.source_file to always be a string
+      const normalizedEdges: GraphEdge[] = rawEdges.map(edge => {
+        const normalizedSourceFile = typeof edge.source_file === 'object' && edge.source_file !== null && 'file_name' in edge.source_file
+          ? (edge.source_file as FileReference).file_name
+          : String(edge.source_file);
+        return { ...edge, source_file: normalizedSourceFile };
+      });
+
+      const processedEdges: GraphEdge[] = normalizedEdges.filter(edge =>
         nodeIds.has(edge.source as string) && nodeIds.has(edge.target as string)
       );
 
       setAllNodes(processedNodes);
       setAllEdges(processedEdges);
-      
       // On initial load or refresh, if there are nodes, select all by default
       if (processedNodes.length > 0) {
         setSelectedNodeTypes(new Set(processedNodes.map(node => node.type)));
-        
-        const allFileSources = new Set<string>();
-        processedNodes.forEach(node => node.source.forEach(s => allFileSources.add(s)));
-        processedEdges.forEach(edge => edge.source_file.forEach(s => allFileSources.add(s)));
-        setSelectedSourceFiles(allFileSources);
-
+        setSelectedSourceFiles(new Set(processedNodes.map(node => node.source as string)));
       } else {
         setSelectedNodeTypes(new Set());
         setSelectedSourceFiles(new Set());
@@ -115,6 +133,64 @@ const KnowledgeBase = () => {
     }
   }, [currentWorkspace, refreshCounter, fetchGraphData]);
 
+  // Callback to close all filter panels
+  const closeAllFilterPanels = useCallback(() => {
+    setActiveFilterPanel('none');
+  }, []);
+
+  // Effect to handle clicks outside the panels
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // If no filter panel is currently active, there's nothing to close.
+      if (activeFilterPanel === 'none') return;
+
+      // Check if the click originated from within the filter buttons container.
+      // Clicking these buttons should toggle panels, not close them.
+      if (filterButtonsContainerRef.current && filterButtonsContainerRef.current.contains(target)) {
+        return;
+      }
+
+      // Check if the click originated from within the active filter panel itself,
+      // or any of its content rendered via React Portals (like dropdowns).
+      const isClickInsideFilterPanel = (
+        rotatingFilterPanelRef.current && rotatingFilterPanelRef.current.contains(target)
+      ) || target.closest(
+        '[data-radix-popper-content], [data-radix-dropdown-menu-content], [data-radix-menu-content]'
+      );
+
+      if (isClickInsideFilterPanel) {
+        // If the click is inside the filter panel or its associated Radix UI portals, do not close.
+        return;
+      }
+
+      // Check if the click is inside the graph visualization area.
+      // If so, deselect item and close filter panels.
+      if (graphContainerRef.current && graphContainerRef.current.contains(target)) {
+        setSelectedItem(null);
+        closeAllFilterPanels();
+        return;
+      }
+
+      // Check if the click is inside the detail panel.
+      // Clicking the detail panel should not close the filter panel.
+      const detailPanelElement = document.getElementById('detail-panel-container');
+      if (detailPanelElement && detailPanelElement.contains(target)) {
+        return;
+      }
+
+      // If the click is not within any of the above elements, it's truly an "outside" click for the filter panels.
+      setActiveFilterPanel('none');
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeFilterPanel, closeAllFilterPanels, setSelectedItem]);
+
+
   const handleRefreshGraph = () => {
     console.log("KnowledgeBase: handleRefreshGraph called.");
     setRefreshCounter(prev => prev + 1);
@@ -136,9 +212,7 @@ const KnowledgeBase = () => {
       tempNodes = tempNodes.filter((node) => selectedNodeTypes.has(node.type));
     }
     if (selectedSourceFiles.size > 0) {
-      tempNodes = tempNodes.filter((node) => 
-        node.source.some(s => selectedSourceFiles.has(s))
-      );
+      tempNodes = tempNodes.filter((node) => selectedSourceFiles.has(node.source as string));
     }
 
     // Filter edges based on the already filtered nodes and source files
@@ -147,7 +221,7 @@ const KnowledgeBase = () => {
       (edge) =>
         preFilteredNodeIds.has(edge.source as string) &&
         preFilteredNodeIds.has(edge.target as string) &&
-        (selectedSourceFiles.size === 0 || edge.source_file.some(s => selectedSourceFiles.has(s)))
+        (selectedSourceFiles.size === 0 || selectedSourceFiles.has(edge.source_file as string))
     );
 
     // If there's a search query, apply depth filtering
@@ -253,54 +327,59 @@ const KnowledgeBase = () => {
 
   const handleTogglePanel = useCallback((panelName: ActiveFilterPanel) => {
     setActiveFilterPanel(prev => (prev === panelName ? 'none' : panelName));
-    setSelectedItem(null); // Deselect item when changing filter panels
-  }, []);
-
-  const handleGraphBackgroundClick = useCallback(() => {
-    setSelectedItem(null);
   }, []);
 
   return (
-    <div className="flex-grow h-full p-4 bg-gradient-to-br from-background to-muted/20">
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
-      >
-        {/* Left Panel: Filter Controls */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <BookOpen className="h-5 w-5 mr-2 text-primary" />
-                Graph Filters
-              </CardTitle>
-              <div className="flex space-x-2">
+    <div className="relative h-full w-full overflow-hidden p-4">
+      {currentWorkspace && !loading && !error ? (
+        <div ref={graphContainerRef} className="relative h-full w-full border rounded-lg shadow-lg bg-card">
+          {filteredNodes.length > 0 ? (
+            <InteractiveGraphVisualization
+              nodes={filteredNodes}
+              edges={filteredEdges}
+              onSelect={setSelectedItem}
+              selectedItem={selectedItem}
+              onGraphBackgroundClick={closeAllFilterPanels}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <Alert className="max-w-lg">
+                <Info className="h-4 w-4" />
+                <AlertTitle>No Graph Data</AlertTitle>
+                <AlertDescription>
+                  {alertMessage}
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {/* Filter/Refresh Buttons - now fixed at top center */}
+          <div ref={filterButtonsContainerRef} id="filter-buttons-container" className="absolute top-4 left-1/2 -translate-x-1/2 z-30 p-2 bg-background/50 backdrop-blur-sm rounded-lg flex flex-row space-x-2">
+            {currentWorkspace && (
+              <>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('search')}
                   title={activeFilterPanel === 'search' ? "Hide Search Panel" : "Show Search Panel"}
-                  className={cn(activeFilterPanel === 'search' && "bg-accent text-accent-foreground")}
                 >
-                  <Search className="h-4 w-4" />
+                  {activeFilterPanel === 'search' ? <PanelLeftOpen className="h-4 w-4" /> : <Search className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('nodeTypes')}
                   title={activeFilterPanel === 'nodeTypes' ? "Hide Node Types Panel" : "Show Node Types Panel"}
-                  className={cn(activeFilterPanel === 'nodeTypes' && "bg-accent text-accent-foreground")}
                 >
-                  <Network className="h-4 w-4" />
+                  {activeFilterPanel === 'nodeTypes' ? <PanelLeftOpen className="h-4 w-4" /> : <Network className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handleTogglePanel('sourceFiles')}
                   title={activeFilterPanel === 'sourceFiles' ? "Hide Source Files Panel" : "Show Source Files Panel"}
-                  className={cn(activeFilterPanel === 'sourceFiles' && "bg-accent text-accent-foreground")}
                 >
-                  <FileText className="h-4 w-4" />
+                  {activeFilterPanel === 'sourceFiles' ? <PanelLeftOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="outline"
@@ -315,127 +394,93 @@ const KnowledgeBase = () => {
                     <RefreshCw className="h-4 w-4" />
                   )}
                 </Button>
+              </>
+            )}
+          </div>
+
+          {/* Single Rotating Filter Panel Container */}
+          <div ref={rotatingFilterPanelRef} id="rotating-filter-panel-container" className={cn(
+            "absolute left-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+            "w-[var(--filter-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
+            activeFilterPanel !== 'none' ? "translate-x-0" : "-translate-x-full"
+          )}
+          // Removed onClick={e => e.stopPropagation()} here
+          >
+            {activeFilterPanel === 'search' && (
+              <SearchNodesPanel
+                searchQuery={nodeSearchQuery}
+                onSearchQueryChange={setNodeSearchQuery}
+                searchDepth={searchDepth}
+                onSearchDepthChange={setSearchDepth}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
+            {activeFilterPanel === 'nodeTypes' && (
+              <NodeTypesPanel
+                nodes={allNodes}
+                selectedNodeTypes={selectedNodeTypes}
+                onSelectedNodeTypesChange={setSelectedNodeTypes}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
+            {activeFilterPanel === 'sourceFiles' && (
+              <SourceFilesPanel
+                nodes={allNodes}
+                edges={allEdges}
+                selectedSourceFiles={selectedSourceFiles}
+                onSelectedSourceFilesChange={setSelectedSourceFiles}
+                onClose={() => setActiveFilterPanel('none')}
+                onFilterInteraction={onFilterInteraction}
+              />
+            )}
+          </div>
+
+          {/* Detail Panel (right side, higher z-index, relative to the new block) */}
+          {currentWorkspace && !loading && !error && (allNodes.length > 0 || allEdges.length > 0) && (
+            <div id="detail-panel-container" className={cn(
+              "absolute right-0 z-20 p-4 transition-transform duration-300 ease-in-out",
+              "w-[var(--detail-panel-width)] h-[var(--panel-height)] top-[var(--panel-top-offset)]",
+              selectedItem ? "translate-x-0" : "translate-x-full"
+            )}
+            // Removed onClick={e => e.stopPropagation()} here
+            >
+              <div className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg rounded-lg overflow-hidden">
+                <h3 className="text-lg font-semibold p-4 border-b flex items-center justify-between">
+                  Details
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSelectedItem(null);
+                      console.log("KnowledgeBase: Closing Detail Panel.");
+                    }}
+                    title="Close Details"
+                  >
+                    <PanelRightClose className="h-4 w-4" />
+                  </Button>
+                </h3>
+                <ScrollArea className="h-[calc(100%-57px)]">
+                  <DetailPanel item={selectedItem} />
+                </ScrollArea>
               </div>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              {activeFilterPanel === 'search' && (
-                <SearchNodesPanel
-                  searchQuery={nodeSearchQuery}
-                  onSearchQueryChange={setNodeSearchQuery}
-                  searchDepth={searchDepth}
-                  onSearchDepthChange={setSearchDepth}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'nodeTypes' && (
-                <NodeTypesPanel
-                  nodes={allNodes}
-                  selectedNodeTypes={selectedNodeTypes}
-                  onSelectedNodeTypesChange={setSelectedNodeTypes}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'sourceFiles' && (
-                <SourceFilesPanel
-                  nodes={allNodes}
-                  edges={allEdges}
-                  selectedSourceFiles={selectedSourceFiles}
-                  onSelectedSourceFilesChange={setSelectedSourceFiles}
-                  onClose={() => setActiveFilterPanel('none')}
-                  onFilterInteraction={onFilterInteraction}
-                />
-              )}
-              {activeFilterPanel === 'none' && (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-center p-4">
-                  <p>Select a filter option above to begin.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        {/* Middle Panel: Graph Visualization */}
-        <ResizablePanel defaultSize={50} minSize={30}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <BookOpen className="h-5 w-5 mr-2 text-primary" />
-                Knowledge Graph {currentWorkspace && `(${currentWorkspace})`}
-              </CardTitle>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              {currentWorkspace && !loading && !error ? (
-                <div className="relative h-full w-full">
-                  {filteredNodes.length > 0 ? (
-                    <InteractiveGraphVisualization
-                      nodes={filteredNodes}
-                      edges={filteredEdges}
-                      onSelect={setSelectedItem}
-                      selectedItem={selectedItem}
-                      onGraphBackgroundClick={handleGraphBackgroundClick}
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                      <Alert className="max-w-lg">
-                        <Info className="h-4 w-4" />
-                        <AlertTitle>No Graph Data</AlertTitle>
-                        <AlertDescription>
-                          {alertMessage}
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full p-4">
-                  <Alert className="max-w-lg">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
-                    <AlertDescription>
-                      {alertMessage}
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        {/* Right Panel: Detail Panel */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <Card className="h-full border-none shadow-none rounded-none flex flex-col">
-            <CardHeader className="pb-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl font-bold flex items-center">
-                <Info className="h-5 w-5 mr-2 text-primary" />
-                Details
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSelectedItem(null)}
-                title="Clear Selection"
-                disabled={!selectedItem}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <Separator className="mb-4" />
-            <CardContent className="flex-grow p-0 h-[calc(100%-80px)]">
-              <ScrollArea className="h-full hide-scrollbar">
-                <DetailPanel item={selectedItem} workspaceName={currentWorkspace} />
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+          <div className="pointer-events-auto bg-card p-6 rounded-lg shadow-lg">
+            <Alert className="max-w-lg">
+              <Info className="h-4 w-4" />
+              <AlertTitle>{loading ? "Loading..." : "Information"}</AlertTitle>
+              <AlertDescription>
+                {alertMessage}
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
