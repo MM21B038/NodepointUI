@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 
-const WorkspacesPerPage = 4;
+const WorkspacesPerPage = 8; // Changed to 8 workspaces per page
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
@@ -38,14 +38,39 @@ const WorkspaceManagement = () => {
 
   const [currentPage, setCurrentPage] = useState(0);
 
-  // New state for workspace statistics and their loading status
-  const [workspaceStats, setWorkspaceStats] = useState<Record<string, { files: number; nodes: number; edges: number }>>({});
-  const [statsLoading, setStatsLoading] = useState<Record<string, boolean>>({});
+  // State for cached workspace statistics and their loading status
+  const [cachedWorkspaceStats, setCachedWorkspaceStats] = useState<Map<string, { files: number; nodes: number; edges: number }>>(new Map());
+  const [statsLoadingMap, setStatsLoadingMap] = useState<Map<string, boolean>>(new Map());
+
+  // Function to fetch and cache stats for a single workspace
+  const fetchAndCacheStatsForWorkspace = useCallback(async (workspaceName: string) => {
+    // If already cached or currently loading, do nothing
+    if (cachedWorkspaceStats.has(workspaceName) || statsLoadingMap.get(workspaceName)) {
+      return;
+    }
+
+    setStatsLoadingMap(prev => new Map(prev).set(workspaceName, true));
+
+    try {
+      const files = await listFiles(workspaceName);
+      const graph = await getKnowledgeGraph(workspaceName);
+      setCachedWorkspaceStats(prev => new Map(prev).set(workspaceName, {
+        files: files.length,
+        nodes: graph.nodes?.length || 0,
+        edges: graph.edges?.length || 0,
+      }));
+    } catch (error) {
+      console.error(`Failed to fetch stats for workspace ${workspaceName}:`, error);
+      setCachedWorkspaceStats(prev => new Map(prev).set(workspaceName, { files: 0, nodes: 0, edges: 0 })); // Store default on error
+    } finally {
+      setStatsLoadingMap(prev => new Map(prev).set(workspaceName, false));
+    }
+  }, [cachedWorkspaceStats, statsLoadingMap]); // Dependencies for useCallback
 
   const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
     try {
-      const list: WorkspaceEntry[] = await getWorkspaces(); // Expect WorkspaceEntry[]
+      const list: WorkspaceEntry[] = await getWorkspaces();
       
       // Sort by timestamp in descending order (latest first)
       list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -53,33 +78,7 @@ const WorkspaceManagement = () => {
       const workspaceNames = list.map(ws => ws.workspace_name);
       setAllWorkspaces(workspaceNames);
 
-      // Fetch stats for each workspace in parallel
-      const statsPromises = list.map(async (wsEntry) => { // Use wsEntry for name
-        setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: true }));
-        try {
-          const files = await listFiles(wsEntry.workspace_name);
-          const graph = await getKnowledgeGraph(wsEntry.workspace_name);
-          return {
-            name: wsEntry.workspace_name,
-            files: files.length,
-            nodes: graph.nodes?.length || 0,
-            edges: graph.edges?.length || 0,
-          };
-        } catch (error) {
-          console.error(`Failed to fetch stats for workspace ${wsEntry.workspace_name}:`, error);
-          return { name: wsEntry.workspace_name, files: 0, nodes: 0, edges: 0 }; // Return default on error
-        } finally {
-          setStatsLoading(prev => ({ ...prev, [wsEntry.workspace_name]: false }));
-        }
-      });
-
-      const results = await Promise.all(statsPromises);
-      const newStats: Record<string, { files: number; nodes: number; edges: number }> = {};
-      results.forEach(stat => {
-        newStats[stat.name] = { files: stat.files, nodes: stat.nodes, edges: stat.edges };
-      });
-      setWorkspaceStats(newStats);
-
+      // Update current workspace if it's no longer in the list or set a default
       if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
         setCurrentWorkspace(null);
       }
@@ -88,7 +87,7 @@ const WorkspaceManagement = () => {
       } else if (workspaceNames.length === 0) {
         setCurrentWorkspace(null);
       }
-      setCurrentPage(0);
+      setCurrentPage(0); // Reset to first page on refresh
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
       toast.error("Failed to load workspaces.");
@@ -100,6 +99,27 @@ const WorkspaceManagement = () => {
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
+
+  // Effect to load stats for visible and next page workspaces
+  useEffect(() => {
+    if (!currentWorkspace && allWorkspaces.length === 0) return;
+
+    const workspacesToLoad: string[] = [];
+    const currentWorkspaces = filteredWorkspaces.slice(currentPage * WorkspacesPerPage, (currentPage + 1) * WorkspacesPerPage);
+    const nextWorkspaces = filteredWorkspaces.slice((currentPage + 1) * WorkspacesPerPage, (currentPage + 2) * WorkspacesPerPage);
+
+    currentWorkspaces.forEach(ws => workspacesToLoad.push(ws));
+    nextWorkspaces.forEach(ws => workspacesToLoad.push(ws));
+
+    // Filter out duplicates and already cached/loading ones
+    const uniqueWorkspacesToLoad = Array.from(new Set(workspacesToLoad)).filter(ws =>
+        !cachedWorkspaceStats.has(ws) && !statsLoadingMap.get(ws)
+    );
+
+    uniqueWorkspacesToLoad.forEach(ws => fetchAndCacheStatsForWorkspace(ws));
+
+  }, [currentPage, filteredWorkspaces, currentWorkspace, fetchAndCacheStatsForWorkspace, cachedWorkspaceStats, statsLoadingMap, allWorkspaces]);
+
 
   const handleCreateWorkspace = async () => {
     const name = newWorkspaceName.trim();
@@ -150,7 +170,18 @@ const WorkspaceManagement = () => {
     try {
       await deleteWorkspace(workspaceToDelete);
       toast.success(`Workspace "${workspaceToDelete}" deleted successfully!`, { id: loadingToastId });
-      fetchWorkspaces();
+      // Remove from cache and loading map
+      setCachedWorkspaceStats(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(workspaceToDelete);
+        return newMap;
+      });
+      setStatsLoadingMap(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(workspaceToDelete);
+        return newMap;
+      });
+      fetchWorkspaces(); // Re-fetch workspace names to update the list
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
       toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
@@ -273,21 +304,25 @@ const WorkspaceManagement = () => {
               ) : (
                 <div className="relative flex-grow">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch">
-                    {currentWorkspacesToDisplay.map((workspace) => (
-                      <WorkspaceCard
-                        key={workspace}
-                        workspaceName={workspace}
-                        isCurrent={currentWorkspace === workspace}
-                        onSelect={handleSelectWorkspace}
-                        onDelete={handleDeleteClick}
-                        isDeleting={isDeleting}
-                        deletingWorkspaceName={workspaceToDelete}
-                        totalFiles={workspaceStats[workspace]?.files}
-                        totalNodes={workspaceStats[workspace]?.nodes}
-                        totalEdges={workspaceStats[workspace]?.edges}
-                        isLoadingStats={statsLoading[workspace]}
-                      />
-                    ))}
+                    {currentWorkspacesToDisplay.map((workspace) => {
+                      const stats = cachedWorkspaceStats.get(workspace) || { files: 0, nodes: 0, edges: 0 };
+                      const isLoadingStats = statsLoadingMap.get(workspace) || false;
+                      return (
+                        <WorkspaceCard
+                          key={workspace}
+                          workspaceName={workspace}
+                          isCurrent={currentWorkspace === workspace}
+                          onSelect={handleSelectWorkspace}
+                          onDelete={handleDeleteClick}
+                          isDeleting={isDeleting}
+                          deletingWorkspaceName={workspaceToDelete}
+                          totalFiles={stats.files}
+                          totalNodes={stats.nodes}
+                          totalEdges={stats.edges}
+                          isLoadingStats={isLoadingStats}
+                        />
+                      );
+                    })}
                   </div>
 
                   {/* Left Navigation Overlay */}
