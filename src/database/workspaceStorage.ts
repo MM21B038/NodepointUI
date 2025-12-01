@@ -365,19 +365,18 @@ const normalizeSourceEntry = (source: string | FileReference): string[] => {
   }
 
   const sourceString = String(source);
-  // Regex to identify the start of a filename pattern: digits_word_scan_timestamp_part
+  // Regex to identify the start of a filename pattern: digits_word_word_timestamp_part
   // This is used for splitting, so it's a lookahead.
-  // The pattern is: digits, underscore, word chars, underscore, 'scan', underscore, digits-digits-digitsTdigits:digits:digits.digits
-  // We want to split *before* the next occurrence of this pattern.
-  const filenameStartPattern = /(?=\d+_\w+_scan_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/;
+  // The pattern is: digits, underscore, word chars (tool name), underscore, word chars (action like scan/crawl), underscore, timestamp.
+  const filenameStartPattern = /(?=\d+_\w+_\w+_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)/;
   
-  const parts = sourceString.split(filenameStartPattern).filter(part => part.length > 0);
+  const parts = sourceString.split(filenameStartPattern).filter(part => part.length > 0).map(part => part.trim());
 
   if (parts.length > 0) {
     return parts;
   } else {
     // Fallback: if split didn't work as expected, or no pattern found, treat the whole string as a single source.
-    return [sourceString];
+    return [sourceString.trim()];
   }
 };
 
