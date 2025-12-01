@@ -104,9 +104,16 @@ const WorkspaceManagement = () => {
   useEffect(() => {
     if (!currentWorkspace && allWorkspaces.length === 0) return;
 
+    // Recompute filteredWorkspaces here
+    const currentFilteredWorkspaces = searchTerm
+      ? allWorkspaces.filter(workspace =>
+          workspace.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : allWorkspaces;
+
     const workspacesToLoad: string[] = [];
-    const currentWorkspaces = filteredWorkspaces.slice(currentPage * WorkspacesPerPage, (currentPage + 1) * WorkspacesPerPage);
-    const nextWorkspaces = filteredWorkspaces.slice((currentPage + 1) * WorkspacesPerPage, (currentPage + 2) * WorkspacesPerPage);
+    const currentWorkspaces = currentFilteredWorkspaces.slice(currentPage * WorkspacesPerPage, (currentPage + 1) * WorkspacesPerPage);
+    const nextWorkspaces = currentFilteredWorkspaces.slice((currentPage + 1) * WorkspacesPerPage, (currentPage + 2) * WorkspacesPerPage);
 
     currentWorkspaces.forEach(ws => workspacesToLoad.push(ws));
     nextWorkspaces.forEach(ws => workspacesToLoad.push(ws));
@@ -118,7 +125,7 @@ const WorkspaceManagement = () => {
 
     uniqueWorkspacesToLoad.forEach(ws => fetchAndCacheStatsForWorkspace(ws));
 
-  }, [currentPage, filteredWorkspaces, currentWorkspace, fetchAndCacheStatsForWorkspace, cachedWorkspaceStats, statsLoadingMap, allWorkspaces]);
+  }, [currentPage, currentWorkspace, fetchAndCacheStatsForWorkspace, cachedWorkspaceStats, statsLoadingMap, allWorkspaces, searchTerm]);
 
 
   const handleCreateWorkspace = async () => {
@@ -349,7 +356,7 @@ const WorkspaceManagement = () => {
                                  cursor-pointer z-10 text-foreground hover:text-primary"
                       aria-label="Next page"
                     >
-                      <ChevronRight className="h-8 w-8" />
+                      ChevronRight className="h-8 w-8" />
                     </button>
                   )}
                 </div>
