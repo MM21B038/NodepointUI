@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry } from "@/database/workspaceStorage"; // Import WorkspaceEntry
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess } from "@/database/workspaceStorage"; // Import WorkspaceEntry and startPreprocess
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -37,6 +37,10 @@ const WorkspaceManagement = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(0);
+
+  // State for preprocessing
+  const [isPreprocessing, setIsPreprocessing] = useState(false);
+  const [preprocessingWorkspaceName, setPreprocessingWorkspaceName] = useState<string | null>(null);
 
   // State for cached workspace statistics and their loading status
   const [cachedWorkspaceStats, setCachedWorkspaceStats] = useState<Map<string, { files: number; nodes: number; edges: number }>>(new Map());
@@ -199,6 +203,33 @@ const WorkspaceManagement = () => {
     }
   }, [workspaceToDelete, fetchWorkspaces]);
 
+  const handleStartPreprocess = useCallback(async (workspaceName: string) => {
+    setIsPreprocessing(true);
+    setPreprocessingWorkspaceName(workspaceName);
+    const preprocessToastId = toast.loading(`Starting data extraction for "${workspaceName}"...`);
+
+    try {
+      await startPreprocess(workspaceName);
+      toast.success(`Data extraction started for "${workspaceName}"!`, { id: preprocessToastId });
+      // Invalidate cache for this workspace so stats are re-fetched later
+      setCachedWorkspaceStats(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(workspaceName);
+        return newMap;
+      });
+      // Optionally, trigger a re-fetch of stats for the current page after a delay
+      // to reflect updated node/edge counts once preprocessing is done.
+      // For now, we'll rely on the next page load or manual refresh.
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      toast.error(`Failed to start data extraction: ${errorMessage}`, { id: preprocessToastId });
+      console.error("Preprocessing error:", error);
+    } finally {
+      setIsPreprocessing(false);
+      setPreprocessingWorkspaceName(null);
+    }
+  }, []);
+
   const filteredWorkspaces = useMemo(() => {
     if (!searchTerm) {
       return allWorkspaces;
@@ -327,6 +358,9 @@ const WorkspaceManagement = () => {
                           totalNodes={stats.nodes}
                           totalEdges={stats.edges}
                           isLoadingStats={isLoadingStats}
+                          onPreprocess={handleStartPreprocess} // Pass the handler
+                          isPreprocessing={isPreprocessing} // Pass the state
+                          preprocessingWorkspaceName={preprocessingWorkspaceName} // Pass the state
                         />
                       );
                     })}

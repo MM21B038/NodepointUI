@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,6 +18,9 @@ interface WorkspaceCardProps {
   totalNodes?: number;
   totalEdges?: number;
   isLoadingStats?: boolean;
+  onPreprocess: (workspaceName: string) => void; // New prop for preprocessing
+  isPreprocessing: boolean; // New prop to indicate if any workspace is preprocessing
+  preprocessingWorkspaceName: string | null; // New prop to indicate which workspace is preprocessing
 }
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
@@ -31,23 +34,27 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   totalNodes,
   totalEdges,
   isLoadingStats,
+  onPreprocess, // Destructure new prop
+  isPreprocessing, // Destructure new prop
+  preprocessingWorkspaceName, // Destructure new prop
 }) => {
-  const [isHovered, setIsHovered] = useState(false); // New state for hover
+  const [isHovered, setIsHovered] = useState(false);
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
+  const isThisWorkspacePreprocessing = isPreprocessing && preprocessingWorkspaceName === workspaceName;
 
   return (
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer", // Removed 'group' class as we're using local state
+        "cursor-pointer",
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
           : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
       )}
       onClick={() => onSelect(workspaceName)}
-      onMouseEnter={() => setIsHovered(true)} // Set hovered state on mouse enter
-      onMouseLeave={() => setIsHovered(false)} // Clear hovered state on mouse leave
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <CardHeader className="p-0 flex flex-col space-y-2">
         <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
@@ -55,23 +62,21 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           <span className={cn("break-words", isCurrent ? "text-primary" : "text-foreground")}>
             {workspaceName}
           </span>
-          {/* Tick Icon for Current Workspace */}
           {isCurrent && (
             <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
           )}
-          {/* Delete Button - now controlled by local isHovered state */}
           <Button
             variant="destructive"
             size="icon"
             onClick={(e) => {
-              e.stopPropagation(); // Prevent card selection when clicking delete
+              e.stopPropagation();
               onDelete(workspaceName);
             }}
-            disabled={isDeleting}
+            disabled={isDeleting || isPreprocessing}
             className={cn(
               "ml-auto transition-all duration-200",
-              "pointer-events-none", // Always disable pointer events by default
-              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0" // Show if hovered or deleting
+              "pointer-events-none",
+              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0"
             )}
           >
             {isThisWorkspaceDeleting ? (
@@ -83,6 +88,24 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
+        {/* New "Extract Data" button */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent card selection
+            onPreprocess(workspaceName);
+          }}
+          disabled={isPreprocessing} // Disable if any preprocessing is active
+          className="w-full flex items-center justify-center text-sm font-medium py-2"
+        >
+          {isThisWorkspacePreprocessing ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <Play className="h-4 w-4 mr-2" />
+          )}
+          {isThisWorkspacePreprocessing ? "Extracting..." : "Extract Data"}
+        </Button>
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center">
             <FileStack className="h-4 w-4 mr-1" />
