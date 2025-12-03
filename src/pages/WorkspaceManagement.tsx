@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { FolderCog, Info, Loader2, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { FolderCog, Info, Loader2, Plus, Search, ChevronLeft, ChevronRight, Flag } from "lucide-react"; // Added Flag icon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,11 +15,12 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess } from "@/database/workspaceStorage"; // Import WorkspaceEntry and startPreprocess
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess, getFlagStatus } from "@/database/workspaceStorage"; // Import WorkspaceEntry and startPreprocess, getFlagStatus
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 
 const WorkspacesPerPage = 8; // Changed to 8 workspaces per page
 
@@ -31,6 +32,8 @@ const WorkspaceManagement = () => {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [flagFilter, setFlagFilter] = useState<"both" | "flagged" | "unflagged">("both"); // New state for flag filter
+  const [workspaceFlagStatus, setWorkspaceFlagStatus] = useState<Map<string, boolean>>(new Map()); // New state for flag statuses
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
@@ -78,6 +81,21 @@ const WorkspaceManagement = () => {
       
       const workspaceNames = list.map(ws => ws.workspace_name);
       setAllWorkspaces(workspaceNames);
+
+      // Fetch flag status for all workspaces in parallel
+      const flagStatusPromises = workspaceNames.map(async (name) => {
+        try {
+          const status = await getFlagStatus(name);
+          return { name, isFlagged: status.flag };
+        } catch (error) {
+          console.error(`Failed to fetch flag status for ${name}:`, error);
+          return { name, isFlagged: false }; // Default to unflagged on error
+        }
+      });
+      const statuses = await Promise.all(flagStatusPromises);
+      const newFlagStatusMap = new Map<string, boolean>();
+      statuses.forEach(s => newFlagStatusMap.set(s.name, s.isFlagged));
+      setWorkspaceFlagStatus(newFlagStatusMap);
 
       // Update current workspace if it's no longer in the list or set a default
       if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
@@ -225,14 +243,25 @@ const WorkspaceManagement = () => {
   }, [fetchAndCacheStatsForWorkspace]);
 
   const filteredWorkspaces = useMemo(() => {
-    if (!searchTerm) {
-      return allWorkspaces;
+    let tempWorkspaces = allWorkspaces;
+
+    // Apply search term filter
+    if (searchTerm) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      tempWorkspaces = tempWorkspaces.filter(workspace =>
+        workspace.toLowerCase().includes(lowerCaseSearchTerm)
+      );
     }
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    return allWorkspaces.filter(workspace =>
-      workspace.toLowerCase().includes(lowerCaseSearchTerm)
-    );
-  }, [allWorkspaces, searchTerm]);
+
+    // Apply flag filter
+    if (flagFilter !== "both") {
+      tempWorkspaces = tempWorkspaces.filter(workspace => {
+        const isFlagged = workspaceFlagStatus.get(workspace) || false; // Default to false if status not found
+        return flagFilter === "flagged" ? isFlagged : !isFlagged;
+      });
+    }
+    return tempWorkspaces;
+  }, [allWorkspaces, searchTerm, flagFilter, workspaceFlagStatus]);
 
   const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
   const startIndex = currentPage * WorkspacesPerPage;
@@ -306,6 +335,23 @@ const WorkspaceManagement = () => {
               />
             </div>
           </div>
+
+          {/* Filter by Flag Status Section */}
+          <div className="space-y-3">
+            <Label htmlFor="flag-filter" className="text-sm font-medium flex items-center">
+                <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> Filter by Flag Status
+            </Label>
+            <Select value={flagFilter} onValueChange={(value: "both" | "flagged" | "unflagged") => setFlagFilter(value)}>
+                <SelectTrigger id="flag-filter" className="w-full">
+                    <SelectValue placeholder="Filter by flag status" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="both">All Workspaces</SelectItem>
+                    <SelectItem value="flagged">Flagged Workspaces</SelectItem>
+                    <SelectItem value="unflagged">Unflagged Workspaces</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
@@ -331,7 +377,7 @@ const WorkspaceManagement = () => {
             <>
               {filteredWorkspaces.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground text-lg">
-                  <p>No workspaces match your search term.</p>
+                  <p>No workspaces match your current filters.</p>
                 </div>
               ) : (
                 <div className="relative flex-grow">
