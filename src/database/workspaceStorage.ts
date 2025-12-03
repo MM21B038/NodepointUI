@@ -139,6 +139,15 @@ export interface ChatMessage {
   provenance?: ProvenanceEntry[];
 }
 
+// --- Flagging Interfaces ---
+interface FlagResponse {
+  flag: boolean;
+  message: string;
+}
+
+interface FlagStatusResponse {
+  flag: boolean;
+}
 
 /**
  * Retrieves all existing workspace names from the API.
@@ -487,5 +496,76 @@ export async function getChatHistory(workspaceName: string): Promise<ChatHistory
   } catch (error) {
     console.error(`Error fetching chat history for ${workspaceName}:`, error);
     return [];
+  }
+}
+
+/**
+ * Flags a workspace.
+ * @param workspaceName The name of the workspace to flag.
+ * @returns A promise that resolves to the FlagResponse.
+ */
+export async function flagWorkspace(workspaceName: string): Promise<FlagResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/flag`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: workspaceName }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Failed to flag workspace: ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error flagging workspace ${workspaceName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Unflags a workspace.
+ * @param workspaceName The name of the workspace to unflag.
+ * @returns A promise that resolves to the FlagResponse.
+ */
+export async function undoFlagWorkspace(workspaceName: string): Promise<FlagResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/undo_flag`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: workspaceName }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Failed to unflag workspace: ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error unflagging workspace ${workspaceName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Gets the flag status of a workspace.
+ * @param workspaceName The name of the workspace.
+ * @returns A promise that resolves to the FlagStatusResponse.
+ */
+export async function getFlagStatus(workspaceName: string): Promise<FlagStatusResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/flag_status/${workspaceName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`Error fetching flag status for ${workspaceName}:`, error);
+    // Return a default unflagged status on error
+    return { flag: false };
   }
 }

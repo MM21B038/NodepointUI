@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Play } from "lucide-react";
+import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Play, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { flagWorkspace, undoFlagWorkspace, getFlagStatus } from "@/database/workspaceStorage"; // Import new API functions
 
 interface WorkspaceCardProps {
   workspaceName: string;
@@ -18,8 +20,8 @@ interface WorkspaceCardProps {
   totalNodes?: number;
   totalEdges?: number;
   isLoadingStats?: boolean;
-  onExtract: (workspaceName: string) => void; // New prop for extract action
-  isExtracting: boolean; // New prop for extraction loading state
+  onExtract: (workspaceName: string) => void;
+  isExtracting: boolean;
 }
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
@@ -33,25 +35,67 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   totalNodes,
   totalEdges,
   isLoadingStats,
-  onExtract, // Destructure new prop
-  isExtracting, // Destructure new prop
+  onExtract,
+  isExtracting,
 }) => {
-  const [isHovered, setIsHovered] = useState(false); // New state for hover
+  const [isHovered, setIsHovered] = useState(false);
+  const [isFlagged, setIsFlagged] = useState(false);
+  const [isFlagging, setIsFlagging] = useState(false);
+
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
+  const isDisabled = isDeleting || isExtracting || isFlagging;
+
+  // Fetch initial flag status
+  useEffect(() => {
+    const fetchFlagStatus = async () => {
+      try {
+        const status = await getFlagStatus(workspaceName);
+        setIsFlagged(status.flag);
+      } catch (error) {
+        console.error(`Failed to fetch flag status for ${workspaceName}:`, error);
+        setIsFlagged(false); // Default to unflagged on error
+      }
+    };
+    fetchFlagStatus();
+  }, [workspaceName]);
+
+  const handleFlagToggle = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card selection
+    setIsFlagging(true);
+    const action = isFlagged ? "unflag" : "flag";
+    const loadingToastId = toast.loading(`${action === "flag" ? "Flagging" : "Unflagging"} workspace ${workspaceName}...`);
+
+    try {
+      let response;
+      if (isFlagged) {
+        response = await undoFlagWorkspace(workspaceName);
+      } else {
+        response = await flagWorkspace(workspaceName);
+      }
+      setIsFlagged(response.flag);
+      toast.success(response.message, { id: loadingToastId });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : `Failed to ${action} workspace.`;
+      toast.error(errorMessage, { id: loadingToastId });
+      console.error(`Error ${action}ging workspace ${workspaceName}:`, error);
+    } finally {
+      setIsFlagging(false);
+    }
+  }, [workspaceName, isFlagged]);
 
   return (
     <Card
       className={cn(
         "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out",
-        "cursor-pointer", // Removed 'group' class as we're using local state
+        "cursor-pointer",
         "h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
           : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
       )}
       onClick={() => onSelect(workspaceName)}
-      onMouseEnter={() => setIsHovered(true)} // Set hovered state on mouse enter
-      onMouseLeave={() => setIsHovered(false)} // Clear hovered state on mouse leave
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <CardHeader className="p-0 flex flex-col space-y-2">
         <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
@@ -63,19 +107,19 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           {isCurrent && (
             <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
           )}
-          {/* Delete Button - now controlled by local isHovered state */}
+          {/* Delete Button */}
           <Button
             variant="destructive"
             size="icon"
             onClick={(e) => {
-              e.stopPropagation(); // Prevent card selection when clicking delete
+              e.stopPropagation();
               onDelete(workspaceName);
             }}
-            disabled={isDeleting || isExtracting} // Disable if deleting or extracting
+            disabled={isDisabled}
             className={cn(
               "ml-auto transition-all duration-200",
-              "pointer-events-none", // Always disable pointer events by default
-              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0" // Show if hovered or deleting
+              "pointer-events-none",
+              (isHovered || isThisWorkspaceDeleting) ? "opacity-100 pointer-events-auto" : "opacity-0"
             )}
           >
             {isThisWorkspaceDeleting ? (
@@ -87,15 +131,34 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
+        {/* Flag Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleFlagToggle}
+          disabled={isDisabled}
+          className={cn(
+            "w-full flex items-center justify-center gap-2",
+            isFlagged ? "text-green-600 hover:bg-green-100" : "text-red-600 hover:bg-red-100"
+          )}
+        >
+          {isFlagging ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Flag className={cn("h-4 w-4", isFlagged ? "fill-green-600" : "fill-red-600")} />
+          )}
+          <span>{isFlagging ? (isFlagged ? "Unflagging..." : "Flagging...") : (isFlagged ? "Flagged" : "Unflagged")}</span>
+        </Button>
+
         {/* Extract Button */}
         <Button
           variant="outline"
           size="sm"
           onClick={(e) => {
-            e.stopPropagation(); // Prevent card selection
+            e.stopPropagation();
             onExtract(workspaceName);
           }}
-          disabled={isExtracting || isDeleting} // Disable if extracting or deleting
+          disabled={isDisabled}
           className="w-full flex items-center justify-center gap-2 text-primary hover:bg-primary/10"
         >
           {isExtracting ? (
