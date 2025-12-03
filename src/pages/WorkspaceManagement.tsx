@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
+import BatchFlaggingControls from "@/components/BatchFlaggingControls"; // New import
 
 const WorkspacesPerPage = 8; // Changed to 8 workspaces per page
 
@@ -282,7 +283,7 @@ const WorkspaceManagement = () => {
         direction="horizontal"
         className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
       >
-        {/* Left Panel: Create and Search */}
+        {/* Left Panel: Create, Search, Filter, and Batch Flagging */}
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
           {/* Create Workspace Section */}
           <div className="space-y-3">
@@ -351,6 +352,16 @@ const WorkspaceManagement = () => {
                     <SelectItem value="unflagged">Unflagged Workspaces</SelectItem>
                 </SelectContent>
             </Select>
+          </div>
+
+          <Separator />
+
+          {/* New: Batch Flagging/Unflagging Section */}
+          <div className="space-y-3">
+            <h2 className="text-xl font-bold flex items-center text-primary">
+              <Flag className="h-5 w-5 mr-2" /> Batch Flagging
+            </h2>
+            <BatchFlaggingControls />
           </div>
         </ResizablePanel>
 
