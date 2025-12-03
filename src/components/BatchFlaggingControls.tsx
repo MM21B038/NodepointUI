@@ -35,24 +35,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
     <div className="space-y-6">
       {/* Removed: Alert for Backend API Required */}
 
-      {/* Flag/Unflag All Workspaces */}
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold flex items-center">
-          <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> All Workspaces
-        </h3>
-        <div className="flex gap-2">
-          {/* Removed: Flag All Button */}
-          <Button
-            onClick={() => handleBatchAction("unflag all", {})}
-            disabled={true} // Disabled until backend API is ready
-            variant="outline"
-            className="flex-1"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-            Unflag All
-          </Button>
-        </div>
-      </div>
+      {/* Removed: Flag/Unflag All Workspaces section */}
 
       <Separator />
 
