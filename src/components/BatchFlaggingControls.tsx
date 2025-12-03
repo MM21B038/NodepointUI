@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Flag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils"; // Import cn for utility classes
 
 interface BatchFlaggingControlsProps {
   activeMethod: 'names' | 'time';
@@ -83,25 +84,27 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
             placeholder="e.g., ProjectA, AS2$, $Project, AS423-453"
             value={namesInput}
             onChange={(e) => setNamesInput(e.target.value)}
-            disabled={true} // Disabled until backend API is ready
+            // Removed disabled={true}
           />
           <div className="flex gap-2">
             <Button
               onClick={() => handleBatchAction("flag by names", { names: parsedNames })}
-              disabled={true} // Disabled until backend API is ready
+              disabled={isProcessing || !namesInput.trim()} // Disabled if processing or input is empty
               className="flex-1"
+              size="icon" // Make button icon-sized
             >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-              Flag Names
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
+              <span className="sr-only">Flag Names</span> {/* Add screen reader text */}
             </Button>
             <Button
               onClick={() => handleBatchAction("unflag by names", { names: parsedNames })}
-              disabled={true} // Disabled until backend API is ready
+              disabled={isProcessing || !namesInput.trim()} // Disabled if processing or input is empty
               variant="outline"
               className="flex-1"
+              size="icon" // Make button icon-sized
             >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-              Unflag Names
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
+              <span className="sr-only">Unflag Names</span> {/* Add screen reader text */}
             </Button>
           </div>
         </div>
@@ -120,7 +123,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
                 type="date"
                 value={afterDate}
                 onChange={(e) => setAfterDate(e.target.value)}
-                disabled={true} // Disabled until backend API is ready
+                // Removed disabled={true}
               />
             </div>
             <div>
@@ -130,27 +133,29 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
                 type="date"
                 value={beforeDate}
                 onChange={(e) => setBeforeDate(e.target.value)}
-                disabled={true} // Disabled until backend API is ready
+                // Removed disabled={true}
               />
             </div>
           </div>
           <div className="flex gap-2">
             <Button
               onClick={() => handleBatchAction("flag by date", { after: afterDate, before: beforeDate })}
-              disabled={true} // Disabled until backend API is ready
+              disabled={isProcessing || (!afterDate && !beforeDate)} // Disabled if processing or both dates are empty
               className="flex-1"
+              size="icon" // Make button icon-sized
             >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-              Flag by Date
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
+              <span className="sr-only">Flag by Date</span> {/* Add screen reader text */}
             </Button>
             <Button
               onClick={() => handleBatchAction("unflag by date", { after: afterDate, before: beforeDate })}
-              disabled={true} // Disabled until backend API is ready
+              disabled={isProcessing || (!afterDate && !beforeDate)} // Disabled if processing or both dates are empty
               variant="outline"
               className="flex-1"
+              size="icon" // Make button icon-sized
             >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-              Unflag by Date
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
+              <span className="sr-only">Unflag by Date</span> {/* Add screen reader text */}
             </Button>
           </div>
         </div>
