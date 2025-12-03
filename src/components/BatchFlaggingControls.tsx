@@ -76,7 +76,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
       {activeMethod === 'names' && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold flex items-center">
-            <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> By Name Sequences
+            By Name Sequences
           </h3>
           <Label htmlFor="names-input">Workspace Names (comma-separated)</Label>
           <Input
@@ -113,7 +113,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
       {activeMethod === 'time' && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold flex items-center">
-            <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> By Creation Time
+            By Creation Time
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
