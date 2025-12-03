@@ -24,6 +24,9 @@ function Calendar({
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
+        caption_dropdowns: "flex gap-1", // Added for dropdown layout
+        caption_dropdown_month: "relative", // Added for month dropdown styling
+        caption_dropdown_year: "relative", // Added for year dropdown styling
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -32,10 +35,10 @@ function Calendar({
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
-        head_row: "flex",
+        head_row: "flex", // Changed to flex for better alignment with dropdowns
         head_cell:
           "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
+        row: "flex w-full mt-2", // Changed to flex for better alignment with dropdowns
         cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-range-start)]:rounded-l-md [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
@@ -56,10 +59,16 @@ function Calendar({
       components={{
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
+        Dropdown: ({ ...props }) => ( // Added custom Dropdown component for styling
+          <select
+            {...props}
+            className={cn(buttonVariants({ variant: "outline" }), "h-8")} // Styled as an outline button
+          />
+        ),
       }}
-      captionLayout="dropdown" // Added for month/year dropdowns
-      fromYear={1900} // Start year for dropdown
-      toYear={2100} // End year for dropdown
+      captionLayout="dropdown"
+      fromYear={1900}
+      toYear={2100}
       {...props}
     />
   );
