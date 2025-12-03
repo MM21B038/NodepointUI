@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Flag, Loader2, Info } from "lucide-react"; // Added Info icon
+import { Flag, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Added Tooltip imports
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
 
 // Helper function to parse workspace names with new patterns
 const parseWorkspaceNames = (input: string): string[] => {
@@ -50,12 +51,8 @@ const parseWorkspaceNames = (input: string): string[] => {
   return parsedNames;
 };
 
-interface BatchFlaggingControlsProps {
-  // Removed activeMethod prop as it's now managed internally
-}
-
-const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
-  const [selectedBatchMethod, setSelectedBatchMethod] = useState<'names' | 'time'>('names'); // Internal state
+const BatchFlaggingControls: React.FC = () => {
+  const [selectedBatchMethod, setSelectedBatchMethod] = useState<'names' | 'time'>('names');
   const [namesInput, setNamesInput] = useState("");
   const [beforeDate, setBeforeDate] = useState<string>("");
   const [afterDate, setAfterDate] = useState<string>("");
@@ -63,7 +60,6 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
 
   const parsedNames = useMemo(() => parseWorkspaceNames(namesInput), [namesInput]);
 
-  // Placeholder function to demonstrate interaction, will be replaced with actual API calls
   const handleBatchAction = (actionType: string, criteria: any) => {
     setIsProcessing(true);
     const loadingToastId = toast.loading(`Attempting to ${actionType} workspaces... (Backend API needed)`);
@@ -75,124 +71,125 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold flex items-center text-primary">
-          <Flag className="h-5 w-5 mr-2" /> Batch Flagging
-        </h2>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <Info className="h-4 w-4 text-muted-foreground" />
+    <Card className="p-0 border-none shadow-none"> {/* Wrapped in Card */}
+      <CardHeader className="pb-3 px-0 pt-0">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-xl font-bold flex items-center text-primary">
+            <Flag className="h-5 w-5 mr-2" /> Batch Flagging
+          </CardTitle>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-sm">
+                <p className="font-semibold mb-1">How to use Batch Flagging:</p>
+                <p className="mb-2">
+                  <span className="font-medium">By Name Sequences:</span> Enter workspace names separated by commas. You can use patterns like `ProjectA`, `AS2$` (starts with AS2), `$Project` (ends with Project), or `AS423-453` (a range of numbers).
+                </p>
+                <p>
+                  <span className="font-medium">By Creation Time:</span> Specify 'Created After' and/or 'Created Before' dates in YYYY-MM-DD format to flag/unflag workspaces created within that period.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 px-0 pb-0"> {/* CardContent for the rest of the controls */}
+        <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select Method" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="names">By Name Sequences</SelectItem>
+            <SelectItem value="time">By Creation Time</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {selectedBatchMethod === 'names' && (
+          <div className="space-y-3">
+            <Label htmlFor="names-input">Workspace Names (comma-separated)</Label>
+            <Input
+              id="names-input"
+              placeholder="e.g., ProjectA, AS2$, $Project, AS423-453"
+              value={namesInput}
+              onChange={(e) => setNamesInput(e.target.value)}
+              disabled={isProcessing}
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleBatchAction("flag by names", { names: parsedNames })}
+                disabled={isProcessing || !namesInput.trim()}
+                className="flex-1"
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-green-600 mr-2" />}
+                Flag Workspaces
               </Button>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs text-sm">
-              <p className="font-semibold mb-1">How to use Batch Flagging:</p>
-              <p className="mb-2">
-                <span className="font-medium">By Name Sequences:</span> Enter workspace names separated by commas. You can use patterns like `ProjectA`, `AS2$` (starts with AS2), `$Project` (ends with Project), or `AS423-453` (a range of numbers).
-              </p>
-              <p>
-                <span className="font-medium">By Creation Time:</span> Specify 'Created After' and/or 'Created Before' dates in YYYY-MM-DD format to flag/unflag workspaces created within that period.
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-      <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select Method" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="names">By Name Sequences</SelectItem>
-          <SelectItem value="time">By Creation Time</SelectItem>
-        </SelectContent>
-      </Select>
-
-      {selectedBatchMethod === 'names' && (
-        <div className="space-y-3">
-          <Label htmlFor="names-input">Workspace Names (comma-separated)</Label>
-          <Input
-            id="names-input"
-            placeholder="e.g., ProjectA, AS2$, $Project, AS423-453"
-            value={namesInput}
-            onChange={(e) => setNamesInput(e.target.value)}
-            disabled={isProcessing}
-          />
-          <div className="flex gap-2">
-            <Button
-              onClick={() => handleBatchAction("flag by names", { names: parsedNames })}
-              disabled={isProcessing || !namesInput.trim()}
-              className="flex-1"
-              size="icon"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
-              <span className="sr-only">Flag Names</span>
-            </Button>
-            <Button
-              onClick={() => handleBatchAction("unflag by names", { names: parsedNames })}
-              disabled={isProcessing || !namesInput.trim()}
-              variant="outline"
-              className="flex-1"
-              size="icon"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
-              <span className="sr-only">Unflag Names</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {selectedBatchMethod === 'time' && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="after-date">Created After (YYYY-MM-DD)</Label>
-              <Input
-                id="after-date"
-                type="text"
-                placeholder="e.g., 2023-01-01"
-                value={afterDate}
-                onChange={(e) => setAfterDate(e.target.value)}
-                disabled={isProcessing}
-              />
-            </div>
-            <div>
-              <Label htmlFor="before-date">Created Before (YYYY-MM-DD)</Label>
-              <Input
-                id="before-date"
-                type="text"
-                placeholder="e.g., 2023-12-31"
-                value={beforeDate}
-                onChange={(e) => setBeforeDate(e.target.value)}
-                disabled={isProcessing}
-              />
+              <Button
+                onClick={() => handleBatchAction("unflag by names", { names: parsedNames })}
+                disabled={isProcessing || !namesInput.trim()}
+                variant="outline"
+                className="flex-1"
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-red-600 mr-2" />}
+                Unflag Workspaces
+              </Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => handleBatchAction("flag by date", { after: afterDate, before: beforeDate })}
-              disabled={isProcessing || (!afterDate && !beforeDate)}
-              className="flex-1"
-              size="icon"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
-              <span className="sr-only">Flag by Date</span>
-            </Button>
-            <Button
-              onClick={() => handleBatchAction("unflag by date", { after: afterDate, before: beforeDate })}
-              disabled={isProcessing || (!afterDate && !beforeDate)}
-              variant="outline"
-              className="flex-1"
-              size="icon"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
-              <span className="sr-only">Unflag by Date</span>
-            </Button>
+        )}
+
+        {selectedBatchMethod === 'time' && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="after-date">Created After</Label>
+                <Input
+                  id="after-date"
+                  type="text"
+                  placeholder="YYYY-MM-DD"
+                  value={afterDate}
+                  onChange={(e) => setAfterDate(e.target.value)}
+                  disabled={isProcessing}
+                />
+              </div>
+              <div>
+                <Label htmlFor="before-date">Created Before</Label>
+                <Input
+                  id="before-date"
+                  type="text"
+                  placeholder="YYYY-MM-DD"
+                  value={beforeDate}
+                  onChange={(e) => setBeforeDate(e.target.value)}
+                  disabled={isProcessing}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">Format: YYYY-MM-DD</p> {/* Date format hint */}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleBatchAction("flag by date", { after: afterDate, before: beforeDate })}
+                disabled={isProcessing || (!afterDate && !beforeDate)}
+                className="flex-1"
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-green-600 mr-2" />}
+                Flag Workspaces
+              </Button>
+              <Button
+                onClick={() => handleBatchAction("unflag by date", { after: afterDate, before: beforeDate })}
+                disabled={isProcessing || (!afterDate && !beforeDate)}
+                variant="outline"
+                className="flex-1"
+              >
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-red-600 mr-2" />}
+                Unflag Workspaces
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
