@@ -35,6 +35,7 @@ const WorkspaceManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [flagFilter, setFlagFilter] = useState<"both" | "flagged" | "unflagged">("both"); // New state for flag filter
   const [workspaceFlagStatus, setWorkspaceFlagStatus] = useState<Map<string, boolean>>(new Map()); // New state for flag statuses
+  const [selectedBatchMethod, setSelectedBatchMethod] = useState<'names' | 'time'>('names'); // New state for batch method
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
@@ -358,10 +359,21 @@ const WorkspaceManagement = () => {
 
           {/* New: Batch Flagging/Unflagging Section */}
           <div className="space-y-3">
-            <h2 className="text-xl font-bold flex items-center text-primary">
-              <Flag className="h-5 w-5 mr-2" /> Batch Flagging
-            </h2>
-            <BatchFlaggingControls />
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center text-primary">
+                <Flag className="h-5 w-5 mr-2" /> Batch Flagging
+              </h2>
+              <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select Method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="names">By Name Sequences</SelectItem>
+                  <SelectItem value="time">By Creation Time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <BatchFlaggingControls activeMethod={selectedBatchMethod} />
           </div>
         </ResizablePanel>
 
