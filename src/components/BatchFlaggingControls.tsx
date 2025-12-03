@@ -33,13 +33,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
 
   return (
     <div className="space-y-6">
-      <Alert variant="default" className="border-l-4 border-primary">
-        <Info className="h-4 w-4" />
-        <AlertTitle>Backend API Required</AlertTitle>
-        <AlertDescription>
-          Batch flagging/unflagging by sequences or time requires new backend API endpoints. The controls below are currently disabled.
-        </AlertDescription>
-      </Alert>
+      {/* Removed: Alert for Backend API Required */}
 
       {/* Flag/Unflag All Workspaces */}
       <div className="space-y-3">
@@ -47,14 +41,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
           <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> All Workspaces
         </h3>
         <div className="flex gap-2">
-          <Button
-            onClick={() => handleBatchAction("flag all", {})}
-            disabled={true} // Disabled until backend API is ready
-            className="flex-1"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 mr-2" />}
-            Flag All
-          </Button>
+          {/* Removed: Flag All Button */}
           <Button
             onClick={() => handleBatchAction("unflag all", {})}
             disabled={true} // Disabled until backend API is ready
