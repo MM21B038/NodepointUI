@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Flag, Loader2, CalendarIcon } from "lucide-react"; // Added CalendarIcon
+import { Flag, Loader2 } from "lucide-react"; // Removed CalendarIcon
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Calendar } from "@/components/ui/calendar"; // Added Calendar
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover components
-import { format } from "date-fns"; // Added format from date-fns
+// Removed Calendar and Popover components as they are no longer needed
+// Removed format from date-fns as it's no longer needed
 
 interface BatchFlaggingControlsProps {
   activeMethod: 'names' | 'time';
@@ -61,9 +60,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
   const [afterDate, setAfterDate] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // State for calendar popovers
-  const [isAfterDatePopoverOpen, setIsAfterDatePopoverOpen] = useState(false);
-  const [isBeforeDatePopoverOpen, setIsBeforeDatePopoverOpen] = useState(false);
+  // Removed state for calendar popovers as they are no longer needed
 
   const parsedNames = useMemo(() => parseWorkspaceNames(namesInput), [namesInput]);
 
@@ -91,6 +88,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
             placeholder="e.g., ProjectA, AS2$, $Project, AS423-453"
             value={namesInput}
             onChange={(e) => setNamesInput(e.target.value)}
+            disabled={isProcessing}
           />
           <div className="flex gap-2">
             <Button
@@ -123,60 +121,26 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="after-date">Created After</Label>
-              <Popover open={isAfterDatePopoverOpen} onOpenChange={setIsAfterDatePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !afterDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {afterDate ? format(new Date(afterDate), "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={afterDate ? new Date(afterDate) : undefined}
-                    onSelect={(date) => {
-                      setAfterDate(date ? format(date, "yyyy-MM-dd") : "");
-                      setIsAfterDatePopoverOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="after-date">Created After (YYYY-MM-DD)</Label>
+              <Input
+                id="after-date"
+                type="text" // Changed to text to allow flexible input
+                placeholder="e.g., 2023-01-01"
+                value={afterDate}
+                onChange={(e) => setAfterDate(e.target.value)}
+                disabled={isProcessing}
+              />
             </div>
             <div>
-              <Label htmlFor="before-date">Created Before</Label>
-              <Popover open={isBeforeDatePopoverOpen} onOpenChange={setIsBeforeDatePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !beforeDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {beforeDate ? format(new Date(beforeDate), "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={beforeDate ? new Date(beforeDate) : undefined}
-                    onSelect={(date) => {
-                      setBeforeDate(date ? format(date, "yyyy-MM-dd") : "");
-                      setIsBeforeDatePopoverOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="before-date">Created Before (YYYY-MM-DD)</Label>
+              <Input
+                id="before-date"
+                type="text" // Changed to text to allow flexible input
+                placeholder="e.g., 2023-12-31"
+                value={beforeDate}
+                onChange={(e) => setBeforeDate(e.target.value)}
+                disabled={isProcessing}
+              />
             </div>
           </div>
           <div className="flex gap-2">
