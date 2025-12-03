@@ -562,7 +562,9 @@ export async function getFlagStatus(workspaceName: string): Promise<FlagStatusRe
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    // Map the backend's 'flag_status' to the frontend's 'flag' property
+    return { flag: data.flag_status };
   } catch (error) {
     console.error(`Error fetching flag status for ${workspaceName}:`, error);
     // Return a default unflagged status on error
