@@ -5,15 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Flag, Loader2 } from "lucide-react"; // Removed CalendarIcon
+import { Flag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-// Removed Calendar and Popover components as they are no longer needed
-// Removed format from date-fns as it's no longer needed
-
-interface BatchFlaggingControlsProps {
-  activeMethod: 'names' | 'time';
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 
 // Helper function to parse workspace names with new patterns
 const parseWorkspaceNames = (input: string): string[] => {
@@ -54,13 +49,16 @@ const parseWorkspaceNames = (input: string): string[] => {
   return parsedNames;
 };
 
-const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMethod }) => {
+interface BatchFlaggingControlsProps {
+  // Removed activeMethod prop as it's now managed internally
+}
+
+const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
+  const [selectedBatchMethod, setSelectedBatchMethod] = useState<'names' | 'time'>('names'); // Internal state
   const [namesInput, setNamesInput] = useState("");
   const [beforeDate, setBeforeDate] = useState<string>("");
   const [afterDate, setAfterDate] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Removed state for calendar popovers as they are no longer needed
 
   const parsedNames = useMemo(() => parseWorkspaceNames(namesInput), [namesInput]);
 
@@ -76,12 +74,22 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
   };
 
   return (
-    <div className="space-y-6">
-      {activeMethod === 'names' && (
+    <div className="space-y-3">
+      <h2 className="text-xl font-bold flex items-center text-primary">
+        <Flag className="h-5 w-5 mr-2" /> Batch Flagging
+      </h2>
+      <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
+        <SelectTrigger className="w-full"> {/* Changed width to full */}
+          <SelectValue placeholder="Select Method" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="names">By Name Sequences</SelectItem>
+          <SelectItem value="time">By Creation Time</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {selectedBatchMethod === 'names' && (
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold flex items-center">
-            By Name Sequences
-          </h3>
           <Label htmlFor="names-input">Workspace Names (comma-separated)</Label>
           <Input
             id="names-input"
@@ -114,17 +122,14 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
         </div>
       )}
 
-      {activeMethod === 'time' && (
+      {selectedBatchMethod === 'time' && (
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold flex items-center">
-            By Creation Time
-          </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="after-date">Created After (YYYY-MM-DD)</Label>
               <Input
                 id="after-date"
-                type="text" // Changed to text to allow flexible input
+                type="text"
                 placeholder="e.g., 2023-01-01"
                 value={afterDate}
                 onChange={(e) => setAfterDate(e.target.value)}
@@ -135,7 +140,7 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
               <Label htmlFor="before-date">Created Before (YYYY-MM-DD)</Label>
               <Input
                 id="before-date"
-                type="text" // Changed to text to allow flexible input
+                type="text"
                 placeholder="e.g., 2023-12-31"
                 value={beforeDate}
                 onChange={(e) => setBeforeDate(e.target.value)}
