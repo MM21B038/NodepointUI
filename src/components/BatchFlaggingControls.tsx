@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Flag, Loader2 } from "lucide-react";
+import { Flag, Loader2, Info } from "lucide-react"; // Added Info icon
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Added Tooltip imports
 
 // Helper function to parse workspace names with new patterns
 const parseWorkspaceNames = (input: string): string[] => {
@@ -75,11 +76,31 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = () => {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-xl font-bold flex items-center text-primary">
-        <Flag className="h-5 w-5 mr-2" /> Batch Flagging
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold flex items-center text-primary">
+          <Flag className="h-5 w-5 mr-2" /> Batch Flagging
+        </h2>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-sm">
+              <p className="font-semibold mb-1">How to use Batch Flagging:</p>
+              <p className="mb-2">
+                <span className="font-medium">By Name Sequences:</span> Enter workspace names separated by commas. You can use patterns like `ProjectA`, `AS2$` (starts with AS2), `$Project` (ends with Project), or `AS423-453` (a range of numbers).
+              </p>
+              <p>
+                <span className="font-medium">By Creation Time:</span> Specify 'Created After' and/or 'Created Before' dates in YYYY-MM-DD format to flag/unflag workspaces created within that period.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
-        <SelectTrigger className="w-full"> {/* Changed width to full */}
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Select Method" />
         </SelectTrigger>
         <SelectContent>
