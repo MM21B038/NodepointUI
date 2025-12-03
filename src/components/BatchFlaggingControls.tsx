@@ -71,7 +71,7 @@ const BatchFlaggingControls: React.FC = () => {
   };
 
   return (
-    <Card className="p-0 border-none shadow-none"> {/* Wrapped in Card */}
+    <Card className="p-0 border-none shadow-none">
       <CardHeader className="pb-3 px-0 pt-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center text-primary">
@@ -97,7 +97,7 @@ const BatchFlaggingControls: React.FC = () => {
           </TooltipProvider>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 px-0 pb-0"> {/* CardContent for the rest of the controls */}
+      <CardContent className="space-y-3 px-0 pb-0">
         <Select value={selectedBatchMethod} onValueChange={(value: 'names' | 'time') => setSelectedBatchMethod(value)}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select Method" />
@@ -123,18 +123,20 @@ const BatchFlaggingControls: React.FC = () => {
                 onClick={() => handleBatchAction("flag by names", { names: parsedNames })}
                 disabled={isProcessing || !namesInput.trim()}
                 className="flex-1"
+                size="icon" // Set size to icon
               >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-green-600 mr-2" />}
-                Flag Workspaces
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
+                <span className="sr-only">Flag Workspaces</span> {/* Screen reader text */}
               </Button>
               <Button
                 onClick={() => handleBatchAction("unflag by names", { names: parsedNames })}
                 disabled={isProcessing || !namesInput.trim()}
                 variant="outline"
                 className="flex-1"
+                size="icon" // Set size to icon
               >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-red-600 mr-2" />}
-                Unflag Workspaces
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
+                <span className="sr-only">Unflag Workspaces</span> {/* Screen reader text */}
               </Button>
             </div>
           </div>
@@ -166,24 +168,26 @@ const BatchFlaggingControls: React.FC = () => {
                 />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2">Format: YYYY-MM-DD</p> {/* Date format hint */}
+            <p className="text-xs text-muted-foreground -mt-2">Format: YYYY-MM-DD</p>
             <div className="flex gap-2">
               <Button
                 onClick={() => handleBatchAction("flag by date", { after: afterDate, before: beforeDate })}
                 disabled={isProcessing || (!afterDate && !beforeDate)}
                 className="flex-1"
+                size="icon" // Set size to icon
               >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-green-600 mr-2" />}
-                Flag Workspaces
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
+                <span className="sr-only">Flag Workspaces</span> {/* Screen reader text */}
               </Button>
               <Button
                 onClick={() => handleBatchAction("unflag by date", { after: afterDate, before: beforeDate })}
                 disabled={isProcessing || (!afterDate && !beforeDate)}
                 variant="outline"
                 className="flex-1"
+                size="icon" // Set size to icon
               >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Flag className="h-4 w-4 text-red-600 mr-2" />}
-                Unflag Workspaces
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
+                <span className="sr-only">Unflag Workspaces</span> {/* Screen reader text */}
               </Button>
             </div>
           </div>
