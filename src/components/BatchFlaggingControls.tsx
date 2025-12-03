@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Flag, Loader2 } from "lucide-react";
+import { Flag, Loader2, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { toast } from "sonner";
-import { cn } from "@/lib/utils"; // Import cn for utility classes
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar"; // Added Calendar
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover components
+import { format } from "date-fns"; // Added format from date-fns
 
 interface BatchFlaggingControlsProps {
   activeMethod: 'names' | 'time';
@@ -54,9 +57,13 @@ const parseWorkspaceNames = (input: string): string[] => {
 
 const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMethod }) => {
   const [namesInput, setNamesInput] = useState("");
-  const [beforeDate, setBeforeDate] = useState("");
-  const [afterDate, setAfterDate] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false); // Simulate processing state
+  const [beforeDate, setBeforeDate] = useState<string>("");
+  const [afterDate, setAfterDate] = useState<string>("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // State for calendar popovers
+  const [isAfterDatePopoverOpen, setIsAfterDatePopoverOpen] = useState(false);
+  const [isBeforeDatePopoverOpen, setIsBeforeDatePopoverOpen] = useState(false);
 
   const parsedNames = useMemo(() => parseWorkspaceNames(namesInput), [namesInput]);
 
@@ -84,27 +91,26 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
             placeholder="e.g., ProjectA, AS2$, $Project, AS423-453"
             value={namesInput}
             onChange={(e) => setNamesInput(e.target.value)}
-            // Removed disabled={true}
           />
           <div className="flex gap-2">
             <Button
               onClick={() => handleBatchAction("flag by names", { names: parsedNames })}
-              disabled={isProcessing || !namesInput.trim()} // Disabled if processing or input is empty
+              disabled={isProcessing || !namesInput.trim()}
               className="flex-1"
-              size="icon" // Make button icon-sized
+              size="icon"
             >
               {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
-              <span className="sr-only">Flag Names</span> {/* Add screen reader text */}
+              <span className="sr-only">Flag Names</span>
             </Button>
             <Button
               onClick={() => handleBatchAction("unflag by names", { names: parsedNames })}
-              disabled={isProcessing || !namesInput.trim()} // Disabled if processing or input is empty
+              disabled={isProcessing || !namesInput.trim()}
               variant="outline"
               className="flex-1"
-              size="icon" // Make button icon-sized
+              size="icon"
             >
               {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
-              <span className="sr-only">Unflag Names</span> {/* Add screen reader text */}
+              <span className="sr-only">Unflag Names</span>
             </Button>
           </div>
         </div>
@@ -118,44 +124,80 @@ const BatchFlaggingControls: React.FC<BatchFlaggingControlsProps> = ({ activeMet
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="after-date">Created After</Label>
-              <Input
-                id="after-date"
-                type="date"
-                value={afterDate}
-                onChange={(e) => setAfterDate(e.target.value)}
-                // Removed disabled={true}
-              />
+              <Popover open={isAfterDatePopoverOpen} onOpenChange={setIsAfterDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !afterDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {afterDate ? format(new Date(afterDate), "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={afterDate ? new Date(afterDate) : undefined}
+                    onSelect={(date) => {
+                      setAfterDate(date ? format(date, "yyyy-MM-dd") : "");
+                      setIsAfterDatePopoverOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label htmlFor="before-date">Created Before</Label>
-              <Input
-                id="before-date"
-                type="date"
-                value={beforeDate}
-                onChange={(e) => setBeforeDate(e.target.value)}
-                // Removed disabled={true}
-              />
+              <Popover open={isBeforeDatePopoverOpen} onOpenChange={setIsBeforeDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !beforeDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {beforeDate ? format(new Date(beforeDate), "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={beforeDate ? new Date(beforeDate) : undefined}
+                    onSelect={(date) => {
+                      setBeforeDate(date ? format(date, "yyyy-MM-dd") : "");
+                      setIsBeforeDatePopoverOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <div className="flex gap-2">
             <Button
               onClick={() => handleBatchAction("flag by date", { after: afterDate, before: beforeDate })}
-              disabled={isProcessing || (!afterDate && !beforeDate)} // Disabled if processing or both dates are empty
+              disabled={isProcessing || (!afterDate && !beforeDate)}
               className="flex-1"
-              size="icon" // Make button icon-sized
+              size="icon"
             >
               {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-green-600" />}
-              <span className="sr-only">Flag by Date</span> {/* Add screen reader text */}
+              <span className="sr-only">Flag by Date</span>
             </Button>
             <Button
               onClick={() => handleBatchAction("unflag by date", { after: afterDate, before: beforeDate })}
-              disabled={isProcessing || (!afterDate && !beforeDate)} // Disabled if processing or both dates are empty
+              disabled={isProcessing || (!afterDate && !beforeDate)}
               variant="outline"
               className="flex-1"
-              size="icon" // Make button icon-sized
+              size="icon"
             >
               {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4 text-red-600" />}
-              <span className="sr-only">Unflag by Date</span> {/* Add screen reader text */}
+              <span className="sr-only">Unflag by Date</span>
             </Button>
           </div>
         </div>
