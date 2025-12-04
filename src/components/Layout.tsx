@@ -5,8 +5,8 @@ import Navbar from "./Navbar";
 import { MadeWithDyad } from "./made-with-dyad";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import SidebarNav from "./SidebarNav"; // New import
-import { FileStack, BookOpen, FolderCog, MessageCircle } from "lucide-react"; // Removed ArrowDown
+import SidebarNav from "./SidebarNav";
+import { FileStack, BookOpen, FolderCog, MessageCircle } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,16 +17,12 @@ const pages = [
   { path: "/documents", name: "Documents", icon: FileStack },
   { path: "/knowledge-base", name: "Knowledge Base", icon: BookOpen },
   { path: "/chatin", name: "ChatIn", icon: MessageCircle },
+  { path: "/stream", name: "Stream", icon: MessageCircle }, // New entry for Stream
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const isKnowledgeBase = location.pathname === "/knowledge-base";
-  // const isChatInPage = location.pathname === "/chatin"; // No longer needed
-
-  // Removed state and ref for the scroll-to-bottom button
-  // Removed function to scroll ChatIn's content to bottom
-  // Removed chatInProps and React.cloneElement logic
 
   return (
     <div className="flex flex-col h-screen">
@@ -53,8 +49,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
         </main>
       </div>
-
-      {/* Removed Scroll to bottom button */}
 
       <MadeWithDyad />
     </div>

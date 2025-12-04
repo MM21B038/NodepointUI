@@ -9,7 +9,8 @@ import Layout from "./components/Layout";
 import Documents from "./pages/Documents";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import WorkspaceManagement from "./pages/WorkspaceManagement";
-import ChatIn from "./pages/ChatIn"; // Import the new ChatIn page
+import ChatIn from "./pages/ChatIn";
+import Stream from "./pages/Stream"; // Import the new Stream page
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,7 +31,8 @@ const App = () => (
                 <Route path="/documents" element={<Layout><Documents /></Layout>} />
                 <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
                 <Route path="/workspace-management" element={<Layout><WorkspaceManagement /></Layout>} />
-                <Route path="/chatin" element={<Layout><ChatIn /></Layout>} /> {/* New route for ChatIn */}
+                <Route path="/chatin" element={<Layout><ChatIn /></Layout>} />
+                <Route path="/stream" element={<Layout><Stream /></Layout>} /> {/* New route for Stream */}
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
