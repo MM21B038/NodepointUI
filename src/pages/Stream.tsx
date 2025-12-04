@@ -178,15 +178,30 @@ const Stream: React.FC<StreamProps> = () => {
                         <span>Waiting for first step...</span>
                       </div>
                     ) : (
-                      thinkingLogs.map((log, i) => (
-                        <div key={i} className="thinking-row flex items-center gap-2">
-                          <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
-                          <span className="text-muted-foreground">— {log.status}</span>
-                          {isStreaming && i === thinkingLogs.length - 1 && (
-                            <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
-                          )}
-                        </div>
-                      ))
+                      <Accordion type="multiple" className="w-full"> {/* Nested Accordion for individual logs */}
+                        {thinkingLogs.map((log, i) => (
+                          <AccordionItem key={i} value={`log-${i}`} className="border-b last:border-b-0">
+                            <AccordionTrigger className="py-2 text-sm text-foreground hover:no-underline">
+                              <div className="flex items-center gap-2 w-full">
+                                <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
+                                <span className="text-muted-foreground">— {log.status}</span>
+                                {isStreaming && i === thinkingLogs.length - 1 && (
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
+                                )}
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-0 pb-2">
+                              {log.data && Object.keys(log.data).length > 0 ? (
+                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                  <code>{JSON.stringify(log.data, null, 2)}</code>
+                                </pre>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                              )}
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
                     )}
                   </div>
                 </AccordionContent>
