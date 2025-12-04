@@ -468,6 +468,47 @@ export async function performSearch(
 }
 
 /**
+ * Performs a streaming search query using the specified engine and file filters.
+ * @param workspaceName The name of the workspace.
+ * @param engine The search engine to use.
+ * @param query The search query string.
+ * @param filesFilter An array of file names or 'all' to filter the search.
+ * @returns A promise that resolves to a ReadableStreamDefaultReader for processing events.
+ */
+export async function performStreamingSearch(
+  workspaceName: string,
+  engine: SearchEngineType,
+  query: string,
+  filesFilter: string[] | "all"
+): Promise<ReadableStreamDefaultReader> {
+  try {
+    const body: SearchRequest = {
+      query: query,
+      filter: { files: filesFilter },
+    };
+
+    const response = await fetch(`${API_BASE_URL}/streaming_search/${workspaceName}/${engine}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok || !response.body) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Streaming search failed: ${response.statusText}`);
+    }
+
+    return response.body.getReader();
+  } catch (error) {
+    console.error(`Error performing streaming search in ${workspaceName} with ${engine}:`, error);
+    throw error;
+  }
+}
+
+
+/**
  * Asks a question to the AI, using the default agent search and all files.
  * @param workspaceName The name of the workspace.
  * @param query The question to ask.
