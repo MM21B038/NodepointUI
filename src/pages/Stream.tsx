@@ -19,12 +19,13 @@ import FileFilterDialog from "@/components/FileFilterDialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
 import remarkGfm from 'remark-gfm';
+import ProvenanceDisplay from "@/components/ProvenanceDisplay"; // Import the new ProvenanceDisplay component
 
 interface StreamProps {}
 
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
-  const [thinkingLogs, setThinkingLogs] = useState<any[]>([]); // Reverted to array
+  const [thinkingLogs, setThinkingLogs] = useState<any[]>([]);
   const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -76,7 +77,7 @@ const Stream: React.FC<StreamProps> = () => {
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
-        setThinkingLogs([]); // Clear all thinking logs
+        setThinkingLogs([]);
         setFinalAnswer(null);
       }
     };
@@ -88,7 +89,7 @@ const Stream: React.FC<StreamProps> = () => {
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setThinkingLogs([]); // Clear all previous thinking logs
+    setThinkingLogs([]);
     setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
@@ -116,7 +117,7 @@ const Stream: React.FC<StreamProps> = () => {
             const event = JSON.parse(line.replace("data: ", ""));
             
             if (event.step.startsWith("THINKING")) {
-              setThinkingLogs(prev => [...prev, event]); // Accumulate all thinking logs
+              setThinkingLogs(prev => [...prev, event]);
             }
 
             if (event.step === "FINAL_RESPONSE") {
@@ -238,6 +239,9 @@ const Stream: React.FC<StreamProps> = () => {
                     {finalAnswer.synthesis.answer}
                   </ReactMarkdown>
                 </div>
+                {finalAnswer.synthesis.provenance && finalAnswer.synthesis.provenance.length > 0 && (
+                  <ProvenanceDisplay provenance={finalAnswer.synthesis.provenance} />
+                )}
               </div>
             )}
           </ScrollArea>
