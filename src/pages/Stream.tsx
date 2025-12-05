@@ -24,7 +24,7 @@ interface StreamProps {}
 
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
-  const [thinkingLogs, setThinkingLogs] = useState<any[]>([]);
+  const [currentThinkingLog, setCurrentThinkingLog] = useState<any | null>(null); // Changed from thinkingLogs array
   const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -76,7 +76,7 @@ const Stream: React.FC<StreamProps> = () => {
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
-        setThinkingLogs([]);
+        setCurrentThinkingLog(null); // Clear current thinking log
         setFinalAnswer(null);
       }
     };
@@ -88,7 +88,7 @@ const Stream: React.FC<StreamProps> = () => {
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setThinkingLogs([]);
+    setCurrentThinkingLog(null); // Clear previous thinking log
     setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
@@ -116,11 +116,12 @@ const Stream: React.FC<StreamProps> = () => {
             const event = JSON.parse(line.replace("data: ", ""));
             
             if (event.step.startsWith("THINKING")) {
-              setThinkingLogs(prev => [...prev, event]);
+              setCurrentThinkingLog(event); // Update with the latest thinking log
             }
 
             if (event.step === "FINAL_RESPONSE") {
               setFinalAnswer(event.data.message);
+              setCurrentThinkingLog(null); // Clear thinking log when final response arrives
               setThinkingOpen(false); // auto close thinking panel
             }
           } catch (parseError) {
@@ -131,6 +132,7 @@ const Stream: React.FC<StreamProps> = () => {
     } catch (error) {
       console.error("Streaming search failed:", error);
       setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
+      setCurrentThinkingLog(null); // Clear thinking log on error
       setThinkingOpen(false);
     } finally {
       setIsStreaming(false);
@@ -170,38 +172,33 @@ const Stream: React.FC<StreamProps> = () => {
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 pb-0">
                   <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
-                    {thinkingLogs.length === 0 && !isStreaming && !finalAnswer ? (
-                      <p className="text-muted-foreground">Start a query to see thinking steps...</p>
-                    ) : thinkingLogs.length === 0 && isStreaming ? (
+                    {isStreaming && !currentThinkingLog && (
                       <div className="flex items-center">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                         <span>Waiting for first step...</span>
                       </div>
+                    )}
+                    {!isStreaming && !finalAnswer && !currentThinkingLog ? (
+                      <p className="text-muted-foreground">Start a query to see thinking steps...</p>
                     ) : (
-                      <Accordion type="multiple" className="w-full"> {/* Nested Accordion for individual logs */}
-                        {thinkingLogs.map((log, i) => (
-                          <AccordionItem key={i} value={`log-${i}`} className="border-b last:border-b-0">
-                            <AccordionTrigger className="py-2 text-sm text-foreground hover:no-underline">
-                              <div className="flex items-center gap-2 w-full">
-                                <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
-                                <span className="text-muted-foreground">— {log.status}</span>
-                                {isStreaming && i === thinkingLogs.length - 1 && (
-                                  <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
-                                )}
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-0 pb-2">
-                              {log.data && Object.keys(log.data).length > 0 ? (
-                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                  <code>{JSON.stringify(log.data, null, 2)}</code>
-                                </pre>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                              )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
+                      currentThinkingLog && (
+                        <div className="thinking-row space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-primary/80">{currentThinkingLog.step.replace("THINKING_", "")}</span>
+                            <span className="text-muted-foreground">— {currentThinkingLog.status}</span>
+                            {isStreaming && (
+                              <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
+                            )}
+                          </div>
+                          {currentThinkingLog.data && Object.keys(currentThinkingLog.data).length > 0 ? (
+                            <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                              <code>{JSON.stringify(currentThinkingLog.data, null, 2)}</code>
+                            </pre>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
                 </AccordionContent>
@@ -267,7 +264,7 @@ const Stream: React.FC<StreamProps> = () => {
                 <FileText className="h-4 w-4" />
               </Button>
 
-              <div className="relative flex-grow flex flex-col border rounded-md p-2">
+              <div className="relative flex-grow flex-col border rounded-md p-2">
                 <Textarea
                     placeholder={currentWorkspace ? "Type your message..." : "Select a workspace to chat"}
                     value={currentInput}
