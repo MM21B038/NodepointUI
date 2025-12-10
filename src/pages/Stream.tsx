@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"; // Import useRef
 import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,7 +27,7 @@ const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
   const [completedThinkingSteps, setCompletedThinkingSteps] = useState<any[]>([]); // Stores all completed steps
   const [currentActiveThinkingLog, setCurrentActiveThinkingLog] = useState<any | null>(null); // The currently active step
-  const [currentLlmChunkAccumulator, setCurrentLlmChunkAccumulator] = useState<string>(""); // Accumulates LLM chunk tokens
+  const currentLlmChunkAccumulatorRef = useRef<string>(""); // Use useRef for accumulation
   const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -81,7 +81,7 @@ const Stream: React.FC<StreamProps> = () => {
         setSelectedFiles("all");
         setCompletedThinkingSteps([]);
         setCurrentActiveThinkingLog(null);
-        setCurrentLlmChunkAccumulator("");
+        currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
       }
     };
@@ -91,10 +91,10 @@ const Stream: React.FC<StreamProps> = () => {
   const finalizeCurrentThinkingLog = useCallback(() => {
     if (currentActiveThinkingLog) {
       if (currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS") {
-        if (currentLlmChunkAccumulator) {
+        if (currentLlmChunkAccumulatorRef.current) {
           setCompletedThinkingSteps(prev => [...prev, {
             ...currentActiveThinkingLog,
-            data: { content: currentLlmChunkAccumulator }, // Store accumulated content
+            data: { content: currentLlmChunkAccumulatorRef.current }, // Store accumulated content
             type: "final_llm_chunk" // Mark as finalized LLM chunk
           }]);
         }
@@ -103,8 +103,8 @@ const Stream: React.FC<StreamProps> = () => {
       }
     }
     setCurrentActiveThinkingLog(null);
-    setCurrentLlmChunkAccumulator("");
-  }, [currentActiveThinkingLog, currentLlmChunkAccumulator]);
+    currentLlmChunkAccumulatorRef.current = ""; // Clear ref
+  }, [currentActiveThinkingLog]);
 
   const handleStreamSend = useCallback(async () => {
     const query = currentInput.trim();
@@ -113,7 +113,7 @@ const Stream: React.FC<StreamProps> = () => {
     setIsStreaming(true);
     setCompletedThinkingSteps([]);
     setCurrentActiveThinkingLog(null);
-    setCurrentLlmChunkAccumulator("");
+    currentLlmChunkAccumulatorRef.current = ""; // Clear ref
     setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
@@ -142,10 +142,13 @@ const Stream: React.FC<StreamProps> = () => {
             
             if (event.step.startsWith("THINKING")) {
               if (event.step === "THINKING_LLM_CHUNKS" && event.type === "token") {
-                setCurrentLlmChunkAccumulator(prev => prev + event.content);
+                currentLlmChunkAccumulatorRef.current += event.content;
+                // Update currentActiveThinkingLog to reflect the latest accumulated content
                 setCurrentActiveThinkingLog(prev => ({
-                  ...event,
-                  data: { content: (prev?.data?.content || "") + event.content } // Update data with accumulated content
+                  ...event, // Keep other properties from the latest token event
+                  step: "THINKING_LLM_CHUNKS", // Ensure step is correct
+                  status: "progress", // Ensure status is correct
+                  data: { content: currentLlmChunkAccumulatorRef.current } // Crucially, update data.content
                 }));
               } else {
                 // A new non-LLM chunk thinking step, or a non-token LLM chunk event
@@ -224,7 +227,7 @@ const Stream: React.FC<StreamProps> = () => {
                         </div>
                         {currentActiveThinkingLog.data && Object.keys(currentActiveThinkingLog.data).length > 0 ? (
                           <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                            <code>{currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" ? currentLlmChunkAccumulator : JSON.stringify(currentActiveThinkingLog.data, null, 2)}</code>
+                            <code>{currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" ? currentActiveThinkingLog.data.content : JSON.stringify(currentActiveThinkingLog.data, null, 2)}</code>
                           </pre>
                         ) : (
                           <p className="text-xs text-muted-foreground">No additional data for this step.</p>
