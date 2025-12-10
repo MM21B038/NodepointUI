@@ -141,9 +141,8 @@ const Stream: React.FC<StreamProps> = () => {
             const event = JSON.parse(line.replace("data: ", ""));
             
             if (event.step.startsWith("THINKING")) {
-              if (event.step === "THINKING_LLM_CHUNKS" && event.type === "token") {
+              if (event.step === "THINKING_LLM_CHUNKS") { // Removed event.type === "token" check here
                 let tokenContent = "";
-                // Prioritize event.data if it's a string (direct token)
                 if (typeof event.data === 'string') {
                     tokenContent = event.data;
                 } else if (event.content !== undefined) {
@@ -154,27 +153,20 @@ const Stream: React.FC<StreamProps> = () => {
                 
                 currentLlmChunkAccumulatorRef.current += tokenContent;
                 
-                // Check if the current active log is already an LLM chunk step
+                // Always create a new object to ensure React detects the state change
                 setCurrentActiveThinkingLog(prev => {
-                  if (prev && prev.step === "THINKING_LLM_CHUNKS") {
-                    // If it is, just update its content
-                    return {
-                      ...prev,
-                      data: { content: currentLlmChunkAccumulatorRef.current }
-                    };
-                  } else {
-                    // Otherwise, it's a new LLM chunk step
-                    return {
-                      ...event,
-                      step: "THINKING_LLM_CHUNKS",
-                      status: "progress",
-                      data: { content: currentLlmChunkAccumulatorRef.current }
-                    };
-                  }
+                  // Use previous event as base if it was also LLM_CHUNKS, otherwise use current event
+                  const baseEvent = prev && prev.step === "THINKING_LLM_CHUNKS" ? prev : event; 
+                  return {
+                    ...baseEvent, // Spread the base event (either previous LLM_CHUNKS or current event)
+                    step: "THINKING_LLM_CHUNKS", // Ensure step is correct
+                    status: "progress", // Ensure status is correct
+                    data: { content: currentLlmChunkAccumulatorRef.current } // Always use accumulated content
+                  };
                 });
               } else {
-                // A new non-LLM chunk thinking step, or a non-token LLM chunk event
-                finalizeCurrentThinkingLog(); // Finalize previous step if any
+                // This is a new non-LLM chunk thinking step
+                finalizeCurrentThinkingLog(); // Finalize previous step (could be LLM chunk or another thinking step)
                 setCurrentActiveThinkingLog(event); // Set new event as active
               }
             }
