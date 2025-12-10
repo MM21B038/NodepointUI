@@ -154,12 +154,24 @@ const Stream: React.FC<StreamProps> = () => {
                 
                 currentLlmChunkAccumulatorRef.current += tokenContent;
                 
-                setCurrentActiveThinkingLog(prev => ({
-                  ...event, // Spread original event properties
-                  step: "THINKING_LLM_CHUNKS",
-                  status: "progress",
-                  data: { content: currentLlmChunkAccumulatorRef.current } // Explicitly set data.content
-                }));
+                // Check if the current active log is already an LLM chunk step
+                setCurrentActiveThinkingLog(prev => {
+                  if (prev && prev.step === "THINKING_LLM_CHUNKS") {
+                    // If it is, just update its content
+                    return {
+                      ...prev,
+                      data: { content: currentLlmChunkAccumulatorRef.current }
+                    };
+                  } else {
+                    // Otherwise, it's a new LLM chunk step
+                    return {
+                      ...event,
+                      step: "THINKING_LLM_CHUNKS",
+                      status: "progress",
+                      data: { content: currentLlmChunkAccumulatorRef.current }
+                    };
+                  }
+                });
               } else {
                 // A new non-LLM chunk thinking step, or a non-token LLM chunk event
                 finalizeCurrentThinkingLog(); // Finalize previous step if any
