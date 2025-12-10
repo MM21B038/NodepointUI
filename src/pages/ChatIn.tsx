@@ -111,6 +111,7 @@ const ChatIn: React.FC<ChatInProps> = ({
         setIsLoadingHistory(true);
         try {
           const history = await getChatHistory(currentWorkspace);
+          console.log("ChatIn: Raw chat history from API:", history); // Debugging log
           const mappedMessages: ChatMessage[] = history.flatMap(entry => {
             const messages: ChatMessage[] = [];
             messages.push({
@@ -128,20 +129,20 @@ const ChatIn: React.FC<ChatInProps> = ({
               );
             } else if (typeof entry.source === 'string') {
               const trimmedSource = entry.source.trim();
-              if (trimmedSource.startsWith('[') && trimmedSource.endsWith(']')) {
-                try {
-                  const parsedSource = JSON.parse(trimmedSource);
-                  if (Array.isArray(parsedSource)) {
-                    provenance = parsedSource.filter((item: any) =>
-                      typeof item === 'object' && item !== null &&
-                      'id' in item && 'reason' in item && 'snippet' in item
-                    );
-                  } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
-                    provenance = [parsedSource as ProvenanceEntry];
-                  }
-                } catch (e) {
-                  console.warn("Failed to parse provenance source as JSON string:", trimmedSource, e);
+              try {
+                const parsedSource = JSON.parse(trimmedSource);
+                if (Array.isArray(parsedSource)) {
+                  provenance = parsedSource.filter((item: any) =>
+                    typeof item === 'object' && item !== null &&
+                    'id' in item && 'reason' in item && 'snippet' in item
+                  );
+                } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
+                  provenance = [parsedSource as ProvenanceEntry];
                 }
+              } catch (e) {
+                // If parsing as JSON fails, treat the entire string as a single snippet
+                provenance = [{ id: "direct-source", reason: "Direct string source", snippet: trimmedSource }];
+                console.warn("ChatIn: Treating provenance source as direct string:", trimmedSource);
               }
             }
 
@@ -154,6 +155,7 @@ const ChatIn: React.FC<ChatInProps> = ({
             });
             return messages;
           }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          console.log("ChatIn: Mapped messages for display:", mappedMessages); // Debugging log
           setMessages(mappedMessages);
         } catch (error) {
           console.error("Failed to fetch chat history:", error);
