@@ -6,7 +6,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils"; // Corrected import statement
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import {
@@ -143,10 +143,11 @@ const Stream: React.FC<StreamProps> = () => {
             if (event.step.startsWith("THINKING")) {
               if (event.step === "THINKING_LLM_CHUNKS" && event.type === "token") {
                 let tokenContent = "";
-                if (event.content !== undefined) {
-                    tokenContent = event.content;
-                } else if (typeof event.data === 'string') { // This is the crucial change
+                // Prioritize event.data if it's a string (direct token)
+                if (typeof event.data === 'string') {
                     tokenContent = event.data;
+                } else if (event.content !== undefined) {
+                    tokenContent = event.content;
                 } else if (event.data && typeof event.data === 'object' && event.data.content !== undefined) {
                     tokenContent = event.data.content;
                 }
@@ -255,13 +256,12 @@ const Stream: React.FC<StreamProps> = () => {
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pt-0 pb-2">
-                              {log.data && Object.keys(log.data).length > 0 ? (
-                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                  <code>{log.step === "THINKING_LLM_CHUNKS" ? log.data.content : JSON.stringify(log.data, null, 2)}</code>
-                                </pre>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                              )}
+                              <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                <code>
+                                  {log.step === "THINKING_LLM_CHUNKS" ? log.data.content : 
+                                   (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))}
+                                </code>
+                              </pre>
                             </AccordionContent>
                           </AccordionItem>
                         ))}
