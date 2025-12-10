@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { listFiles, performStreamingSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
+import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,22 +19,14 @@ import FileFilterDialog from "@/components/FileFilterDialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
 import remarkGfm from 'remark-gfm';
-import ProvenanceDisplay from "@/components/ProvenanceDisplay";
+import ProvenanceDisplay from "@/components/ProvenanceDisplay"; // Import the new ProvenanceDisplay component
 
 interface StreamProps {}
-
-// Define a type for the final answer structure to ensure consistency
-interface FinalAnswerState {
-  synthesis: {
-    answer: string;
-    provenance: ProvenanceEntry[];
-  };
-}
 
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
   const [thinkingLogs, setThinkingLogs] = useState<any[]>([]);
-  const [finalAnswer, setFinalAnswer] = useState<FinalAnswerState | null>(null); // Use the defined type
+  const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -98,8 +90,7 @@ const Stream: React.FC<StreamProps> = () => {
 
     setIsStreaming(true);
     setThinkingLogs([]);
-    // Initialize finalAnswer with an empty answer and provenance
-    setFinalAnswer({ synthesis: { answer: "", provenance: [] } }); 
+    setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
 
@@ -129,22 +120,7 @@ const Stream: React.FC<StreamProps> = () => {
               setThinkingLogs(prev => [...prev, event]);
             }
 
-            if (event.step === "LLM_CHUNKS") {
-              // Append the LLM chunk to the current answer
-              setFinalAnswer(prev => {
-                if (!prev) return { synthesis: { answer: event.data, provenance: [] } }; // Should not happen if initialized
-                return {
-                  ...prev,
-                  synthesis: {
-                    ...prev.synthesis,
-                    answer: prev.synthesis.answer + event.data,
-                  },
-                };
-              });
-            }
-
             if (event.step === "FINAL_RESPONSE") {
-              // Set the complete final answer and provenance
               setFinalAnswer(event.data.message);
               setThinkingOpen(false); // auto close thinking panel
             }
@@ -155,7 +131,7 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}`, provenance: [] } });
+      setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
       setThinkingOpen(false);
     } finally {
       setIsStreaming(false);
