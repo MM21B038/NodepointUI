@@ -235,9 +235,15 @@ const Stream: React.FC<StreamProps> = () => {
                           <span className="text-muted-foreground">— {currentActiveThinkingLog.status}</span>
                           <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
                         </div>
-                        {currentActiveThinkingLog.data && Object.keys(currentActiveThinkingLog.data).length > 0 ? (
+                        {currentActiveThinkingLog.data ? (
                           <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                            <code>{currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" ? currentActiveThinkingLog.data.content : JSON.stringify(currentActiveThinkingLog.data, null, 2)}</code>
+                            <code>
+                              {currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" && typeof currentActiveThinkingLog.data === 'object' && currentActiveThinkingLog.data.content !== undefined
+                                ? currentActiveThinkingLog.data.content
+                                : typeof currentActiveThinkingLog.data === 'string'
+                                  ? currentActiveThinkingLog.data
+                                  : JSON.stringify(currentActiveThinkingLog.data, null, 2)}
+                            </code>
                           </pre>
                         ) : (
                           <p className="text-xs text-muted-foreground">No additional data for this step.</p>
@@ -256,12 +262,19 @@ const Stream: React.FC<StreamProps> = () => {
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pt-0 pb-2">
-                              <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                <code>
-                                  {log.step === "THINKING_LLM_CHUNKS" ? log.data.content : 
-                                   (typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 2))}
-                                </code>
-                              </pre>
+                              {log.data ? (
+                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                  <code>
+                                    {log.step === "THINKING_LLM_CHUNKS" && typeof log.data === 'object' && log.data.content !== undefined
+                                      ? log.data.content
+                                      : typeof log.data === 'string'
+                                        ? log.data
+                                        : JSON.stringify(log.data, null, 2)}
+                                  </code>
+                                </pre>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                              )}
                             </AccordionContent>
                           </AccordionItem>
                         ))}
