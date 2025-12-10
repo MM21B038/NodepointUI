@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
+import { listFiles, performStreamingSearch, SearchEngineType, ProvenanceEntry } from "@/database/workspaceStorage"; // Import ProvenanceEntry
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,21 @@ import { Textarea } from "@/components/ui/textarea";
 import remarkGfm from 'remark-gfm';
 import ProvenanceDisplay from "@/components/ProvenanceDisplay"; // Import the new ProvenanceDisplay component
 
+// Define the expected structure for the final JSON content from the stream
+interface StreamFinalResponseContent {
+  synthesis: {
+    answer: string;
+    provenance: ProvenanceEntry[];
+  };
+  // Add any other top-level fields expected in the final JSON
+}
+
 interface StreamProps {}
 
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
-  const [thinkingLogs, setThinkingLogs] = useState<any[]>([]);
-  const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
+  const [streamedAnswerText, setStreamedAnswerText] = useState<string>(""); // New state for accumulating streamed tokens
+  const [finalAnswer, setFinalAnswer] = useState<StreamFinalResponseContent | null>(null); // Type updated
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -77,7 +86,7 @@ const Stream: React.FC<StreamProps> = () => {
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
-        setThinkingLogs([]);
+        setStreamedAnswerText(""); // Clear streamed answer
         setFinalAnswer(null);
       }
     };
@@ -89,7 +98,7 @@ const Stream: React.FC<StreamProps> = () => {
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setThinkingLogs([]);
+    setStreamedAnswerText(""); // Clear previous streamed answer
     setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
@@ -116,12 +125,12 @@ const Stream: React.FC<StreamProps> = () => {
           try {
             const event = JSON.parse(line.replace("data: ", ""));
             
-            if (event.step.startsWith("THINKING")) {
-              setThinkingLogs(prev => [...prev, event]);
+            if (event.type === "token") { // Handle token chunks
+              setStreamedAnswerText(prev => prev + event.content);
             }
 
-            if (event.step === "FINAL_RESPONSE") {
-              setFinalAnswer(event.data.message);
+            if (event.type === "final") { // Handle final JSON response
+              setFinalAnswer(event.content as StreamFinalResponseContent);
               setThinkingOpen(false); // auto close thinking panel
             }
           } catch (parseError) {
@@ -131,7 +140,7 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
+      setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}`, provenance: [] } });
       setThinkingOpen(false);
     } finally {
       setIsStreaming(false);
@@ -160,69 +169,38 @@ const Stream: React.FC<StreamProps> = () => {
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar p-4">
-            {/* Thinking Dropdown */}
+            {/* Thinking/Streaming Answer Dropdown */}
             <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={(value) => setThinkingOpen(value === "thinking-panel")}>
               <AccordionItem value="thinking-panel" className="border-none">
                 <AccordionTrigger className="py-2 text-lg font-semibold text-primary hover:no-underline">
                   <span className="flex items-center">
                     <Bot className="h-5 w-5 mr-2" />
-                    Thinking {thinkingOpen ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+                    {isStreaming ? "Streaming Answer" : "Thinking Process"} {thinkingOpen ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 pb-0">
                   <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
-                    {/* Case 1: Streaming and waiting for first log */}
-                    {isStreaming && thinkingLogs.length === 0 && (
+                    {isStreaming && streamedAnswerText.length === 0 && (
                       <div className="flex items-center">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        <span>Waiting for first step...</span>
+                        <span>Waiting for first token...</span>
                       </div>
                     )}
-                    {/* Case 2: Streaming and showing current log */}
-                    {isStreaming && thinkingLogs.length > 0 && (
+                    {isStreaming && streamedAnswerText.length > 0 && (
                       <div className="thinking-row space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-primary/80">{thinkingLogs[thinkingLogs.length - 1].step.replace("THINKING_", "")}</span>
-                          <span className="text-muted-foreground">— {thinkingLogs[thinkingLogs.length - 1].status}</span>
+                          <span className="font-medium text-primary/80">Generating Response</span>
                           <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
                         </div>
-                        {thinkingLogs[thinkingLogs.length - 1].data && Object.keys(thinkingLogs[thinkingLogs.length - 1].data).length > 0 ? (
-                          <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                            <code>{JSON.stringify(thinkingLogs[thinkingLogs.length - 1].data, null, 2)}</code>
-                          </pre>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                        )}
+                        <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto whitespace-pre-wrap">
+                          <code>{streamedAnswerText}</code>
+                        </pre>
                       </div>
                     )}
-                    {/* Case 3: Not streaming, final answer received, show all logs */}
-                    {!isStreaming && finalAnswer && thinkingLogs.length > 0 && (
-                      <Accordion type="multiple" className="w-full"> {/* Nested Accordion for individual logs */}
-                        {thinkingLogs.map((log, i) => (
-                          <AccordionItem key={i} value={`log-${i}`} className="border-b last:border-b-0">
-                            <AccordionTrigger className="py-2 text-sm text-foreground hover:no-underline">
-                              <div className="flex items-center gap-2 w-full">
-                                <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
-                                <span className="text-muted-foreground">— {log.status}</span>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-0 pb-2">
-                              {log.data && Object.keys(log.data).length > 0 ? (
-                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                  <code>{JSON.stringify(log.data, null, 2)}</code>
-                                </pre>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                              )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
+                    {!isStreaming && !finalAnswer && streamedAnswerText.length === 0 && (
+                      <p className="text-muted-foreground">Start a query to see streaming answer...</p>
                     )}
-                    {/* Case 4: Idle state (not streaming, no final answer, no logs) */}
-                    {!isStreaming && !finalAnswer && thinkingLogs.length === 0 && (
-                      <p className="text-muted-foreground">Start a query to see thinking steps...</p>
-                    )}
+                    {/* After streaming, this accordion will be closed, and the full answer is in finalAnswer section */}
                   </div>
                 </AccordionContent>
               </AccordionItem>
