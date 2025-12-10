@@ -142,13 +142,17 @@ const Stream: React.FC<StreamProps> = () => {
             
             if (event.step.startsWith("THINKING")) {
               if (event.step === "THINKING_LLM_CHUNKS" && event.type === "token") {
-                currentLlmChunkAccumulatorRef.current += event.content;
-                // Update currentActiveThinkingLog to reflect the latest accumulated content
+                // Robustly get content from event
+                const tokenContent = event.content !== undefined ? event.content : 
+                                     (event.data && event.data.content !== undefined ? event.data.content : "");
+                
+                currentLlmChunkAccumulatorRef.current += tokenContent;
+                
                 setCurrentActiveThinkingLog(prev => ({
-                  ...event, // Keep other properties from the latest token event
-                  step: "THINKING_LLM_CHUNKS", // Ensure step is correct
-                  status: "progress", // Ensure status is correct
-                  data: { content: currentLlmChunkAccumulatorRef.current } // Crucially, update data.content
+                  ...event, // Spread original event properties
+                  step: "THINKING_LLM_CHUNKS",
+                  status: "progress",
+                  data: { content: currentLlmChunkAccumulatorRef.current } // Explicitly set data.content
                 }));
               } else {
                 // A new non-LLM chunk thinking step, or a non-token LLM chunk event
