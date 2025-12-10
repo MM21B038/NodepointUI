@@ -6,7 +6,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } = "@/lib/utils";
+import { cn } from "@/lib/utils"; // Corrected import statement
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import {
