@@ -6,7 +6,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn } = "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import {
@@ -142,9 +142,14 @@ const Stream: React.FC<StreamProps> = () => {
             
             if (event.step.startsWith("THINKING")) {
               if (event.step === "THINKING_LLM_CHUNKS" && event.type === "token") {
-                // Robustly get content from event
-                const tokenContent = event.content !== undefined ? event.content : 
-                                     (event.data && event.data.content !== undefined ? event.data.content : "");
+                let tokenContent = "";
+                if (event.content !== undefined) {
+                    tokenContent = event.content;
+                } else if (typeof event.data === 'string') { // This is the crucial change
+                    tokenContent = event.data;
+                } else if (event.data && typeof event.data === 'object' && event.data.content !== undefined) {
+                    tokenContent = event.data.content;
+                }
                 
                 currentLlmChunkAccumulatorRef.current += tokenContent;
                 
