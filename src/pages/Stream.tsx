@@ -86,6 +86,8 @@ const Stream: React.FC<StreamProps> = () => {
       }
     };
     fetchData();
+    console.log("Stream: Current workspace changed or loaded. State reset.");
+    console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "finalAnswer:", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
   }, [currentWorkspace, selectedFiles]);
 
   const finalizeCurrentThinkingLog = useCallback(() => {
@@ -198,6 +200,13 @@ const Stream: React.FC<StreamProps> = () => {
     }
   };
 
+  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps", completedThinkingSteps.length);
+
+  const handleAccordionValueChange = useCallback((value: string) => {
+    console.log("Accordion onValueChange triggered. New value:", value);
+    setThinkingOpen(value === "thinking-panel");
+  }, []);
+
   return (
     <div className="flex flex-col flex-grow h-full relative">
       {!currentWorkspace ? (
@@ -214,7 +223,7 @@ const Stream: React.FC<StreamProps> = () => {
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar p-4">
             {/* Thinking Dropdown */}
-            <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={(value) => setThinkingOpen(value === "thinking-panel")}>
+            <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={handleAccordionValueChange}>
               <AccordionItem value="thinking-panel" className="border-none">
                 <AccordionTrigger className="py-2 text-lg font-semibold text-primary hover:no-underline">
                   <span className="flex items-center">
@@ -224,6 +233,10 @@ const Stream: React.FC<StreamProps> = () => {
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 pb-0">
                   <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
+                    <p>DEBUG: thinkingOpen: {String(thinkingOpen)}</p>
+                    <p>DEBUG: isStreaming: {String(isStreaming)}</p>
+                    <p>DEBUG: finalAnswer: {String(!!finalAnswer)}</p>
+                    <p>DEBUG: completedThinkingSteps.length: {completedThinkingSteps.length}</p>
                     {/* Case 1: Streaming and waiting for first log */}
                     {isStreaming && !currentActiveThinkingLog && (
                       <div className="flex items-center">
