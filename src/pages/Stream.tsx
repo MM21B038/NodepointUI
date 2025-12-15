@@ -512,7 +512,7 @@ const Stream: React.FC<StreamProps> = () => {
                                   <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
                                     <span className="flex items-center">
                                       <FileText className="h-4 w-4 mr-2" />
-                                      Provenance ({message.provenance.length})
+                                      Thinking Process | Provenance ({message.provenance.length})
                                     </span>
                                   </AccordionTrigger>
                                   <AccordionContent className="pt-2 pb-0">
@@ -635,40 +635,13 @@ const Stream: React.FC<StreamProps> = () => {
                                     <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
                                       <span className="flex items-center">
                                         <FileText className="h-4 w-4 mr-2" />
-                                        Provenance ({liveResponse.finalAnswerProvenance.length})
+                                        Thinking Process | Provenance ({liveResponse.finalAnswerProvenance.length})
                                       </span>
                                     </AccordionTrigger>
-                                    <AccordionContent className="pt-2 pb-0">
-                                      <div className="space-y-3">
-                                        {liveResponse.finalAnswerProvenance.map((entry: ProvenanceEntry, index: number) => (
-                                          <div key={entry.id} className="border rounded-md p-3 bg-muted">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <p className="text-xs font-semibold text-primary/80">
-                                                    Source: {entry.id}
-                                                </p>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleTagProvenance(entry)}
-                                                    className="h-6 px-2 py-1 text-xs"
-                                                >
-                                                    <Tag className="h-3 w-3 mr-1" /> Tag
-                                                </Button>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground italic mb-2">
-                                              Reason: {entry.reason}
-                                            </p>
-                                            <Separator className="my-2" />
-                                            <p className="text-sm">
-                                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
-                                            </p>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </AccordionContent>
-                                  </AccordionItem>
-                                </Accordion>
-                              </div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              </Accordion>
+                            </div>
                     )}
                   </div>
                 )}
