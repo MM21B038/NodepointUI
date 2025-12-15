@@ -34,6 +34,7 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
   provenance?: ProvenanceEntry[]; // Now explicitly ProvenanceEntry[]
+  thinkingSteps?: any[]; // Added to store thinking steps with the message
 }
 
 interface LiveResponseState {
@@ -42,7 +43,6 @@ interface LiveResponseState {
   finalAnswerText: string | null;
   finalAnswerProvenance: ProvenanceEntry[];
   isError: boolean;
-  isUserMessageDisplayed: boolean; // Track if user's query for this live response is in history
 }
 
 const Stream: React.FC<StreamProps> = () => {
@@ -144,6 +144,9 @@ const Stream: React.FC<StreamProps> = () => {
             text: entry.ai,
             timestamp: new Date(entry.response_time),
             provenance: provenance,
+            // Note: Historical chat history from backend does not currently include thinking steps.
+            // If the backend were to provide them, they would be mapped here.
+            thinkingSteps: undefined, 
           });
           return messages;
         }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -244,7 +247,6 @@ const Stream: React.FC<StreamProps> = () => {
       finalAnswerText: null,
       finalAnswerProvenance: [],
       isError: false,
-      isUserMessageDisplayed: true, // User message is now displayed in chatHistoryMessages
     });
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
     setThinkingOpen(true); // Open thinking panel when starting a new stream
@@ -362,11 +364,28 @@ const Stream: React.FC<StreamProps> = () => {
       // setThinkingOpen(false); // Removed: Keep thinking open
     } finally {
       setIsStreaming(false);
-      await fetchData(); // Reload chat history after stream completes
-      setLiveResponse(null); // Clear live response after history has been reloaded
-      // setThinkingOpen(false); // Removed: Keep thinking open
+
+      // Convert the final liveResponse into a ChatMessage and add to history
+      if (liveResponse) {
+        const botMessage: ChatMessage = {
+          id: `bot-${Date.now()}`, // Unique ID for this new historical message
+          type: "bot",
+          text: liveResponse.finalAnswerText || currentLlmChunkAccumulatorRef.current || "An error occurred during streaming.",
+          timestamp: new Date(), // Use current time for the historical entry
+          provenance: liveResponse.finalAnswerProvenance,
+          thinkingSteps: liveResponse.thinkingSteps, // Include thinking steps
+        };
+        setChatHistoryMessages((prev) => [...prev, botMessage]);
+      }
+
+      setLiveResponse(null); // Clear the live response state
+      setThinkingOpen(false); // Ensure thinking panel is closed
+
+      // Re-fetch history to ensure backend is in sync.
+      // This will also ensure the newly added message is correctly reflected if fetchData() has its own mapping logic.
+      await fetchData();
     }
-  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, fetchData]);
+  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, fetchData, liveResponse]); // Added liveResponse to dependencies
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -431,6 +450,50 @@ const Stream: React.FC<StreamProps> = () => {
                           {message.text}
                         </ReactMarkdown>
                       </div>
+                      {/* Thinking Process for Historical Messages */}
+                      {message.type === "bot" && message.thinkingSteps && message.thinkingSteps.length > 0 && (
+                        <div className="border rounded-lg p-3 bg-card shadow-sm">
+                          <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="thinking-panel-history" className="border-none">
+                              <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
+                                <span className="flex items-center">
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Thinking Process | Steps ({message.thinkingSteps.length})
+                                </span>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-2 pb-0">
+                                <div className="space-y-3">
+                                  {message.thinkingSteps.map((log, i) => (
+                                    <div key={i} className="border rounded-md p-3 bg-muted">
+                                      <p className="text-xs font-semibold text-primary/80">
+                                        Step: {log.step.replace("THINKING_", "")}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground italic mb-2">
+                                        Status: {log.status}
+                                      </p>
+                                      <Separator className="my-2" />
+                                      {log.data ? (
+                                        <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                          <code>
+                                            {log.step === "THINKING_LLM_CHUNKS" && typeof log.data === 'object' && log.data.content !== undefined
+                                              ? log.data.content
+                                              : typeof log.data === 'string'
+                                                ? log.data
+                                                : JSON.stringify(log.data, null, 2)}
+                                          </code>
+                                        </pre>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        </div>
+                      )}
+                      {/* Provenance for Historical Messages */}
                       {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
                         <div className="border rounded-lg p-3 bg-card shadow-sm">
                               <Accordion type="single" collapsible className="w-full">
@@ -489,8 +552,8 @@ const Stream: React.FC<StreamProps> = () => {
               </div>
             )}
 
-            {/* Live Streaming Response (Combined) */}
-            {liveResponse && (
+            {/* Live Streaming Response (Only during active streaming) */}
+            {isStreaming && liveResponse && (
               <div className="space-y-6 pb-8">
                 <div className="flex gap-3 justify-start">
                   <Avatar className="h-8 w-8">
@@ -504,10 +567,10 @@ const Stream: React.FC<StreamProps> = () => {
                       "bg-secondary text-secondary-foreground rounded-bl-none"
                     )}
                   >
-                    {/* Final Answer Text (streaming or complete) */}
+                    {/* Accumulating LLM Chunks */}
                     <div className="prose dark:prose-invert text-sm">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {liveResponse.finalAnswerText || currentLlmChunkAccumulatorRef.current || "..."}
+                        {currentLlmChunkAccumulatorRef.current || "..."}
                       </ReactMarkdown>
                     </div>
 
@@ -523,7 +586,7 @@ const Stream: React.FC<StreamProps> = () => {
                           </AccordionTrigger>
                           <AccordionContent className="pt-2 pb-0">
                             <div className="space-y-3">
-                              {liveResponse.thinkingSteps.length === 0 && isStreaming ? (
+                              {liveResponse.thinkingSteps.length === 0 ? (
                                 <div className="flex items-center text-muted-foreground">
                                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                   <span>Waiting for first step...</span>
@@ -559,50 +622,6 @@ const Stream: React.FC<StreamProps> = () => {
                         </AccordionItem>
                       </Accordion>
                     </div>
-
-                    {/* Provenance for Live Response */}
-                    {liveResponse.finalAnswerProvenance && liveResponse.finalAnswerProvenance.length > 0 && (
-                      <div className="border rounded-lg p-3 bg-card shadow-sm">
-                        <Accordion type="single" collapsible className="w-full">
-                          <AccordionItem value="provenance-item" className="border-none">
-                            <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
-                              <span className="flex items-center">
-                                <FileText className="h-4 w-4 mr-2" />
-                                Thinking Process | Provenance ({liveResponse.finalAnswerProvenance.length})
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-2 pb-0">
-                              <div className="space-y-3">
-                                {liveResponse.finalAnswerProvenance.map((entry: ProvenanceEntry, index: number) => (
-                                  <div key={entry.id} className="border rounded-md p-3 bg-muted">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <p className="text-xs font-semibold text-primary/80">
-                                            Source: {entry.id}
-                                        </p>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleTagProvenance(entry)}
-                                            className="h-6 px-2 py-1 text-xs"
-                                        >
-                                            <Tag className="h-3 w-3 mr-1" /> Tag
-                                        </Button>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground italic mb-2">
-                                      Reason: {entry.reason}
-                                    </p>
-                                    <Separator className="my-2" />
-                                    <p className="text-sm">
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      </div>
-                    )}
                     <span className="block text-xs opacity-70 mt-1 text-right">
                       {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
