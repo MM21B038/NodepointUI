@@ -79,7 +79,7 @@ const Stream: React.FC<StreamProps> = () => {
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
-        setCompletedThinkingSteps([]);
+        setCompletedThinkingSteps([]); // Clear here
         setCurrentActiveThinkingLog(null);
         currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
@@ -91,18 +91,35 @@ const Stream: React.FC<StreamProps> = () => {
   }, [currentWorkspace, selectedFiles]);
 
   const finalizeCurrentThinkingLog = useCallback(() => {
+    console.log("finalizeCurrentThinkingLog called. currentActiveThinkingLog:", currentActiveThinkingLog);
+    console.log("currentLlmChunkAccumulatorRef.current:", currentLlmChunkAccumulatorRef.current);
+
     if (currentActiveThinkingLog) {
       if (currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS") {
         if (currentLlmChunkAccumulatorRef.current) {
-          setCompletedThinkingSteps(prev => [...prev, {
-            ...currentActiveThinkingLog,
-            data: { content: currentLlmChunkAccumulatorRef.current }, // Store accumulated content
-            type: "final_llm_chunk" // Mark as finalized LLM chunk
-          }]);
+          setCompletedThinkingSteps(prev => {
+            console.log("setCompletedThinkingSteps (LLM chunk) - prev:", prev, "currentActiveThinkingLog:", currentActiveThinkingLog);
+            const newSteps = [...prev, {
+              ...currentActiveThinkingLog,
+              data: { content: currentLlmChunkAccumulatorRef.current }, // Store accumulated content
+              type: "final_llm_chunk" // Mark as finalized LLM chunk
+            }];
+            console.log("setCompletedThinkingSteps (LLM chunk) - newSteps length:", newSteps.length);
+            return newSteps;
+          });
+        } else {
+          console.log("Skipping LLM chunk finalization: accumulator is empty.");
         }
       } else {
-        setCompletedThinkingSteps(prev => [...prev, currentActiveThinkingLog]);
+        setCompletedThinkingSteps(prev => {
+          console.log("setCompletedThinkingSteps (non-LLM chunk) - prev:", prev, "currentActiveThinkingLog:", currentActiveThinkingLog);
+          const newSteps = [...prev, currentActiveThinkingLog];
+          console.log("setCompletedThinkingSteps (non-LLM chunk) - newSteps length:", newSteps.length);
+          return newSteps;
+        });
       }
+    } else {
+      console.log("finalizeCurrentThinkingLog: currentActiveThinkingLog is null. Nothing to finalize.");
     }
     setCurrentActiveThinkingLog(null);
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
@@ -113,7 +130,7 @@ const Stream: React.FC<StreamProps> = () => {
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setCompletedThinkingSteps([]);
+    setCompletedThinkingSteps([]); // Clear here
     setCurrentActiveThinkingLog(null);
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
     setFinalAnswer(null);
@@ -141,7 +158,8 @@ const Stream: React.FC<StreamProps> = () => {
 
           try {
             const event = JSON.parse(line.replace("data: ", ""));
-            
+            console.log("Received SSE event:", event.step, event); // Log every received event
+
             if (event.step.startsWith("THINKING")) {
               if (event.step === "THINKING_LLM_CHUNKS") { // Removed event.type === "token" check here
                 let tokenContent = "";
@@ -200,7 +218,7 @@ const Stream: React.FC<StreamProps> = () => {
     }
   };
 
-  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps", completedThinkingSteps.length);
+  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
 
   const handleAccordionValueChange = useCallback((value: string) => {
     console.log("Accordion onValueChange triggered. New value:", value);
@@ -236,7 +254,7 @@ const Stream: React.FC<StreamProps> = () => {
                     <p>DEBUG: thinkingOpen: {String(thinkingOpen)}</p>
                     <p>DEBUG: isStreaming: {String(isStreaming)}</p>
                     <p>DEBUG: finalAnswer: {String(!!finalAnswer)}</p>
-                    <p>DEBUG: completedThinkingSteps.length: {completedThinkingSteps.length}</p>
+                    <p>DEBUG: completedSteps.length: {completedThinkingSteps.length}</p>
                     {/* Case 1: Streaming and waiting for first log */}
                     {isStreaming && !currentActiveThinkingLog && (
                       <div className="flex items-center">
