@@ -123,59 +123,56 @@ const Stream: React.FC<StreamProps> = () => {
             console.log("Received SSE event:", event.step, event); // Log every received event
 
             if (event.step.startsWith("THINKING")) {
-              if (event.step === "THINKING_LLM_CHUNKS") {
-                let tokenContent = "";
-                if (typeof event.data === 'string') {
-                    tokenContent = event.data;
-                } else if (event.content !== undefined) {
-                    tokenContent = event.content;
-                } else if (event.data && typeof event.data === 'object' && event.data.content !== undefined) {
-                    tokenContent = event.data.content;
+              setCompletedThinkingSteps(prevSteps => {
+                const newSteps = [...prevSteps];
+                const lastStep = newSteps[newSteps.length - 1];
+
+                if (event.step === "THINKING_LLM_CHUNKS") {
+                  let tokenContent = "";
+                  if (typeof event.data === 'string') {
+                      tokenContent = event.data;
+                  } else if (event.content !== undefined) {
+                      tokenContent = event.content;
+                  } else if (event.data && typeof event.data === 'object' && event.data.content !== undefined) {
+                      tokenContent = event.data.content;
+                  }
+                  currentLlmChunkAccumulatorRef.current += tokenContent;
+
+                  if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                    // Update existing LLM chunk in progress
+                    lastStep.data = { content: currentLlmChunkAccumulatorRef.current };
+                    return newSteps;
+                  } else {
+                    // Add new LLM chunk in progress
+                    return [...newSteps, {
+                      ...event,
+                      status: "progress",
+                      data: { content: currentLlmChunkAccumulatorRef.current }
+                    }];
+                  }
+                } else { // New non-LLM thinking step
+                  // If previous step was an LLM chunk in progress, finalize it
+                  if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                    lastStep.status = "completed";
+                    lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Ensure final content is saved
+                    currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
+                  }
+                  // Add the new non-LLM step as completed
+                  return [...newSteps, { ...event, status: "completed" }];
                 }
-                
-                currentLlmChunkAccumulatorRef.current += tokenContent;
-
-                setCompletedThinkingSteps(prevSteps => {
-                    const newSteps = [...prevSteps];
-                    const lastStep = newSteps[newSteps.length - 1];
-
-                    // If the last step was also an LLM chunk in progress, update it
-                    if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
-                        lastStep.data.content = currentLlmChunkAccumulatorRef.current;
-                        return newSteps;
-                    } else {
-                        // Otherwise, add a new LLM chunk step
-                        return [...newSteps, {
-                            ...event, // Use the current event as base
-                            status: "progress", // Mark as in progress
-                            data: { content: currentLlmChunkAccumulatorRef.current }
-                        }];
-                    }
-                });
-              } else {
-                // This is a new non-LLM chunk thinking step
-                // First, ensure any *previous* LLM chunk is marked as complete
-                setCompletedThinkingSteps(prevSteps => {
-                    const newSteps = [...prevSteps];
-                    const lastStep = newSteps[newSteps.length - 1];
-                    if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
-                        lastStep.status = "completed"; // Mark as completed
-                    }
-                    return [...newSteps, event]; // Add the new non-LLM step
-                });
-                currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator for next LLM chunk
-              }
+              });
             }
 
             if (event.step === "FINAL_RESPONSE") {
-              // Ensure the last LLM chunk is marked as complete before final response
               setCompletedThinkingSteps(prevSteps => {
-                  const newSteps = [...prevSteps];
-                  const lastStep = newSteps[newSteps.length - 1];
-                  if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
-                      lastStep.status = "completed"; // Mark as completed
-                  }
-                  return newSteps;
+                const newSteps = [...prevSteps];
+                const lastStep = newSteps[newSteps.length - 1];
+                // If last step was an LLM chunk in progress, finalize it
+                if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                  lastStep.status = "completed";
+                  lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Ensure final content is saved
+                }
+                return newSteps;
               });
               setFinalAnswer(event.data.message);
               currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
@@ -187,15 +184,17 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      setCompletedThinkingSteps(prevSteps => { // Finalize on error
-          const newSteps = [...prevSteps];
-          const lastStep = newSteps[newSteps.length - 1];
-          if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
-              lastStep.status = "failed"; // Mark as failed
-          }
-          return newSteps;
+      setCompletedThinkingSteps(prevSteps => {
+        const newSteps = [...prevSteps];
+        const lastStep = newSteps[newSteps.length - 1];
+        if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+          lastStep.status = "failed"; // Mark as failed on stream error
+          lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Save current content
+        }
+        return newSteps;
       });
       setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
+      currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator on error
     } finally {
       setIsStreaming(false);
     }
