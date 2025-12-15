@@ -176,6 +176,7 @@ const Stream: React.FC<StreamProps> = () => {
               });
               setFinalAnswer(event.data.message);
               currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
+              setThinkingOpen(false); // Close thinking dropdown after final response
             }
           } catch (parseError) {
             console.error("Failed to parse SSE event:", parseError, "Raw line:", line);
@@ -195,6 +196,7 @@ const Stream: React.FC<StreamProps> = () => {
       });
       setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
       currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator on error
+      setThinkingOpen(false); // Close thinking dropdown on error
     } finally {
       setIsStreaming(false);
     }
