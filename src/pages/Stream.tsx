@@ -79,7 +79,7 @@ const Stream: React.FC<StreamProps> = () => {
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
-        setCompletedThinkingSteps([]); // Clear here
+        setCompletedThinkingSteps([]);
         setCurrentActiveThinkingLog(null);
         currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
@@ -130,7 +130,7 @@ const Stream: React.FC<StreamProps> = () => {
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setCompletedThinkingSteps([]); // Clear here
+    setCompletedThinkingSteps([]);
     setCurrentActiveThinkingLog(null);
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
     setFinalAnswer(null);
@@ -194,7 +194,7 @@ const Stream: React.FC<StreamProps> = () => {
             if (event.step === "FINAL_RESPONSE") {
               finalizeCurrentThinkingLog(); // Finalize any active thinking log before final response
               setFinalAnswer(event.data.message);
-              setThinkingOpen(false); // auto close thinking panel
+              // Removed setThinkingOpen(false);
             }
           } catch (parseError) {
             console.error("Failed to parse SSE event:", parseError, "Raw line:", line);
@@ -205,7 +205,7 @@ const Stream: React.FC<StreamProps> = () => {
       console.error("Streaming search failed:", error);
       finalizeCurrentThinkingLog(); // Finalize on error
       setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
-      setThinkingOpen(false);
+      // Removed setThinkingOpen(false);
     } finally {
       setIsStreaming(false);
     }
@@ -218,7 +218,7 @@ const Stream: React.FC<StreamProps> = () => {
     }
   };
 
-  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
+  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps", completedThinkingSteps.length);
 
   const handleAccordionValueChange = useCallback((value: string) => {
     console.log("Accordion onValueChange triggered. New value:", value);
@@ -251,10 +251,6 @@ const Stream: React.FC<StreamProps> = () => {
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 pb-0">
                   <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
-                    <p>DEBUG: thinkingOpen: {String(thinkingOpen)}</p>
-                    <p>DEBUG: isStreaming: {String(isStreaming)}</p>
-                    <p>DEBUG: finalAnswer: {String(!!finalAnswer)}</p>
-                    <p>DEBUG: completedSteps.length: {completedThinkingSteps.length}</p>
                     {/* Case 1: Streaming and waiting for first log */}
                     {isStreaming && !currentActiveThinkingLog && (
                       <div className="flex items-center">
