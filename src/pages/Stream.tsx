@@ -36,12 +36,19 @@ export interface ChatMessage {
   provenance?: ProvenanceEntry[]; // Now explicitly ProvenanceEntry[]
 }
 
+interface LiveResponseState {
+  query: string;
+  thinkingSteps: any[];
+  finalAnswerText: string | null;
+  finalAnswerProvenance: ProvenanceEntry[];
+  isError: boolean;
+}
+
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
   const [chatHistoryMessages, setChatHistoryMessages] = useState<ChatMessage[]>([]); // For historical messages
-  const [completedThinkingSteps, setCompletedThinkingSteps] = useState<any[]>([]); // Stores all completed steps for current query
-  const currentLlmChunkAccumulatorRef = useRef<string>(""); // Use useRef for accumulation
-  const [finalAnswer, setFinalAnswer] = useState<any | null>(null); // Final answer for current query
+  const [liveResponse, setLiveResponse] = useState<LiveResponseState | null>(null); // State for the current live streaming response
+  const currentLlmChunkAccumulatorRef = useRef<string>(""); // Use useRef for accumulating LLM chunks
   const [thinkingOpen, setThinkingOpen] = useState(true); // Controls current query's thinking accordion
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -149,9 +156,7 @@ const Stream: React.FC<StreamProps> = () => {
       setAvailableFiles([]);
       setSelectedFiles("all");
       setChatHistoryMessages([]);
-      setCompletedThinkingSteps([]);
-      currentLlmChunkAccumulatorRef.current = ""; // Clear ref
-      setFinalAnswer(null);
+      setLiveResponse(null); // Clear live response here too
       setTaggedProvenances([]);
     }
   }, [currentWorkspace, selectedFiles]);
@@ -179,7 +184,7 @@ const Stream: React.FC<StreamProps> = () => {
 
     fetchData();
     console.log("Stream: Current workspace changed or loaded. State reset.");
-    console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "finalAnswer:", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
+    console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "liveResponse:", !!liveResponse, "completedSteps:", liveResponse?.thinkingSteps.length);
 
     return () => {
       window.removeEventListener('chatIconsUpdated', loadIcons);
@@ -197,7 +202,7 @@ const Stream: React.FC<StreamProps> = () => {
         });
       }
     }
-  }, [chatHistoryMessages, completedThinkingSteps, finalAnswer, isStreaming]);
+  }, [chatHistoryMessages, liveResponse, isStreaming]);
 
   const handleTagProvenance = useCallback((entry: ProvenanceEntry) => {
     setTaggedProvenances((prev) => {
@@ -232,9 +237,14 @@ const Stream: React.FC<StreamProps> = () => {
     setChatHistoryMessages((prev) => [...prev, userMessage]);
 
     setIsStreaming(true);
-    setCompletedThinkingSteps([]); // Clear previous steps for new query
+    setLiveResponse({
+      query: query,
+      thinkingSteps: [],
+      finalAnswerText: null,
+      finalAnswerProvenance: [],
+      isError: false,
+    });
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
-    setFinalAnswer(null); // Clear previous final answer
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
     setTaggedProvenances([]); // Clear tags after sending
@@ -263,9 +273,10 @@ const Stream: React.FC<StreamProps> = () => {
             console.log("Received SSE event:", event.step, event); // Log every received event
 
             if (event.step.startsWith("THINKING")) {
-              setCompletedThinkingSteps(prevSteps => {
-                const newSteps = [...prevSteps];
-                const lastStep = newSteps[newSteps.length - 1];
+              setLiveResponse(prev => {
+                if (!prev) return null; // Should not happen
+                const newThinkingSteps = [...prev.thinkingSteps];
+                const lastStep = newThinkingSteps[newThinkingSteps.length - 1];
 
                 if (event.step === "THINKING_LLM_CHUNKS") {
                   let tokenContent = "";
@@ -281,14 +292,13 @@ const Stream: React.FC<StreamProps> = () => {
                   if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
                     // Update existing LLM chunk in progress
                     lastStep.data = { content: currentLlmChunkAccumulatorRef.current };
-                    return newSteps;
                   } else {
                     // Add new LLM chunk in progress
-                    return [...newSteps, {
+                    newThinkingSteps.push({
                       ...event,
                       status: "progress",
                       data: { content: currentLlmChunkAccumulatorRef.current }
-                    }];
+                    });
                   }
                 } else { // New non-LLM thinking step
                   // If previous step was an LLM chunk in progress, finalize it
@@ -298,23 +308,29 @@ const Stream: React.FC<StreamProps> = () => {
                     currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
                   }
                   // Add the new non-LLM step as completed
-                  return [...newSteps, { ...event, status: "completed" }];
+                  newThinkingSteps.push({ ...event, status: "completed" });
                 }
+                return { ...prev, thinkingSteps: newThinkingSteps };
               });
             }
 
             if (event.step === "FINAL_RESPONSE") {
-              setCompletedThinkingSteps(prevSteps => {
-                const newSteps = [...prevSteps];
-                const lastStep = newSteps[newSteps.length - 1];
+              setLiveResponse(prev => {
+                if (!prev) return null;
+                const newThinkingSteps = [...prev.thinkingSteps];
+                const lastStep = newThinkingSteps[newThinkingSteps.length - 1];
                 // If last step was an LLM chunk in progress, finalize it
                 if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
                   lastStep.status = "completed";
                   lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Ensure final content is saved
                 }
-                return newSteps;
+                return {
+                  ...prev,
+                  thinkingSteps: newThinkingSteps,
+                  finalAnswerText: event.data.message.synthesis.answer,
+                  finalAnswerProvenance: event.data.message.synthesis.provenance,
+                };
               });
-              setFinalAnswer(event.data.message);
               currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
               setThinkingOpen(false); // Close thinking dropdown after final response
             }
@@ -325,21 +341,28 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      setCompletedThinkingSteps(prevSteps => {
-        const newSteps = [...prevSteps];
-        const lastStep = newSteps[newSteps.length - 1];
+      setLiveResponse(prev => {
+        if (!prev) return null;
+        const newThinkingSteps = [...prev.thinkingSteps];
+        const lastStep = newThinkingSteps[newThinkingSteps.length - 1];
         if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
           lastStep.status = "failed"; // Mark as failed on stream error
           lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Save current content
         }
-        return newSteps;
+        return {
+          ...prev,
+          thinkingSteps: newThinkingSteps,
+          finalAnswerText: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}`,
+          isError: true,
+        };
       });
-      setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
       currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator on error
       setThinkingOpen(false); // Close thinking dropdown on error
     } finally {
       setIsStreaming(false);
-      fetchData(); // Reload chat history after stream completes
+      await fetchData(); // Reload chat history after stream completes
+      setLiveResponse(null); // Clear live response after history has been reloaded
+      setThinkingOpen(false); // Ensure thinking panel is closed
     }
   }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, fetchData]);
 
@@ -350,7 +373,7 @@ const Stream: React.FC<StreamProps> = () => {
     }
   };
 
-  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
+  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "liveResponse:", !!liveResponse, "liveResponse.thinkingSteps:", liveResponse?.thinkingSteps.length);
 
   const handleAccordionValueChange = useCallback((value: string) => {
     console.log("Accordion onValueChange triggered. New value:", value);
@@ -465,117 +488,118 @@ const Stream: React.FC<StreamProps> = () => {
             )}
 
             {/* Current Query's Thinking Dropdown */}
-            <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={handleAccordionValueChange}>
-              <AccordionItem value="thinking-panel" className="border-none">
-                <AccordionTrigger className="py-2 text-lg font-semibold text-primary hover:no-underline">
-                  <span className="flex items-center">
-                    <Bot className="h-5 w-5 mr-2" />
-                    Thinking {thinkingOpen ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="pt-2 pb-0">
-                  <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
-                    {/* Case 1: Streaming and waiting for first log */}
-                    {isStreaming && completedThinkingSteps.length === 0 && (
-                      <div className="flex items-center">
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        <span>Waiting for first step...</span>
-                      </div>
-                    )}
-                    {/* Case 2: Streaming and showing current log (last step in completedThinkingSteps) */}
-                    {isStreaming && completedThinkingSteps.length > 0 && (
-                      <div className="thinking-row space-y-2">
-                        {/* Display the last step as the "active" one */}
-                        {(() => {
-                          const currentActiveThinkingLog = completedThinkingSteps[completedThinkingSteps.length - 1];
-                          return (
-                            <>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-primary/80">{currentActiveThinkingLog.step.replace("THINKING_", "")}</span>
-                                <span className="text-muted-foreground">— {currentActiveThinkingLog.status}</span>
-                                <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
-                              </div>
-                              {currentActiveThinkingLog.data ? (
-                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                  <code>
-                                    {currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" && typeof currentActiveThinkingLog.data === 'object' && currentActiveThinkingLog.data.content !== undefined
-                                      ? currentActiveThinkingLog.data.content
-                                      : typeof currentActiveThinkingLog.data === 'string'
-                                        ? currentActiveThinkingLog.data
-                                        : JSON.stringify(currentActiveThinkingLog.data, null, 2)}
-                                  </code>
-                                </pre>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    )}
-                    {/* Case 3: Not streaming, final answer received, show all logs */}
-                    {!isStreaming && finalAnswer && completedThinkingSteps.length > 0 && (
-                      <Accordion type="multiple" className="w-full"> {/* Nested Accordion for individual logs */}
-                        {completedThinkingSteps.map((log, i) => (
-                          <AccordionItem key={i} value={`log-${i}`} className="border-b last:border-b-0">
-                            <AccordionTrigger className="py-2 text-sm text-foreground hover:no-underline">
-                              <div className="flex items-center gap-2 w-full">
-                                <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
-                                <span className="text-muted-foreground">— {log.status}</span>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-0 pb-2">
-                              {log.data ? (
-                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                                  <code>
-                                    {log.step === "THINKING_LLM_CHUNKS" && typeof log.data === 'object' && log.data.content !== undefined
-                                      ? log.data.content
-                                      : typeof log.data === 'string'
-                                        ? log.data
-                                        : JSON.stringify(log.data, null, 2)}
-                                  </code>
-                                </pre>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                              )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    )}
-                    {/* Case 4: Idle state (not streaming, no final answer, no logs) */}
-                    {!isStreaming && !finalAnswer && completedThinkingSteps.length === 0 && (
-                      <p className="text-muted-foreground">Start a query to see thinking steps...</p>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+            {liveResponse && (
+              <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={handleAccordionValueChange}>
+                <AccordionItem value="thinking-panel" className="border-none">
+                  <AccordionTrigger className="py-2 text-lg font-semibold text-primary hover:no-underline">
+                    <span className="flex items-center">
+                      <Bot className="h-5 w-5 mr-2" />
+                      Thinking {thinkingOpen ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-2 pb-0">
+                    <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
+                      {/* Case 1: Streaming and waiting for first log */}
+                      {isStreaming && liveResponse.thinkingSteps.length === 0 && (
+                        <div className="flex items-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          <span>Waiting for first step...</span>
+                        </div>
+                      )}
+                      {/* Case 2: Streaming and showing current log (last step in liveResponse.thinkingSteps) */}
+                      {isStreaming && liveResponse.thinkingSteps.length > 0 && (
+                        <div className="thinking-row space-y-2">
+                          {(() => {
+                            const currentActiveThinkingLog = liveResponse.thinkingSteps[liveResponse.thinkingSteps.length - 1];
+                            return (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-primary/80">{currentActiveThinkingLog.step.replace("THINKING_", "")}</span>
+                                  <span className="text-muted-foreground">— {currentActiveThinkingLog.status}</span>
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
+                                </div>
+                                {currentActiveThinkingLog.data ? (
+                                  <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                    <code>
+                                      {currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" && typeof currentActiveThinkingLog.data === 'object' && currentActiveThinkingLog.data.content !== undefined
+                                        ? currentActiveThinkingLog.data.content
+                                        : typeof currentActiveThinkingLog.data === 'string'
+                                          ? currentActiveThinkingLog.data
+                                          : JSON.stringify(currentActiveThinkingLog.data, null, 2)}
+                                    </code>
+                                  </pre>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {/* Case 3: Not streaming, final answer received, show all logs */}
+                      {!isStreaming && liveResponse.finalAnswerText && liveResponse.thinkingSteps.length > 0 && (
+                        <Accordion type="multiple" className="w-full"> {/* Nested Accordion for individual logs */}
+                          {liveResponse.thinkingSteps.map((log, i) => (
+                            <AccordionItem key={i} value={`log-${i}`} className="border-b last:border-b-0">
+                              <AccordionTrigger className="py-2 text-sm text-foreground hover:no-underline">
+                                <div className="flex items-center gap-2 w-full">
+                                  <span className="font-medium text-primary/80">{log.step.replace("THINKING_", "")}</span>
+                                  <span className="text-muted-foreground">— {log.status}</span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-0 pb-2">
+                                {log.data ? (
+                                  <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                    <code>
+                                      {log.step === "THINKING_LLM_CHUNKS" && typeof log.data === 'object' && log.data.content !== undefined
+                                        ? log.data.content
+                                        : typeof log.data === 'string'
+                                          ? log.data
+                                          : JSON.stringify(log.data, null, 2)}
+                                    </code>
+                                  </pre>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      )}
+                      {/* Case 4: Idle state (not streaming, no final answer, no logs) */}
+                      {!isStreaming && !liveResponse.finalAnswerText && liveResponse.thinkingSteps.length === 0 && (
+                        <p className="text-muted-foreground">Start a query to see thinking steps...</p>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
 
             {/* Current Query's Final Answer */}
-            {finalAnswer && (
+            {liveResponse && liveResponse.finalAnswerText && (
               <div className="final-answer mt-6 p-4 border rounded-lg shadow-md bg-card">
                 <h3 className="text-xl font-bold mb-3 flex items-center">
                   <MessageCircle className="h-5 w-5 mr-2 text-primary" /> Final Answer
                 </h3>
                 <div className="prose dark:prose-invert text-base">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {finalAnswer.synthesis.answer}
+                    {liveResponse.finalAnswerText}
                   </ReactMarkdown>
                 </div>
-                {finalAnswer.synthesis.provenance && finalAnswer.synthesis.provenance.length > 0 && (
+                {liveResponse.finalAnswerProvenance && liveResponse.finalAnswerProvenance.length > 0 && (
                   <div className="border rounded-lg p-3 bg-card shadow-sm">
                               <Accordion type="single" collapsible className="w-full">
                                 <AccordionItem value="provenance-item" className="border-none">
                                   <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
                                     <span className="flex items-center">
                                       <FileText className="h-4 w-4 mr-2" />
-                                      Thinking Process | Provenance ({finalAnswer.synthesis.provenance.length})
+                                      Thinking Process | Provenance ({liveResponse.finalAnswerProvenance.length})
                                     </span>
                                   </AccordionTrigger>
                                   <AccordionContent className="pt-2 pb-0">
                                     <div className="space-y-3">
-                                      {finalAnswer.synthesis.provenance.map((entry: ProvenanceEntry, index: number) => (
+                                      {liveResponse.finalAnswerProvenance.map((entry: ProvenanceEntry, index: number) => (
                                         <div key={entry.id} className="border rounded-md p-3 bg-muted">
                                           <div className="flex justify-between items-start mb-1">
                                               <p className="text-xs font-semibold text-primary/80">
