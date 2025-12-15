@@ -80,6 +80,82 @@ const Stream: React.FC<StreamProps> = () => {
     return Array.isArray(selectedFiles) && selectedFiles.length === 0;
   }, [selectedFiles]);
 
+  const fetchData = useCallback(async () => {
+    if (currentWorkspace) {
+      try {
+        const files = await listFiles(currentWorkspace);
+        setAvailableFiles(files);
+        if (Array.isArray(selectedFiles)) {
+          const validSelectedFiles = selectedFiles.filter(file => files.includes(file));
+          if (validSelectedFiles.length !== selectedFiles.length) {
+            setSelectedFiles(validSelectedFiles.length === 0 ? "all" : validSelectedFiles);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch workspace files:", error);
+      }
+
+      // Fetch chat history
+      try {
+        const history = await getChatHistory(currentWorkspace);
+        const mappedMessages: ChatMessage[] = history.flatMap(entry => {
+          const messages: ChatMessage[] = [];
+          messages.push({
+            id: `user-${entry.request_time}`,
+            type: "user",
+            text: entry.query,
+            timestamp: new Date(entry.request_time),
+          });
+
+          let provenance: ProvenanceEntry[] = [];
+          if (Array.isArray(entry.source)) {
+            provenance = entry.source.filter((item: any) =>
+              typeof item === 'object' && item !== null &&
+              'id' in item && 'reason' in item && 'snippet' in item
+            );
+          } else if (typeof entry.source === 'string') {
+            const trimmedSource = entry.source.trim();
+            try {
+              const parsedSource = JSON.parse(trimmedSource);
+              if (Array.isArray(parsedSource)) {
+                provenance = parsedSource.filter((item: any) =>
+                  typeof item === 'object' && item !== null &&
+                  'id' in item && 'reason' in item && 'snippet' in item
+                );
+              } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
+                provenance = [parsedSource as ProvenanceEntry];
+              }
+            } catch (e) {
+              provenance = [{ id: "direct-source", reason: "Direct string source", snippet: trimmedSource }];
+            }
+          }
+
+          messages.push({
+            id: `bot-${entry.response_time}`,
+            type: "bot",
+            text: entry.ai,
+            timestamp: new Date(entry.response_time),
+            provenance: provenance,
+          });
+          return messages;
+        }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        setChatHistoryMessages(mappedMessages);
+      } catch (error) {
+        console.error("Failed to fetch chat history:", error);
+        setChatHistoryMessages([]);
+      }
+
+    } else {
+      setAvailableFiles([]);
+      setSelectedFiles("all");
+      setChatHistoryMessages([]);
+      setCompletedThinkingSteps([]);
+      currentLlmChunkAccumulatorRef.current = ""; // Clear ref
+      setFinalAnswer(null);
+      setTaggedProvenances([]);
+    }
+  }, [currentWorkspace, selectedFiles]);
+
   useEffect(() => {
     const loadIcons = () => {
       const savedBotIconName = localStorage.getItem("chatBotIcon");
@@ -101,81 +177,6 @@ const Stream: React.FC<StreamProps> = () => {
     loadIcons();
     window.addEventListener('chatIconsUpdated', loadIcons);
 
-    const fetchData = async () => {
-      if (currentWorkspace) {
-        try {
-          const files = await listFiles(currentWorkspace);
-          setAvailableFiles(files);
-          if (Array.isArray(selectedFiles)) {
-            const validSelectedFiles = selectedFiles.filter(file => files.includes(file));
-            if (validSelectedFiles.length !== selectedFiles.length) {
-              setSelectedFiles(validSelectedFiles.length === 0 ? "all" : validSelectedFiles);
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch workspace files:", error);
-        }
-
-        // Fetch chat history
-        try {
-          const history = await getChatHistory(currentWorkspace);
-          const mappedMessages: ChatMessage[] = history.flatMap(entry => {
-            const messages: ChatMessage[] = [];
-            messages.push({
-              id: `user-${entry.request_time}`,
-              type: "user",
-              text: entry.query,
-              timestamp: new Date(entry.request_time),
-            });
-
-            let provenance: ProvenanceEntry[] = [];
-            if (Array.isArray(entry.source)) {
-              provenance = entry.source.filter((item: any) =>
-                typeof item === 'object' && item !== null &&
-                'id' in item && 'reason' in item && 'snippet' in item
-              );
-            } else if (typeof entry.source === 'string') {
-              const trimmedSource = entry.source.trim();
-              try {
-                const parsedSource = JSON.parse(trimmedSource);
-                if (Array.isArray(parsedSource)) {
-                  provenance = parsedSource.filter((item: any) =>
-                    typeof item === 'object' && item !== null &&
-                    'id' in item && 'reason' in item && 'snippet' in item
-                  );
-                } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
-                  provenance = [parsedSource as ProvenanceEntry];
-                }
-              } catch (e) {
-                provenance = [{ id: "direct-source", reason: "Direct string source", snippet: trimmedSource }];
-              }
-            }
-
-            messages.push({
-              id: `bot-${entry.response_time}`,
-              type: "bot",
-              text: entry.ai,
-              timestamp: new Date(entry.response_time),
-              provenance: provenance,
-            });
-            return messages;
-          }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-          setChatHistoryMessages(mappedMessages);
-        } catch (error) {
-          console.error("Failed to fetch chat history:", error);
-          setChatHistoryMessages([]);
-        }
-
-      } else {
-        setAvailableFiles([]);
-        setSelectedFiles("all");
-        setChatHistoryMessages([]);
-        setCompletedThinkingSteps([]);
-        currentLlmChunkAccumulatorRef.current = ""; // Clear ref
-        setFinalAnswer(null);
-        setTaggedProvenances([]);
-      }
-    };
     fetchData();
     console.log("Stream: Current workspace changed or loaded. State reset.");
     console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "finalAnswer:", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
@@ -183,7 +184,7 @@ const Stream: React.FC<StreamProps> = () => {
     return () => {
       window.removeEventListener('chatIconsUpdated', loadIcons);
     };
-  }, [currentWorkspace, selectedFiles]);
+  }, [currentWorkspace, selectedFiles, fetchData]);
 
   // Effect for auto-scrolling
   useEffect(() => {
@@ -220,6 +221,15 @@ const Stream: React.FC<StreamProps> = () => {
     }
 
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
+
+    // Add user message to history immediately
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: "user",
+      text: query,
+      timestamp: new Date(),
+    };
+    setChatHistoryMessages((prev) => [...prev, userMessage]);
 
     setIsStreaming(true);
     setCompletedThinkingSteps([]); // Clear previous steps for new query
@@ -329,8 +339,9 @@ const Stream: React.FC<StreamProps> = () => {
       setThinkingOpen(false); // Close thinking dropdown on error
     } finally {
       setIsStreaming(false);
+      fetchData(); // Reload chat history after stream completes
     }
-  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances]);
+  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, fetchData]);
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
