@@ -381,9 +381,11 @@ const Stream: React.FC<StreamProps> = () => {
       setLiveResponse(null); // Clear the live response state
       setThinkingOpen(false); // Ensure thinking panel is closed
 
-      // Removed: await fetchData(); // This was causing the thinking steps to disappear
+      // Re-fetch history to ensure backend is in sync.
+      // This will also ensure the newly added message is correctly reflected if fetchData() has its own mapping logic.
+      await fetchData();
     }
-  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, liveResponse]); // Added liveResponse to dependencies
+  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, fetchData, liveResponse]); // Added liveResponse to dependencies
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
