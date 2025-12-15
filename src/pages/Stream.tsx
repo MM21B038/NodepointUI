@@ -26,7 +26,6 @@ interface StreamProps {}
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
   const [completedThinkingSteps, setCompletedThinkingSteps] = useState<any[]>([]); // Stores all completed steps
-  const [currentActiveThinkingLog, setCurrentActiveThinkingLog] = useState<any | null>(null); // The currently active step
   const currentLlmChunkAccumulatorRef = useRef<string>(""); // Use useRef for accumulation
   const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(true);
@@ -80,7 +79,6 @@ const Stream: React.FC<StreamProps> = () => {
         setAvailableFiles([]);
         setSelectedFiles("all");
         setCompletedThinkingSteps([]);
-        setCurrentActiveThinkingLog(null);
         currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
       }
@@ -90,48 +88,12 @@ const Stream: React.FC<StreamProps> = () => {
     console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "finalAnswer:", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
   }, [currentWorkspace, selectedFiles]);
 
-  const finalizeCurrentThinkingLog = useCallback(() => {
-    console.log("finalizeCurrentThinkingLog called. currentActiveThinkingLog:", currentActiveThinkingLog);
-    console.log("currentLlmChunkAccumulatorRef.current:", currentLlmChunkAccumulatorRef.current);
-
-    if (currentActiveThinkingLog) {
-      if (currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS") {
-        if (currentLlmChunkAccumulatorRef.current) {
-          setCompletedThinkingSteps(prev => {
-            console.log("setCompletedThinkingSteps (LLM chunk) - prev:", prev, "currentActiveThinkingLog:", currentActiveThinkingLog);
-            const newSteps = [...prev, {
-              ...currentActiveThinkingLog,
-              data: { content: currentLlmChunkAccumulatorRef.current }, // Store accumulated content
-              type: "final_llm_chunk" // Mark as finalized LLM chunk
-            }];
-            console.log("setCompletedThinkingSteps (LLM chunk) - newSteps length:", newSteps.length);
-            return newSteps;
-          });
-        } else {
-          console.log("Skipping LLM chunk finalization: accumulator is empty.");
-        }
-      } else {
-        setCompletedThinkingSteps(prev => {
-          console.log("setCompletedThinkingSteps (non-LLM chunk) - prev:", prev, "currentActiveThinkingLog:", currentActiveThinkingLog);
-          const newSteps = [...prev, currentActiveThinkingLog];
-          console.log("setCompletedThinkingSteps (non-LLM chunk) - newSteps length:", newSteps.length);
-          return newSteps;
-        });
-      }
-    } else {
-      console.log("finalizeCurrentThinkingLog: currentActiveThinkingLog is null. Nothing to finalize.");
-    }
-    setCurrentActiveThinkingLog(null);
-    currentLlmChunkAccumulatorRef.current = ""; // Clear ref
-  }, [currentActiveThinkingLog]);
-
   const handleStreamSend = useCallback(async () => {
     const query = currentInput.trim();
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setCompletedThinkingSteps([]);
-    setCurrentActiveThinkingLog(null);
+    setCompletedThinkingSteps([]); // Clear here
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
     setFinalAnswer(null);
     setThinkingOpen(true); // Open thinking panel when starting a new stream
@@ -161,7 +123,7 @@ const Stream: React.FC<StreamProps> = () => {
             console.log("Received SSE event:", event.step, event); // Log every received event
 
             if (event.step.startsWith("THINKING")) {
-              if (event.step === "THINKING_LLM_CHUNKS") { // Removed event.type === "token" check here
+              if (event.step === "THINKING_LLM_CHUNKS") {
                 let tokenContent = "";
                 if (typeof event.data === 'string') {
                     tokenContent = event.data;
@@ -172,29 +134,51 @@ const Stream: React.FC<StreamProps> = () => {
                 }
                 
                 currentLlmChunkAccumulatorRef.current += tokenContent;
-                
-                // Always create a new object to ensure React detects the state change
-                setCurrentActiveThinkingLog(prev => {
-                  // Use previous event as base if it was also LLM_CHUNKS, otherwise use current event
-                  const baseEvent = prev && prev.step === "THINKING_LLM_CHUNKS" ? prev : event; 
-                  return {
-                    ...baseEvent, // Spread the base event (either previous LLM_CHUNKS or current event)
-                    step: "THINKING_LLM_CHUNKS", // Ensure step is correct
-                    status: "progress", // Ensure status is correct
-                    data: { content: currentLlmChunkAccumulatorRef.current } // Always use accumulated content
-                  };
+
+                setCompletedThinkingSteps(prevSteps => {
+                    const newSteps = [...prevSteps];
+                    const lastStep = newSteps[newSteps.length - 1];
+
+                    // If the last step was also an LLM chunk in progress, update it
+                    if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                        lastStep.data.content = currentLlmChunkAccumulatorRef.current;
+                        return newSteps;
+                    } else {
+                        // Otherwise, add a new LLM chunk step
+                        return [...newSteps, {
+                            ...event, // Use the current event as base
+                            status: "progress", // Mark as in progress
+                            data: { content: currentLlmChunkAccumulatorRef.current }
+                        }];
+                    }
                 });
               } else {
                 // This is a new non-LLM chunk thinking step
-                finalizeCurrentThinkingLog(); // Finalize previous step (could be LLM chunk or another thinking step)
-                setCurrentActiveThinkingLog(event); // Set new event as active
+                // First, ensure any *previous* LLM chunk is marked as complete
+                setCompletedThinkingSteps(prevSteps => {
+                    const newSteps = [...prevSteps];
+                    const lastStep = newSteps[newSteps.length - 1];
+                    if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                        lastStep.status = "completed"; // Mark as completed
+                    }
+                    return [...newSteps, event]; // Add the new non-LLM step
+                });
+                currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator for next LLM chunk
               }
             }
 
             if (event.step === "FINAL_RESPONSE") {
-              finalizeCurrentThinkingLog(); // Finalize any active thinking log before final response
+              // Ensure the last LLM chunk is marked as complete before final response
+              setCompletedThinkingSteps(prevSteps => {
+                  const newSteps = [...prevSteps];
+                  const lastStep = newSteps[newSteps.length - 1];
+                  if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+                      lastStep.status = "completed"; // Mark as completed
+                  }
+                  return newSteps;
+              });
               setFinalAnswer(event.data.message);
-              // Removed setThinkingOpen(false);
+              currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator
             }
           } catch (parseError) {
             console.error("Failed to parse SSE event:", parseError, "Raw line:", line);
@@ -203,13 +187,19 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      finalizeCurrentThinkingLog(); // Finalize on error
+      setCompletedThinkingSteps(prevSteps => { // Finalize on error
+          const newSteps = [...prevSteps];
+          const lastStep = newSteps[newSteps.length - 1];
+          if (lastStep && lastStep.step === "THINKING_LLM_CHUNKS" && lastStep.status === "progress") {
+              lastStep.status = "failed"; // Mark as failed
+          }
+          return newSteps;
+      });
       setFinalAnswer({ synthesis: { answer: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}` } });
-      // Removed setThinkingOpen(false);
     } finally {
       setIsStreaming(false);
     }
-  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, finalizeCurrentThinkingLog]);
+  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles]);
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -218,7 +208,7 @@ const Stream: React.FC<StreamProps> = () => {
     }
   };
 
-  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps", completedThinkingSteps.length);
+  console.log("Stream render cycle: thinkingOpen", thinkingOpen, "isStreaming", isStreaming, "finalAnswer", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
 
   const handleAccordionValueChange = useCallback((value: string) => {
     console.log("Accordion onValueChange triggered. New value:", value);
@@ -252,33 +242,41 @@ const Stream: React.FC<StreamProps> = () => {
                 <AccordionContent className="pt-2 pb-0">
                   <div className="space-y-2 p-3 border rounded-lg bg-secondary/50 text-sm">
                     {/* Case 1: Streaming and waiting for first log */}
-                    {isStreaming && !currentActiveThinkingLog && (
+                    {isStreaming && completedThinkingSteps.length === 0 && (
                       <div className="flex items-center">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                         <span>Waiting for first step...</span>
                       </div>
                     )}
-                    {/* Case 2: Streaming and showing current log */}
-                    {isStreaming && currentActiveThinkingLog && (
+                    {/* Case 2: Streaming and showing current log (last step in completedThinkingSteps) */}
+                    {isStreaming && completedThinkingSteps.length > 0 && (
                       <div className="thinking-row space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-primary/80">{currentActiveThinkingLog.step.replace("THINKING_", "")}</span>
-                          <span className="text-muted-foreground">— {currentActiveThinkingLog.status}</span>
-                          <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
-                        </div>
-                        {currentActiveThinkingLog.data ? (
-                          <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
-                            <code>
-                              {currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" && typeof currentActiveThinkingLog.data === 'object' && currentActiveThinkingLog.data.content !== undefined
-                                ? currentActiveThinkingLog.data.content
-                                : typeof currentActiveThinkingLog.data === 'string'
-                                  ? currentActiveThinkingLog.data
-                                  : JSON.stringify(currentActiveThinkingLog.data, null, 2)}
-                            </code>
-                          </pre>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No additional data for this step.</p>
-                        )}
+                        {/* Display the last step as the "active" one */}
+                        {(() => {
+                          const currentActiveThinkingLog = completedThinkingSteps[completedThinkingSteps.length - 1];
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-primary/80">{currentActiveThinkingLog.step.replace("THINKING_", "")}</span>
+                                <span className="text-muted-foreground">— {currentActiveThinkingLog.status}</span>
+                                <Loader2 className="h-3 w-3 animate-spin text-primary ml-auto" />
+                              </div>
+                              {currentActiveThinkingLog.data ? (
+                                <pre className="bg-muted p-2 rounded-md text-xs overflow-x-auto">
+                                  <code>
+                                    {currentActiveThinkingLog.step === "THINKING_LLM_CHUNKS" && typeof currentActiveThinkingLog.data === 'object' && currentActiveThinkingLog.data.content !== undefined
+                                      ? currentActiveThinkingLog.data.content
+                                      : typeof currentActiveThinkingLog.data === 'string'
+                                        ? currentActiveThinkingLog.data
+                                        : JSON.stringify(currentActiveThinkingLog.data, null, 2)}
+                                  </code>
+                                </pre>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No additional data for this step.</p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                     {/* Case 3: Not streaming, final answer received, show all logs */}
