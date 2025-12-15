@@ -60,8 +60,6 @@ const Stream: React.FC<StreamProps> = () => {
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [taggedProvenances, setTaggedProvenances] = useState<ProvenanceEntry[]>([]);
 
-  const finalBotMessageRef = useRef<ChatMessage | null>(null); // Ref to store the complete bot message before adding to history
-
 
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref for auto-scrolling
   const [botIconComponent, setBotIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(Bot);
@@ -253,7 +251,6 @@ const Stream: React.FC<StreamProps> = () => {
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
     setTaggedProvenances([]); // Clear tags after sending
-    finalBotMessageRef.current = null; // Clear the ref for the new query
 
     try {
       const reader = await performStreamingSearch(
@@ -330,17 +327,6 @@ const Stream: React.FC<StreamProps> = () => {
                   lastStep.status = "completed";
                   lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Ensure final content is saved
                 }
-
-                // Prepare the final message data and store it in the ref
-                finalBotMessageRef.current = {
-                  id: `bot-${Date.now()}`,
-                  type: "bot",
-                  text: event.data.message.synthesis.answer || "No answer received.",
-                  timestamp: new Date(),
-                  provenance: event.data.message.synthesis.provenance,
-                  thinkingSteps: newThinkingSteps, // Use the captured steps
-                };
-
                 return {
                   ...prev,
                   thinkingSteps: newThinkingSteps,
@@ -358,7 +344,6 @@ const Stream: React.FC<StreamProps> = () => {
       }
     } catch (error) {
       console.error("Streaming search failed:", error);
-      let currentThinkingStepsOnError: any[] = [];
       setLiveResponse(prev => {
         if (!prev) return null;
         const newThinkingSteps = [...prev.thinkingSteps];
@@ -367,7 +352,6 @@ const Stream: React.FC<StreamProps> = () => {
           lastStep.status = "failed"; // Mark as failed on stream error
           lastStep.data = { content: currentLlmChunkAccumulatorRef.current }; // Save current content
         }
-        currentThinkingStepsOnError = newThinkingSteps; // Capture here
         return {
           ...prev,
           thinkingSteps: newThinkingSteps,
@@ -377,25 +361,22 @@ const Stream: React.FC<StreamProps> = () => {
       });
       currentLlmChunkAccumulatorRef.current = ""; // Clear accumulator on error
       setThinkingOpen(false); // Close thinking dropdown on error
-
-      // Prepare the error message data and store it in the ref
-      finalBotMessageRef.current = {
-        id: `bot-error-${Date.now()}`,
-        type: "bot",
-        text: `Error: ${error instanceof Error ? error.message : "An unknown error occurred during streaming."}`,
-        timestamp: new Date(),
-        provenance: [],
-        thinkingSteps: currentThinkingStepsOnError, // Use the captured steps
-      };
-
     } finally {
       setIsStreaming(false);
-      if (finalBotMessageRef.current) {
-        setChatHistoryMessages((prev) => [...prev, finalBotMessageRef.current!]);
+      // Construct the final bot message and add it to history
+      if (liveResponse) {
+        const botMessage: ChatMessage = {
+          id: `bot-${Date.now()}`,
+          type: "bot",
+          text: liveResponse.finalAnswerText || "No answer received.",
+          timestamp: new Date(),
+          provenance: liveResponse.finalAnswerProvenance,
+          thinkingSteps: liveResponse.thinkingSteps, // Include thinking steps
+        };
+        setChatHistoryMessages((prev) => [...prev, botMessage]);
       }
       setLiveResponse(null); // Clear live response after it's been added to history
       setThinkingOpen(false); // Ensure thinking panel is closed
-      finalBotMessageRef.current = null; // Clear the ref for the next query
     }
   }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances, liveResponse]); // Added liveResponse to dependencies
 
@@ -638,10 +619,37 @@ const Stream: React.FC<StreamProps> = () => {
                                         Thinking Process | Provenance ({liveResponse.finalAnswerProvenance.length})
                                       </span>
                                     </AccordionTrigger>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
-                            </div>
+                                    <AccordionContent className="pt-2 pb-0">
+                                      <div className="space-y-3">
+                                        {liveResponse.finalAnswerProvenance.map((entry: ProvenanceEntry, index: number) => (
+                                          <div key={entry.id} className="border rounded-md p-3 bg-muted">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <p className="text-xs font-semibold text-primary/80">
+                                                    Source: {entry.id}
+                                                </p>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleTagProvenance(entry)}
+                                                    className="h-6 px-2 py-1 text-xs"
+                                                >
+                                                    <Tag className="h-3 w-3 mr-1" /> Tag
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground italic mb-2">
+                                              Reason: {entry.reason}
+                                            </p>
+                                            <Separator className="my-2" />
+                                            <p className="text-sm">
+                                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                </Accordion>
+                              </div>
                     )}
                   </div>
                 )}
