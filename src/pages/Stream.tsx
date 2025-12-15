@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"; // Import useRef
-import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot } from "lucide-react";
+import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot, User } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { listFiles, performStreamingSearch, SearchEngineType } from "@/database/workspaceStorage";
+import { listFiles, performStreamingSearch, SearchEngineType, getChatHistory, ChatHistoryEntry } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,26 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Textarea } from "@/components/ui/textarea";
 import remarkGfm from 'remark-gfm';
 import ProvenanceDisplay from "@/components/ProvenanceDisplay";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // Import Avatar components
+import { iconComponents } from "@/lib/icons"; // Import iconComponents
 
 interface StreamProps {}
 
+export interface ChatMessage {
+  id: string;
+  type: "user" | "bot";
+  text: string;
+  timestamp: Date;
+  provenance?: any[]; // Can be ProvenanceEntry[] or other structure
+}
+
 const Stream: React.FC<StreamProps> = () => {
   const { currentWorkspace } = useWorkspace();
-  const [completedThinkingSteps, setCompletedThinkingSteps] = useState<any[]>([]); // Stores all completed steps
+  const [chatHistoryMessages, setChatHistoryMessages] = useState<ChatMessage[]>([]); // For historical messages
+  const [completedThinkingSteps, setCompletedThinkingSteps] = useState<any[]>([]); // Stores all completed steps for current query
   const currentLlmChunkAccumulatorRef = useRef<string>(""); // Use useRef for accumulation
-  const [finalAnswer, setFinalAnswer] = useState<any | null>(null);
-  const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [finalAnswer, setFinalAnswer] = useState<any | null>(null); // Final answer for current query
+  const [thinkingOpen, setThinkingOpen] = useState(true); // Controls current query's thinking accordion
   const [isStreaming, setIsStreaming] = useState(false);
 
   const [currentInput, setCurrentInput] = useState("");
@@ -36,6 +47,10 @@ const Stream: React.FC<StreamProps> = () => {
   const [isFileFilterDialogOpen, setIsFileFilterDialogOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<string[] | "all">("all");
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Ref for auto-scrolling
+  const [botIconComponent, setBotIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(Bot);
+  const [userIconComponent, setUserIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(User);
 
   const searchEngineOptions = [
     { value: "agent_search", label: "Agent Search", icon: Sparkles },
@@ -61,6 +76,26 @@ const Stream: React.FC<StreamProps> = () => {
   }, [selectedFiles]);
 
   useEffect(() => {
+    const loadIcons = () => {
+      const savedBotIconName = localStorage.getItem("chatBotIcon");
+      const savedUserIconName = localStorage.getItem("chatUserIcon");
+
+      if (savedBotIconName && iconComponents[savedBotIconName]) {
+        setBotIconComponent(() => iconComponents[savedBotIconName]);
+      } else {
+        setBotIconComponent(() => Bot);
+      }
+
+      if (savedUserIconName && iconComponents[savedUserIconName]) {
+        setUserIconComponent(() => iconComponents[savedUserIconName]);
+      } else {
+        setUserIconComponent(() => User);
+      }
+    };
+
+    loadIcons();
+    window.addEventListener('chatIconsUpdated', loadIcons);
+
     const fetchData = async () => {
       if (currentWorkspace) {
         try {
@@ -75,9 +110,61 @@ const Stream: React.FC<StreamProps> = () => {
         } catch (error) {
           console.error("Failed to fetch workspace files:", error);
         }
+
+        // Fetch chat history
+        try {
+          const history = await getChatHistory(currentWorkspace);
+          const mappedMessages: ChatMessage[] = history.flatMap(entry => {
+            const messages: ChatMessage[] = [];
+            messages.push({
+              id: `user-${entry.request_time}`,
+              type: "user",
+              text: entry.query,
+              timestamp: new Date(entry.request_time),
+            });
+
+            let provenance: any[] = [];
+            if (Array.isArray(entry.source)) {
+              provenance = entry.source.filter((item: any) =>
+                typeof item === 'object' && item !== null &&
+                'id' in item && 'reason' in item && 'snippet' in item
+              );
+            } else if (typeof entry.source === 'string') {
+              const trimmedSource = entry.source.trim();
+              try {
+                const parsedSource = JSON.parse(trimmedSource);
+                if (Array.isArray(parsedSource)) {
+                  provenance = parsedSource.filter((item: any) =>
+                    typeof item === 'object' && item !== null &&
+                    'id' in item && 'reason' in item && 'snippet' in item
+                  );
+                } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
+                  provenance = [parsedSource];
+                }
+              } catch (e) {
+                provenance = [{ id: "direct-source", reason: "Direct string source", snippet: trimmedSource }];
+              }
+            }
+
+            messages.push({
+              id: `bot-${entry.response_time}`,
+              type: "bot",
+              text: entry.ai,
+              timestamp: new Date(entry.response_time),
+              provenance: provenance,
+            });
+            return messages;
+          }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          setChatHistoryMessages(mappedMessages);
+        } catch (error) {
+          console.error("Failed to fetch chat history:", error);
+          setChatHistoryMessages([]);
+        }
+
       } else {
         setAvailableFiles([]);
         setSelectedFiles("all");
+        setChatHistoryMessages([]);
         setCompletedThinkingSteps([]);
         currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
@@ -86,16 +173,34 @@ const Stream: React.FC<StreamProps> = () => {
     fetchData();
     console.log("Stream: Current workspace changed or loaded. State reset.");
     console.log("Stream: Initial state - thinkingOpen:", thinkingOpen, "isStreaming:", isStreaming, "finalAnswer:", !!finalAnswer, "completedSteps:", completedThinkingSteps.length);
+
+    return () => {
+      window.removeEventListener('chatIconsUpdated', loadIcons);
+    };
   }, [currentWorkspace, selectedFiles]);
+
+  // Effect for auto-scrolling
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      const viewport = messagesEndRef.current.closest('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    }
+  }, [chatHistoryMessages, completedThinkingSteps, finalAnswer, isStreaming]);
+
 
   const handleStreamSend = useCallback(async () => {
     const query = currentInput.trim();
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
-    setCompletedThinkingSteps([]); // Clear here
+    setCompletedThinkingSteps([]); // Clear previous steps for new query
     currentLlmChunkAccumulatorRef.current = ""; // Clear ref
-    setFinalAnswer(null);
+    setFinalAnswer(null); // Clear previous final answer
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
 
@@ -216,6 +321,9 @@ const Stream: React.FC<StreamProps> = () => {
     setThinkingOpen(value === "thinking-panel");
   }, []);
 
+  const BotIcon = botIconComponent;
+  const UserIcon = userIconComponent;
+
   return (
     <div className="flex flex-col flex-grow h-full relative">
       {!currentWorkspace ? (
@@ -231,7 +339,57 @@ const Stream: React.FC<StreamProps> = () => {
       ) : (
         <div className="flex flex-col flex-grow mt-4 p-4 space-y-4 border-x-4 border-y-2 rounded-lg">
           <ScrollArea className="flex-grow h-0 w-full !transform-none hide-scrollbar p-4">
-            {/* Thinking Dropdown */}
+            {/* Historical Chat Messages */}
+            {chatHistoryMessages.length > 0 && (
+              <div className="space-y-6 pb-8">
+                {chatHistoryMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "flex gap-3",
+                      message.type === "user" ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    {message.type === "bot" && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-secondary text-secondary-foreground rounded-md">
+                          <BotIcon className="h-5 w-5" />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div
+                      className={cn(
+                        "max-w-[75%] p-3 rounded-xl flex flex-col gap-3",
+                        message.type === "user"
+                          ? "bg-primary text-primary-foreground rounded-br-none"
+                          : "bg-secondary text-secondary-foreground rounded-bl-none"
+                      )}
+                    >
+                      <div className="prose dark:prose-invert text-sm">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.text}
+                        </ReactMarkdown>
+                      </div>
+                      {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
+                        <ProvenanceDisplay provenance={message.provenance} />
+                      )}
+                      <span className="block text-xs opacity-70 mt-1 text-right">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {message.type === "user" && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary text-primary-foreground rounded-md">
+                          <UserIcon className="h-5 w-5" />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Current Query's Thinking Dropdown */}
             <Accordion type="single" collapsible value={thinkingOpen ? "thinking-panel" : ""} onValueChange={handleAccordionValueChange}>
               <AccordionItem value="thinking-panel" className="border-none">
                 <AccordionTrigger className="py-2 text-lg font-semibold text-primary hover:no-underline">
@@ -319,7 +477,7 @@ const Stream: React.FC<StreamProps> = () => {
               </AccordionItem>
             </Accordion>
 
-            {/* Final Answer */}
+            {/* Current Query's Final Answer */}
             {finalAnswer && (
               <div className="final-answer mt-6 p-4 border rounded-lg shadow-md bg-card">
                 <h3 className="text-xl font-bold mb-3 flex items-center">
@@ -335,6 +493,7 @@ const Stream: React.FC<StreamProps> = () => {
                 )}
               </div>
             )}
+            <div ref={messagesEndRef} /> {/* Scroll target for auto-scrolling */}
           </ScrollArea>
 
           <div className="flex flex-col gap-2 border rounded-lg px-3 py-2 bg-background shadow-sm flex-shrink-0">
