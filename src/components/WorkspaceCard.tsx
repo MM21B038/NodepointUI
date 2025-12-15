@@ -7,7 +7,7 @@ import { Loader2, Trash2, CheckCircle2, FolderCog, FileStack, GitGraph, Link, Pl
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { flagWorkspace, undoFlagWorkspace, getFlagStatus } from "@/database/workspaceStorage"; // Import new API functions
+import { flagWorkspace, undoFlagWorkspace } from "@/database/workspaceStorage"; // Removed getFlagStatus
 
 interface WorkspaceCardProps {
   workspaceName: string;
@@ -22,6 +22,7 @@ interface WorkspaceCardProps {
   isLoadingStats?: boolean;
   onExtract: (workspaceName: string) => void;
   isExtracting: boolean;
+  isFlagged: boolean; // New prop for flag status
 }
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
@@ -37,27 +38,19 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   isLoadingStats,
   onExtract,
   isExtracting,
+  isFlagged: initialIsFlagged, // Renamed to avoid conflict with state
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isFlagged, setIsFlagged] = useState(false);
+  const [isFlagged, setIsFlagged] = useState(initialIsFlagged); // Initialize from prop
   const [isFlagging, setIsFlagging] = useState(false);
+
+  // Update internal state if initialIsFlagged prop changes
+  useEffect(() => {
+    setIsFlagged(initialIsFlagged);
+  }, [initialIsFlagged]);
 
   const isThisWorkspaceDeleting = isDeleting && deletingWorkspaceName === workspaceName;
   const isDisabled = isDeleting || isExtracting || isFlagging;
-
-  // Fetch initial flag status
-  useEffect(() => {
-    const fetchFlagStatus = async () => {
-      try {
-        const status = await getFlagStatus(workspaceName);
-        setIsFlagged(status.flag);
-      } catch (error) {
-        console.error(`Failed to fetch flag status for ${workspaceName}:`, error);
-        setIsFlagged(false); // Default to unflagged on error
-      }
-    };
-    fetchFlagStatus();
-  }, [workspaceName]);
 
   const handleFlagToggle = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card selection

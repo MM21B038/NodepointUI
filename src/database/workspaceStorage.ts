@@ -4,6 +4,7 @@ const API_BASE_URL = "http://10.10.112.72:3366";
 export interface WorkspaceEntry {
   workspace_name: string;
   timestamp: string; // ISO string
+  star: boolean; // Added star property for flag status
 }
 
 // The API now returns an array of WorkspaceEntry directly, not an object with a 'workspaces' key.
@@ -161,7 +162,11 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
     }
     // The API now returns an array of WorkspaceEntry directly
     const data: WorkspaceEntry[] = await response.json();
-    return data || [];
+    // Ensure 'star' is a boolean
+    return data.map(ws => ({
+      ...ws,
+      star: Boolean(ws.star) // Convert to boolean
+    })) || [];
   } catch (error) {
     console.error("Error fetching workspaces:", error);
     return [];

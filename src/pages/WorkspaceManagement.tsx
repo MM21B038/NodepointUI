@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess, getFlagStatus } from "@/database/workspaceStorage"; // Import WorkspaceEntry and startPreprocess, getFlagStatus
+import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess } from "@/database/workspaceStorage"; // Removed getFlagStatus
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -27,15 +27,14 @@ const WorkspacesPerPage = 8; // Changed to 8 workspaces per page
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
-  const [allWorkspaces, setAllWorkspaces] = useState<string[]>([]);
+  const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceEntry[]>([]); // Store full WorkspaceEntry objects
   const [isLoading, setIsLoading] = useState(false);
 
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [flagFilter, setFlagFilter] = useState<"both" | "flagged" | "unflagged">("both"); // New state for flag filter
-  const [workspaceFlagStatus, setWorkspaceFlagStatus] = useState<Map<string, boolean>>(new Map()); // New state for flag statuses
-  // Removed selectedBatchMethod state
+  // Removed workspaceFlagStatus state as it's now part of allWorkspaces
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
@@ -81,23 +80,9 @@ const WorkspaceManagement = () => {
       // Sort by timestamp in descending order (latest first)
       list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       
-      const workspaceNames = list.map(ws => ws.workspace_name);
-      setAllWorkspaces(workspaceNames);
+      setAllWorkspaces(list); // Store the full WorkspaceEntry objects
 
-      // Fetch flag status for all workspaces in parallel
-      const flagStatusPromises = workspaceNames.map(async (name) => {
-        try {
-          const status = await getFlagStatus(name);
-          return { name, isFlagged: status.flag };
-        } catch (error) {
-          console.error(`Failed to fetch flag status for ${name}:`, error);
-          return { name, isFlagged: false }; // Default to unflagged on error
-        }
-      });
-      const statuses = await Promise.all(flagStatusPromises);
-      const newFlagStatusMap = new Map<string, boolean>();
-      statuses.forEach(s => newFlagStatusMap.set(s.name, s.isFlagged));
-      setWorkspaceFlagStatus(newFlagStatusMap);
+      const workspaceNames = list.map(ws => ws.workspace_name);
 
       // Update current workspace if it's no longer in the list or set a default
       if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
@@ -128,7 +113,7 @@ const WorkspaceManagement = () => {
     // Recompute filteredWorkspaces here
     const currentFilteredWorkspaces = searchTerm
       ? allWorkspaces.filter(workspace =>
-          workspace.toLowerCase().includes(searchTerm.toLowerCase())
+          workspace.workspace_name.toLowerCase().includes(searchTerm.toLowerCase())
         )
       : allWorkspaces;
 
@@ -136,8 +121,8 @@ const WorkspaceManagement = () => {
     const currentWorkspaces = currentFilteredWorkspaces.slice(currentPage * WorkspacesPerPage, (currentPage + 1) * WorkspacesPerPage);
     const nextWorkspaces = currentFilteredWorkspaces.slice((currentPage + 1) * WorkspacesPerPage, (currentPage + 2) * WorkspacesPerPage);
 
-    currentWorkspaces.forEach(ws => workspacesToLoad.push(ws));
-    nextWorkspaces.forEach(ws => workspacesToLoad.push(ws));
+    currentWorkspaces.forEach(ws => workspacesToLoad.push(ws.workspace_name));
+    nextWorkspaces.forEach(ws => workspacesToLoad.push(ws.workspace_name));
 
     // Filter out duplicates and already cached/loading ones
     const uniqueWorkspacesToLoad = Array.from(new Set(workspacesToLoad)).filter(ws =>
@@ -251,19 +236,19 @@ const WorkspaceManagement = () => {
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
       tempWorkspaces = tempWorkspaces.filter(workspace =>
-        workspace.toLowerCase().includes(lowerCaseSearchTerm)
+        workspace.workspace_name.toLowerCase().includes(lowerCaseSearchTerm)
       );
     }
 
     // Apply flag filter
     if (flagFilter !== "both") {
       tempWorkspaces = tempWorkspaces.filter(workspace => {
-        const isFlagged = workspaceFlagStatus.get(workspace) || false; // Default to false if status not found
+        const isFlagged = workspace.star; // Use the 'star' property directly
         return flagFilter === "flagged" ? isFlagged : !isFlagged;
       });
     }
     return tempWorkspaces;
-  }, [allWorkspaces, searchTerm, flagFilter, workspaceFlagStatus]);
+  }, [allWorkspaces, searchTerm, flagFilter]);
 
   const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
   const startIndex = currentPage * WorkspacesPerPage;
@@ -390,13 +375,13 @@ const WorkspaceManagement = () => {
                 <div className="relative flex-grow">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch">
                     {currentWorkspacesToDisplay.map((workspace) => {
-                      const stats = cachedWorkspaceStats.get(workspace) || { files: 0, nodes: 0, edges: 0 };
-                      const isLoadingStats = statsLoadingMap.get(workspace) || false;
+                      const stats = cachedWorkspaceStats.get(workspace.workspace_name) || { files: 0, nodes: 0, edges: 0 };
+                      const isLoadingStats = statsLoadingMap.get(workspace.workspace_name) || false;
                       return (
                         <WorkspaceCard
-                          key={workspace}
-                          workspaceName={workspace}
-                          isCurrent={currentWorkspace === workspace}
+                          key={workspace.workspace_name}
+                          workspaceName={workspace.workspace_name}
+                          isCurrent={currentWorkspace === workspace.workspace_name}
                           onSelect={handleSelectWorkspace}
                           onDelete={handleDeleteClick}
                           isDeleting={isDeleting}
@@ -406,7 +391,8 @@ const WorkspaceManagement = () => {
                           totalEdges={stats.edges}
                           isLoadingStats={isLoadingStats}
                           onExtract={handleExtract} // Pass the new handler
-                          isExtracting={isExtractingMap.get(workspace) || false} // Pass the extraction status
+                          isExtracting={isExtractingMap.get(workspace.workspace_name) || false} // Pass the extraction status
+                          isFlagged={workspace.star} // Pass the flag status directly
                         />
                       );
                     })}
