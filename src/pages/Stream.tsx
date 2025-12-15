@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"; // Import useRef
-import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot, User } from "lucide-react";
+import { MessageCircle, Info, Loader2, Sparkles, Globe, FolderSearch, Zap, FileText, Send, ChevronDown, ChevronUp, Bot, User, Tag, X } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { listFiles, performStreamingSearch, SearchEngineType, getChatHistory, ChatHistoryEntry } from "@/database/workspaceStorage";
+import { listFiles, performStreamingSearch, SearchEngineType, getChatHistory, ChatHistoryEntry, ProvenanceEntry } from "@/database/workspaceStorage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,12 @@ import FileFilterDialog from "@/components/FileFilterDialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
 import remarkGfm from 'remark-gfm';
-import ProvenanceDisplay from "@/components/ProvenanceDisplay";
+import ProvenanceDisplay from "@/components/ProvenanceDisplay"; // Keeping this for now, though its direct use is reduced
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // Import Avatar components
 import { iconComponents } from "@/lib/icons"; // Import iconComponents
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+
 
 interface StreamProps {}
 
@@ -30,7 +33,7 @@ export interface ChatMessage {
   type: "user" | "bot";
   text: string;
   timestamp: Date;
-  provenance?: any[]; // Can be ProvenanceEntry[] or other structure
+  provenance?: ProvenanceEntry[]; // Now explicitly ProvenanceEntry[]
 }
 
 const Stream: React.FC<StreamProps> = () => {
@@ -47,6 +50,8 @@ const Stream: React.FC<StreamProps> = () => {
   const [isFileFilterDialogOpen, setIsFileFilterDialogOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<string[] | "all">("all");
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+  const [taggedProvenances, setTaggedProvenances] = useState<ProvenanceEntry[]>([]);
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null); // Ref for auto-scrolling
   const [botIconComponent, setBotIconComponent] = useState<React.FC<React.SVGProps<SVGSVGElement>>>(Bot);
@@ -68,8 +73,8 @@ const Stream: React.FC<StreamProps> = () => {
   }, [currentWorkspace, isStreaming, selectedFiles]);
 
   const isSendButtonEnabled = useMemo(() => {
-    return isInputAreaEnabled && currentInput.trim().length > 0;
-  }, [isInputAreaEnabled, currentInput]);
+    return isInputAreaEnabled && (currentInput.trim().length > 0 || taggedProvenances.length > 0);
+  }, [isInputAreaEnabled, currentInput, taggedProvenances]);
 
   const fileSelectionError = useMemo(() => {
     return Array.isArray(selectedFiles) && selectedFiles.length === 0;
@@ -123,7 +128,7 @@ const Stream: React.FC<StreamProps> = () => {
               timestamp: new Date(entry.request_time),
             });
 
-            let provenance: any[] = [];
+            let provenance: ProvenanceEntry[] = [];
             if (Array.isArray(entry.source)) {
               provenance = entry.source.filter((item: any) =>
                 typeof item === 'object' && item !== null &&
@@ -139,7 +144,7 @@ const Stream: React.FC<StreamProps> = () => {
                     'id' in item && 'reason' in item && 'snippet' in item
                   );
                 } else if (typeof parsedSource === 'object' && parsedSource !== null && 'id' in parsedSource && 'reason' in parsedSource && 'snippet' in parsedSource) {
-                  provenance = [parsedSource];
+                  provenance = [parsedSource as ProvenanceEntry];
                 }
               } catch (e) {
                 provenance = [{ id: "direct-source", reason: "Direct string source", snippet: trimmedSource }];
@@ -168,6 +173,7 @@ const Stream: React.FC<StreamProps> = () => {
         setCompletedThinkingSteps([]);
         currentLlmChunkAccumulatorRef.current = ""; // Clear ref
         setFinalAnswer(null);
+        setTaggedProvenances([]);
       }
     };
     fetchData();
@@ -192,9 +198,27 @@ const Stream: React.FC<StreamProps> = () => {
     }
   }, [chatHistoryMessages, completedThinkingSteps, finalAnswer, isStreaming]);
 
+  const handleTagProvenance = useCallback((entry: ProvenanceEntry) => {
+    setTaggedProvenances((prev) => {
+        if (prev.some(p => p.id === entry.id)) {
+            return prev;
+        }
+        return [...prev, entry];
+    });
+  }, []);
+
+  const handleRemoveTag = useCallback((id: string) => {
+    setTaggedProvenances((prev) => prev.filter(p => p.id !== id));
+  }, []);
+
 
   const handleStreamSend = useCallback(async () => {
-    const query = currentInput.trim();
+    let query = currentInput.trim();
+    if (taggedProvenances.length > 0) {
+        const tagSnippets = taggedProvenances.map(p => p.snippet).join(' ');
+        query = `${tagSnippets} ${query}`.trim();
+    }
+
     if (!query || !currentWorkspace || !isSendButtonEnabled) return;
 
     setIsStreaming(true);
@@ -203,6 +227,7 @@ const Stream: React.FC<StreamProps> = () => {
     setFinalAnswer(null); // Clear previous final answer
     setThinkingOpen(true); // Open thinking panel when starting a new stream
     setCurrentInput("");
+    setTaggedProvenances([]); // Clear tags after sending
 
     try {
       const reader = await performStreamingSearch(
@@ -305,7 +330,7 @@ const Stream: React.FC<StreamProps> = () => {
     } finally {
       setIsStreaming(false);
     }
-  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles]);
+  }, [currentInput, currentWorkspace, isSendButtonEnabled, selectedEngine, selectedFiles, taggedProvenances]);
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -371,7 +396,46 @@ const Stream: React.FC<StreamProps> = () => {
                         </ReactMarkdown>
                       </div>
                       {message.type === "bot" && message.provenance && message.provenance.length > 0 && (
-                        <ProvenanceDisplay provenance={message.provenance} />
+                        <div className="border rounded-lg p-3 bg-card shadow-sm">
+                              <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="provenance-item" className="border-none">
+                                  <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
+                                    <span className="flex items-center">
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      Thinking Process | Provenance ({message.provenance.length})
+                                    </span>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="pt-2 pb-0">
+                                    <div className="space-y-3">
+                                      {message.provenance.map((entry, index) => (
+                                        <div key={entry.id} className="border rounded-md p-3 bg-muted">
+                                          <div className="flex justify-between items-start mb-1">
+                                              <p className="text-xs font-semibold text-primary/80">
+                                                  Source: {entry.id}
+                                              </p>
+                                              <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleTagProvenance(entry)}
+                                                  className="h-6 px-2 py-1 text-xs"
+                                              >
+                                                  <Tag className="h-3 w-3 mr-1" /> Tag
+                                              </Button>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground italic mb-2">
+                                            Reason: {entry.reason}
+                                          </p>
+                                          <Separator className="my-2" />
+                                          <p className="text-sm">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              </Accordion>
+                            </div>
                       )}
                       <span className="block text-xs opacity-70 mt-1 text-right">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -489,7 +553,46 @@ const Stream: React.FC<StreamProps> = () => {
                   </ReactMarkdown>
                 </div>
                 {finalAnswer.synthesis.provenance && finalAnswer.synthesis.provenance.length > 0 && (
-                  <ProvenanceDisplay provenance={finalAnswer.synthesis.provenance} />
+                  <div className="border rounded-lg p-3 bg-card shadow-sm">
+                              <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="provenance-item" className="border-none">
+                                  <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
+                                    <span className="flex items-center">
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      Thinking Process | Provenance ({finalAnswer.synthesis.provenance.length})
+                                    </span>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="pt-2 pb-0">
+                                    <div className="space-y-3">
+                                      {finalAnswer.synthesis.provenance.map((entry: ProvenanceEntry, index: number) => (
+                                        <div key={entry.id} className="border rounded-md p-3 bg-muted">
+                                          <div className="flex justify-between items-start mb-1">
+                                              <p className="text-xs font-semibold text-primary/80">
+                                                  Source: {entry.id}
+                                              </p>
+                                              <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleTagProvenance(entry)}
+                                                  className="h-6 px-2 py-1 text-xs"
+                                              >
+                                                  <Tag className="h-3 w-3 mr-1" /> Tag
+                                              </Button>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground italic mb-2">
+                                            Reason: {entry.reason}
+                                          </p>
+                                          <Separator className="my-2" />
+                                          <p className="text-sm">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.snippet}</ReactMarkdown>
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              </Accordion>
+                            </div>
                 )}
               </div>
             )}
@@ -541,6 +644,29 @@ const Stream: React.FC<StreamProps> = () => {
               </Button>
 
               <div className="relative flex-grow flex flex-col border rounded-md p-2">
+                <div className="flex flex-wrap gap-2 mb-2">
+                    {taggedProvenances.map((tag) => (
+                        <Tooltip key={tag.id}>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center bg-accent text-accent-foreground text-sm px-3 py-1 rounded-full border border-accent cursor-default group">
+                                    <span className="truncate max-w-[150px]">{tag.snippet}</span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="ml-2 h-5 w-5 rounded-full text-accent-foreground/70 hover:bg-accent/20 hover:text-accent-foreground"
+                                        onClick={() => handleRemoveTag(tag.id)}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p className="text-sm font-semibold">Source: {tag.id}</p>
+                                <p className="text-xs text-muted-foreground">Reason: {tag.reason}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    ))}
+                </div>
                 <Textarea
                     placeholder={currentWorkspace ? "Type your message..." : "Select a workspace to chat"}
                     value={currentInput}
