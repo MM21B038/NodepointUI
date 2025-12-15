@@ -434,7 +434,9 @@ const Stream: React.FC<StreamProps> = () => {
             {/* Historical Chat Messages */}
             {chatHistoryMessages.length > 0 && (
               <div className="space-y-6 pb-8">
-                {chatHistoryMessages.map((message) => (
+                {chatHistoryMessages
+                  .filter(Boolean) // Added filter to remove any null/undefined messages
+                  .map((message) => (
                   <div
                     key={message.id}
                     className={cn(
@@ -512,7 +514,7 @@ const Stream: React.FC<StreamProps> = () => {
                                   <AccordionTrigger className="py-2 text-sm text-primary hover:no-underline">
                                     <span className="flex items-center">
                                       <FileText className="h-4 w-4 mr-2" />
-                                      Provenance ({message.provenance.length})
+                                      Thinking Process | Provenance ({message.provenance.length})
                                     </span>
                                   </AccordionTrigger>
                                   <AccordionContent className="pt-2 pb-0">
