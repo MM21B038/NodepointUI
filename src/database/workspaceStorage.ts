@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://10.10.112.72:3366";
+const API_BASE_URL = "http://192.168.1.8:3366";
 
 // Updated interface for a single workspace entry
 export interface WorkspaceEntry {
@@ -19,7 +19,7 @@ export interface ChunkEntry {
   chunk_uuid: string;
   pdf: string;
   range: [number, number];
-  status: 'queued' | 'running' | 'success' | 'failed';
+  status: "queued" | "running" | "success" | "failed";
   queued_position: number | null;
   pid: number | null;
   pid_cpu_percent: number | null;
@@ -42,7 +42,7 @@ export interface FilePreprocessStatus {
   pdf_name: string;
   total_pages: number;
   chunks_total: number;
-  status: 'success' | 'failed' | 'pending';
+  status: "success" | "failed" | "pending";
   start_time: string | null;
   end_time: string | null;
   total_time: string | null;
@@ -87,7 +87,11 @@ export interface KnowledgeGraphResponse {
 
 // --- Search Interfaces ---
 
-export type SearchEngineType = "agent_search" | "global_search" | "local_search" | "hybrid_search";
+export type SearchEngineType =
+  | "agent_search"
+  | "global_search"
+  | "local_search"
+  | "hybrid_search";
 
 export interface SearchFilter {
   files: string[] | "all";
@@ -163,10 +167,12 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
     // The API now returns an array of WorkspaceEntry directly
     const data: WorkspaceEntry[] = await response.json();
     // Ensure 'star' is a boolean
-    return data.map(ws => ({
-      ...ws,
-      star: Boolean(ws.star) // Convert to boolean
-    })) || [];
+    return (
+      data.map((ws) => ({
+        ...ws,
+        star: Boolean(ws.star), // Convert to boolean
+      })) || []
+    );
   } catch (error) {
     console.error("Error fetching workspaces:", error);
     return [];
@@ -197,7 +203,10 @@ export async function createWorkspace(name: string): Promise<boolean> {
 
     // Check for specific error message (like 'already exists')
     const errorData = await response.json();
-    if (response.status === 409 || (errorData.detail && errorData.detail.includes("already exists"))) {
+    if (
+      response.status === 409 ||
+      (errorData.detail && errorData.detail.includes("already exists"))
+    ) {
       // Treat existing workspace as a known failure case
       return false;
     }
@@ -223,7 +232,10 @@ export async function listFiles(workspaceName: string): Promise<string[]> {
     const data: FileListResponse = await response.json();
     return data.files || [];
   } catch (error) {
-    console.error(`Error fetching files for workspace ${workspaceName}:`, error);
+    console.error(
+      `Error fetching files for workspace ${workspaceName}:`,
+      error
+    );
     return [];
   }
 }
@@ -234,19 +246,27 @@ export async function listFiles(workspaceName: string): Promise<string[]> {
  * @param file The file object to upload.
  * @returns A promise that resolves to true on success.
  */
-export async function uploadFile(workspaceName: string, file: File): Promise<boolean> {
+export async function uploadFile(
+  workspaceName: string,
+  file: File
+): Promise<boolean> {
   const formData = new FormData();
   formData.append("file", file);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/upload_file/${workspaceName}`, {
-      method: "POST",
-      body: formData,
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/upload_file/${workspaceName}`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Failed to upload file: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Failed to upload file: ${response.statusText}`
+      );
     }
 
     return true;
@@ -262,20 +282,31 @@ export async function uploadFile(workspaceName: string, file: File): Promise<boo
  * @param fileName The name of the file to delete.
  * @returns A promise that resolves to true on success.
  */
-export async function deleteFile(workspaceName: string, fileName: string): Promise<boolean> {
+export async function deleteFile(
+  workspaceName: string,
+  fileName: string
+): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/delete_file/${workspaceName}/${fileName}`, {
-      method: "DELETE",
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/delete_file/${workspaceName}/${fileName}`,
+      {
+        method: "DELETE",
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Failed to delete file: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Failed to delete file: ${response.statusText}`
+      );
     }
 
     return true;
   } catch (error) {
-    console.error(`Error deleting file ${fileName} from ${workspaceName}:`, error);
+    console.error(
+      `Error deleting file ${fileName} from ${workspaceName}:`,
+      error
+    );
     throw error;
   }
 }
@@ -287,13 +318,18 @@ export async function deleteFile(workspaceName: string, fileName: string): Promi
  */
 export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/delete_workspace/${workspaceName}`, {
-      method: "DELETE",
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/delete_workspace/${workspaceName}`,
+      {
+        method: "DELETE",
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Failed to delete workspace: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Failed to delete workspace: ${response.statusText}`
+      );
     }
 
     return true;
@@ -308,7 +344,9 @@ export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves with the API message.
  */
-export async function startPreprocess(workspaceName: string): Promise<{ message: string }> {
+export async function startPreprocess(
+  workspaceName: string
+): Promise<{ message: string }> {
   try {
     const response = await fetch(`${API_BASE_URL}/do_preprocess`, {
       method: "POST",
@@ -320,7 +358,10 @@ export async function startPreprocess(workspaceName: string): Promise<{ message:
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Failed to start preprocessing: ${response.statusText}`);
+      throw new Error(
+        errorData.detail ||
+          `Failed to start preprocessing: ${response.statusText}`
+      );
     }
 
     return response.json();
@@ -335,16 +376,27 @@ export async function startPreprocess(workspaceName: string): Promise<{ message:
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves with the pipeline status data.
  */
-export async function getPipelineStatus(workspaceName: string): Promise<PipelineStatusResponse> {
+export async function getPipelineStatus(
+  workspaceName: string
+): Promise<PipelineStatusResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/pipeline_status/${workspaceName}`);
+    const response = await fetch(
+      `${API_BASE_URL}/pipeline_status/${workspaceName}`
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return response.json();
   } catch (error) {
-    console.error(`Error fetching pipeline status for ${workspaceName}:`, error);
-    return { workspace: workspaceName, pipeline: [], error: "Failed to fetch pipeline status." };
+    console.error(
+      `Error fetching pipeline status for ${workspaceName}:`,
+      error
+    );
+    return {
+      workspace: workspaceName,
+      pipeline: [],
+      error: "Failed to fetch pipeline status.",
+    };
   }
 }
 
@@ -353,16 +405,27 @@ export async function getPipelineStatus(workspaceName: string): Promise<Pipeline
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves with the preprocessing status summary.
  */
-export async function getPreprocessStatus(workspaceName: string): Promise<PreprocessStatusResponse> {
+export async function getPreprocessStatus(
+  workspaceName: string
+): Promise<PreprocessStatusResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/preprocess_status/${workspaceName}`);
+    const response = await fetch(
+      `${API_BASE_URL}/preprocess_status/${workspaceName}`
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return response.json();
   } catch (error) {
-    console.error(`Error fetching preprocess status for ${workspaceName}:`, error);
-    return { workspace: workspaceName, files: [], error: "Failed to fetch preprocess status." };
+    console.error(
+      `Error fetching preprocess status for ${workspaceName}:`,
+      error
+    );
+    return {
+      workspace: workspaceName,
+      files: [],
+      error: "Failed to fetch preprocess status.",
+    };
   }
 }
 
@@ -371,7 +434,7 @@ export async function getPreprocessStatus(workspaceName: string): Promise<Prepro
  * This function now explicitly avoids splitting and treats the entire input as one filename.
  */
 const normalizeSourceEntry = (source: string | FileReference): string[] => {
-  if (typeof source === 'object' && source !== null && 'file_name' in source) {
+  if (typeof source === "object" && source !== null && "file_name" in source) {
     return [source.file_name.trim()]; // Return the file_name as a single string
   }
   return [String(source).trim()]; // Return the string representation as a single string
@@ -382,9 +445,13 @@ const normalizeSourceEntry = (source: string | FileReference): string[] => {
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves to the KnowledgeGraphResponse.
  */
-export async function getKnowledgeGraph(workspaceName: string): Promise<KnowledgeGraphResponse> {
+export async function getKnowledgeGraph(
+  workspaceName: string
+): Promise<KnowledgeGraphResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/knowledge_base_new/${workspaceName}`);
+    const response = await fetch(
+      `${API_BASE_URL}/knowledge_base_new/${workspaceName}`
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -395,31 +462,34 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
     const data: KnowledgeGraphResponse = await response.json();
 
     if (data.error) {
-        throw new Error(data.error);
+      throw new Error(data.error);
     }
 
     // Normalize source fields to always be arrays of strings using the new helper
-    const normalizedNodes: GraphNode[] = data.nodes.map(node => ({
+    const normalizedNodes: GraphNode[] = data.nodes.map((node) => ({
       ...node,
       // node.source is already an array of strings from the backend, so we map over it.
       // Each string element is then passed to normalizeSourceEntry for potential splitting.
       source: Array.isArray(node.source)
-        ? node.source.flatMap(s => normalizeSourceEntry(s))
+        ? node.source.flatMap((s) => normalizeSourceEntry(s))
         : normalizeSourceEntry(node.source), // Fallback if it's somehow not an array
     }));
 
-    const normalizedEdges: GraphEdge[] = data.edges.map(edge => ({
+    const normalizedEdges: GraphEdge[] = data.edges.map((edge) => ({
       ...edge,
       // edge.source_file from the backend is a FileReference object.
       // We pass it directly to normalizeSourceEntry, which will extract the file_name string and then split it.
       source_file: Array.isArray(edge.source_file)
-        ? edge.source_file.flatMap(s => normalizeSourceEntry(s)) // Fallback if it's somehow an array
+        ? edge.source_file.flatMap((s) => normalizeSourceEntry(s)) // Fallback if it's somehow an array
         : normalizeSourceEntry(edge.source_file),
     }));
 
     return { ...data, nodes: normalizedNodes, edges: normalizedEdges };
   } catch (error) {
-    console.error(`Error fetching knowledge graph for ${workspaceName}:`, error);
+    console.error(
+      `Error fetching knowledge graph for ${workspaceName}:`,
+      error
+    );
     throw error;
   }
 }
@@ -444,17 +514,22 @@ export async function performSearch(
       filter: { files: filesFilter },
     };
 
-    const response = await fetch(`${API_BASE_URL}/search/${workspaceName}/${engine}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/search/${workspaceName}/${engine}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Search failed: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Search failed: ${response.statusText}`
+      );
     }
 
     const data: SearchResponse = await response.json();
@@ -467,7 +542,10 @@ export async function performSearch(
       provenance: data.message.synthesis.provenance,
     };
   } catch (error) {
-    console.error(`Error performing search in ${workspaceName} with ${engine}:`, error);
+    console.error(
+      `Error performing search in ${workspaceName} with ${engine}:`,
+      error
+    );
     throw error;
   }
 }
@@ -492,26 +570,33 @@ export async function performStreamingSearch(
       filter: { files: filesFilter },
     };
 
-    const response = await fetch(`${API_BASE_URL}/streaming_search/${workspaceName}/${engine}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/streaming_search/${workspaceName}/${engine}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
 
     if (!response.ok || !response.body) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Streaming search failed: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Streaming search failed: ${response.statusText}`
+      );
     }
 
     return response.body.getReader();
   } catch (error) {
-    console.error(`Error performing streaming search in ${workspaceName} with ${engine}:`, error);
+    console.error(
+      `Error performing streaming search in ${workspaceName} with ${engine}:`,
+      error
+    );
     throw error;
   }
 }
-
 
 /**
  * Asks a question to the AI, using the default agent search and all files.
@@ -531,7 +616,9 @@ export async function askQuestion(
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves to an array of ChatHistoryEntry.
  */
-export async function getChatHistory(workspaceName: string): Promise<ChatHistoryEntry[]> {
+export async function getChatHistory(
+  workspaceName: string
+): Promise<ChatHistoryEntry[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/get_chat/${workspaceName}`);
     if (!response.ok) {
@@ -550,7 +637,9 @@ export async function getChatHistory(workspaceName: string): Promise<ChatHistory
  * @param workspaceName The name of the workspace to flag.
  * @returns A promise that resolves to the FlagResponse.
  */
-export async function flagWorkspace(workspaceName: string): Promise<FlagResponse> {
+export async function flagWorkspace(
+  workspaceName: string
+): Promise<FlagResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/flag`, {
       method: "POST",
@@ -562,7 +651,9 @@ export async function flagWorkspace(workspaceName: string): Promise<FlagResponse
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.message || `Failed to flag workspace: ${response.statusText}`);
+      throw new Error(
+        errorData.message || `Failed to flag workspace: ${response.statusText}`
+      );
     }
     return response.json();
   } catch (error) {
@@ -576,7 +667,9 @@ export async function flagWorkspace(workspaceName: string): Promise<FlagResponse
  * @param workspaceName The name of the workspace to unflag.
  * @returns A promise that resolves to the FlagResponse.
  */
-export async function undoFlagWorkspace(workspaceName: string): Promise<FlagResponse> {
+export async function undoFlagWorkspace(
+  workspaceName: string
+): Promise<FlagResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/undo_flag`, {
       method: "POST",
@@ -588,7 +681,10 @@ export async function undoFlagWorkspace(workspaceName: string): Promise<FlagResp
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.message || `Failed to unflag workspace: ${response.statusText}`);
+      throw new Error(
+        errorData.message ||
+          `Failed to unflag workspace: ${response.statusText}`
+      );
     }
     return response.json();
   } catch (error) {
@@ -602,9 +698,13 @@ export async function undoFlagWorkspace(workspaceName: string): Promise<FlagResp
  * @param workspaceName The name of the workspace.
  * @returns A promise that resolves to the FlagStatusResponse.
  */
-export async function getFlagStatus(workspaceName: string): Promise<FlagStatusResponse> {
+export async function getFlagStatus(
+  workspaceName: string
+): Promise<FlagStatusResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/flag_status/${workspaceName}`);
+    const response = await fetch(
+      `${API_BASE_URL}/flag_status/${workspaceName}`
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
