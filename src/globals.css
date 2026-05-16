@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    height: 100%; /* Ensure html and body take full viewport height */
+    /* Removed overflow: hidden; to allow page scrolling */
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased hide-scrollbar;
+  }
+
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent-border: 217.2 91.2% 59.8%; /* Vibrant Blue for Light Theme */
+    
+    /* Navbar specific colors (Light Mode) */
+    --nav-background: var(--background);
+    --nav-foreground: 222.2 84% 4.9%;
+    --navbar-height: 76px; /* Define a consistent height for the navbar */
+
+    /* Sidebar specific widths */
+    --sidebar-collapsed-width: 64px; /* w-16 */
+    --sidebar-expanded-width: 240px; /* w-60 */
+    --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px; /* 16px (graph container top padding) + 16px (filter buttons top) + 56px (filter buttons height) + 16px (gap) */
+    --panel-bottom-offset: 16px; /* Desired bottom padding */
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
+  }
+
+  .dark {
+    /* Dirty charcoal: warm undertone, layered surfaces, visible borders */
+    --background: 28 10% 8%;
+    --foreground: 40 15% 96%;
+
+    --card: 28 9% 12%;
+    --card-foreground: 40 15% 96%;
+
+    --popover: 28 9% 11%;
+    --popover-foreground: 40 15% 96%;
+
+    --primary: 38 70% 58%;
+    --primary-foreground: 28 12% 10%;
+
+    --secondary: 28 8% 16%;
+    --secondary-foreground: 40 12% 92%;
+
+    --muted: 28 7% 18%;
+    --muted-foreground: 35 10% 62%;
+
+    --accent: 28 8% 20%;
+    --accent-foreground: 40 15% 96%;
+
+    --destructive: 0 55% 42%;
+    --destructive-foreground: 40 20% 98%;
+
+    --border: 28 8% 22%;
+    --input: 28 8% 20%;
+    --ring: 38 55% 50%;
+
+    --sidebar-background: 28 11% 7%;
+    --sidebar-foreground: 40 12% 90%;
+    --sidebar-primary: 38 65% 52%;
+    --sidebar-primary-foreground: 28 14% 8%;
+    --sidebar-accent: 28 8% 15%;
+    --sidebar-accent-foreground: 40 12% 92%;
+    --sidebar-border: 28 7% 18%;
+    --sidebar-ring: 38 55% 50%;
+    --sidebar-accent-border: 38 45% 40%;
+    
+    /* Navbar specific colors (Dark Mode) */
+    --nav-background: var(--background);
+    --nav-foreground: 210 40% 98%;
+    --navbar-height: 76px; /* Define a consistent height for the navbar */
+
+    /* Sidebar specific widths */
+    --sidebar-collapsed-width: 64px; /* w-16 */
+    --sidebar-expanded-width: 240px; /* w-60 */
+    --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px;
+    --panel-bottom-offset: 16px;
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
+  }
+  
+  .navy-blue {
+    --background: 210 30% 8%; /* Deep Navy Blue */
+    --foreground: 210 40% 98%; /* White/Light text */
+
+    --card: 210 30% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 210 30% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%; /* Light color for primary elements */
+    --primary-foreground: 210 30% 8%; /* Dark text on primary */
+
+    --secondary: 210 30% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 210 30% 18%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 210 30% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 30% 25%;
+    --input: 210 30% 18%;
+    --ring: 210 40% 98%;
+    
+    /* Sidebar colors adjusted for Navy Blue */
+    --sidebar-background: 210 30% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 210 30% 8%;
+    --sidebar-accent: 210 30% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 210 30% 25%;
+    --sidebar-ring: 210 40% 98%;
+    --sidebar-accent-border: 38.5 92.4% 50.6%; /* Vibrant Orange/Gold for Navy Blue Theme */
+    
+    /* Navbar specific colors (Navy Blue Mode) */
+    --nav-background: var(--background);
+    --nav-foreground: 210 40% 98%;
+    --navbar-height: 76px; /* Define a consistent height for the navbar */
+
+    /* Sidebar specific widths */
+    --sidebar-collapsed-width: 64px; /* w-16 */
+    --sidebar-expanded-width: 240px; /* w-60 */
+    --footer-height: 36px; /* Height of MadeWithDyad component */
+
+    /* KnowledgeBase Panel Sizing */
+    --filter-panel-width: min(35vw, 450px); /* Updated to match detail panel width */
+    --detail-panel-width: min(35vw, 450px);
+    --panel-top-offset: 88px;
+    --panel-bottom-offset: 16px;
+    --panel-height: calc(100% - var(--panel-top-offset) - var(--panel-bottom-offset));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground hide-scrollbar;
+  }
+}
+
+/* Custom utility to hide scrollbar */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Apply hide-scrollbar to all Radix UI ScrollArea viewports */
+[data-radix-scroll-area-viewport] {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+}
+
+/* Aggressive global scrollbar hiding */
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+
+/* Custom classes for navbar background */
+.navbar-opaque {
+  background-color: hsl(var(--nav-background));
+}
+
+.navbar-translucent {
+  background-color: hsl(var(--nav-background) / 0.8);
+  backdrop-filter: blur(8px);
+}
