@@ -1,77 +1,70 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Network, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { GraphNode } from "@/database/workspaceStorage";
+import type { EntityTypeEntry } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
-import { colorScale } from "./InteractiveGraphVisualization"; // Import the shared colorScale
+import { colorScale } from "./InteractiveGraphVisualization";
 
 interface NodeTypesPanelProps {
-  nodes: GraphNode[];
+  entityTypes: EntityTypeEntry[];
   selectedNodeTypes: Set<string>;
   onSelectedNodeTypesChange: (types: Set<string>) => void;
+  onApply: () => void;
   onClose: () => void;
-  onFilterInteraction: () => void; // New prop
+  loading?: boolean;
 }
 
 const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
-  nodes,
+  entityTypes,
   selectedNodeTypes,
   onSelectedNodeTypesChange,
+  onApply,
   onClose,
-  onFilterInteraction,
+  loading,
 }) => {
-  const uniqueNodeTypes = useMemo(() => {
-    const types = new Set(nodes.map((node) => node.type));
-    return Array.from(types).sort();
-  }, [nodes]);
+  const sortedTypes = [...entityTypes].sort((a, b) => b.count - a.count);
 
   const handleNodeTypeChange = (type: string, checked: boolean) => {
-    onSelectedNodeTypesChange((prev) => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(type);
-      } else {
-        newSet.delete(type);
-      }
-      return newSet;
-    });
-    onFilterInteraction(); // Notify parent about filter interaction
+    const next = new Set(selectedNodeTypes);
+    if (checked) next.add(type);
+    else next.delete(type);
+    onSelectedNodeTypesChange(next);
   };
 
   const handleSelectAll = () => {
-    onSelectedNodeTypesChange(new Set(uniqueNodeTypes));
-    onFilterInteraction(); // Notify parent about filter interaction
+    onSelectedNodeTypesChange(new Set(sortedTypes.map((t) => t.type)));
   };
 
   const handleClearAll = () => {
     onSelectedNodeTypesChange(new Set());
-    onFilterInteraction(); // Notify parent about filter interaction
   };
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* Removed onClick={e => e.stopPropagation()} */}
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+    <Card className="h-full border-none bg-background/80 shadow-lg backdrop-blur-sm">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center">
-          <Network className="h-5 w-5 mr-2" />
+          <Network className="mr-2 h-5 w-5" />
           <CardTitle className="text-xl">Node Types</CardTitle>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} title="Close Node Types Panel">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-hidden">
-        <div className="flex space-x-2 mb-4">
+      <CardContent className="flex h-[calc(100%-60px)] flex-col overflow-hidden p-4">
+        <div className="mb-4 flex space-x-2">
           <Button
             variant="outline"
             size="sm"
             onClick={handleSelectAll}
-            disabled={uniqueNodeTypes.length === 0 || selectedNodeTypes.size === uniqueNodeTypes.length}
+            disabled={
+              sortedTypes.length === 0 || selectedNodeTypes.size === sortedTypes.length
+            }
             className="flex-1"
           >
             Select All
@@ -86,23 +79,44 @@ const NodeTypesPanel: React.FC<NodeTypesPanelProps> = ({
             Clear All
           </Button>
         </div>
-        <ScrollArea className="flex-grow pr-4 hide-scrollbar"> {/* Added hide-scrollbar here */}
-          <div className="grid gap-2">
-            {uniqueNodeTypes.map((type) => (
-              <div key={type} className="flex items-center space-x-2"> {/* Removed onClick here */}
-                <Checkbox
-                  id={`node-type-${type}`}
-                  checked={selectedNodeTypes.has(type)}
-                  onCheckedChange={(checked) => handleNodeTypeChange(type, checked as boolean)}
-                />
-                <Label htmlFor={`node-type-${type}`} className="text-sm cursor-pointer flex items-center space-x-2">
-                  <span className={cn("h-4 w-4 rounded-full")} style={{ backgroundColor: colorScale(type) }}></span>
-                  <span>{type}</span>
-                </Label>
-              </div>
-            ))}
-          </div>
+
+        <ScrollArea className="min-h-0 flex-1 pr-3">
+          {sortedTypes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No entity types in this scope.</p>
+          ) : (
+            <div className="space-y-3">
+              {sortedTypes.map(({ type, count }) => (
+                <div key={type} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`node-type-${type}`}
+                    checked={selectedNodeTypes.has(type)}
+                    onCheckedChange={(checked) =>
+                      handleNodeTypeChange(type, checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor={`node-type-${type}`}
+                    className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-medium"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={cn("h-3 w-3 shrink-0 rounded-full", colorScale(type))}
+                      />
+                      {type}
+                    </span>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {count.toLocaleString()}
+                    </span>
+                  </Label>
+                </div>
+              ))}
+            </div>
+          )}
         </ScrollArea>
+
+        <Button className="mt-4 shrink-0" onClick={onApply} disabled={loading || selectedNodeTypes.size === 0}>
+          Apply types
+        </Button>
       </CardContent>
     </Card>
   );

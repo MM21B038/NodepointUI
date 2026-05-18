@@ -347,9 +347,42 @@ export interface ApiGraphNode {
 }
 
 export interface ApiGraphEdge {
+  id?: string;
   source: string;
   target: string;
+  source_id?: string;
+  target_id?: string;
+  type_description?: string;
 }
+
+export interface EntityTypeEntry {
+  type: string;
+  count: number;
+}
+
+export interface GraphFetchParams {
+  entityTypes?: string[];
+  depth?: number;
+  limit?: number;
+}
+
+export interface EntitySearchMatch {
+  id: string;
+  name: string;
+  entity_type: string;
+  score: number;
+  workspace?: string;
+  document_id?: string;
+  file_name?: string;
+  vector?: string;
+  created_at?: string;
+}
+
+export const KB_DEFAULT_DEPTH = 1;
+export const KB_DEFAULT_LIMIT = 100;
+export const KB_MAX_LIMIT = 500;
+export const KB_INITIAL_TYPE_COUNT = 3;
+export const KB_DEFAULT_SEARCH_THRESHOLD = 0.6;
 
 export interface FileReference {
   file_name: string;
@@ -379,11 +412,58 @@ export interface KnowledgeGraphResponse {
   error?: string;
 }
 
+export interface KnowledgeGraphPayload extends KnowledgeGraphResponse {
+  truncated?: boolean;
+  filters?: {
+    entity_types?: string[] | null;
+    depth?: number;
+    limit?: number;
+  };
+}
+
+export interface ApiGraphPayload {
+  workspace?: string;
+  nodes?: ApiGraphNode[];
+  edges?: ApiGraphEdge[];
+  truncated?: boolean;
+  filters?: KnowledgeGraphPayload["filters"];
+}
+
+export interface EntitySearchResponse {
+  query: string;
+  workspace?: string;
+  filters?: Record<string, unknown>;
+  matches: EntitySearchMatch[];
+  graph?: ApiGraphPayload;
+  workspaces?: Array<{
+    workspace: string;
+    matches: EntitySearchMatch[];
+    graph?: ApiGraphPayload;
+  }>;
+}
+
+function clampGraphLimit(limit?: number): number | undefined {
+  if (limit == null) return undefined;
+  return Math.min(KB_MAX_LIMIT, Math.max(1, Math.floor(limit)));
+}
+
+function graphFetchQueryParams(params?: GraphFetchParams): Record<string, string | undefined> {
+  const q: Record<string, string | undefined> = {};
+  if (params?.entityTypes && params.entityTypes.length > 0) {
+    q.entity_type = params.entityTypes.join(",");
+  }
+  if (params?.depth != null) q.depth = String(params.depth);
+  const limit = clampGraphLimit(params?.limit);
+  if (limit != null) q.limit = String(limit);
+  return q;
+}
+
 function mapKnowledgeGraph(
   workspace: string,
   apiNodes: ApiGraphNode[],
-  apiEdges: ApiGraphEdge[]
-): KnowledgeGraphResponse {
+  apiEdges: ApiGraphEdge[],
+  extra?: { truncated?: boolean; filters?: KnowledgeGraphPayload["filters"] }
+): KnowledgeGraphPayload {
   const nameToId = new Map(apiNodes.map((n) => [n.name, n.id]));
 
   const nodes: GraphNode[] = apiNodes.map((n) => ({
@@ -395,19 +475,95 @@ function mapKnowledgeGraph(
   }));
 
   const edges: GraphEdge[] = apiEdges.map((e) => ({
-    source: nameToId.get(e.source) ?? e.source,
-    target: nameToId.get(e.target) ?? e.target,
-    label: "",
+    source: e.source_id ?? nameToId.get(e.source) ?? e.source,
+    target: e.target_id ?? nameToId.get(e.target) ?? e.target,
+    label: e.type_description ?? "",
     score: 0,
     source_file: [],
   }));
 
-  return { workspace, nodes, edges };
+  return {
+    workspace,
+    nodes,
+    edges,
+    truncated: extra?.truncated,
+    filters: extra?.filters,
+  };
 }
 
-export async function getKnowledgeGraph(workspaceName: string): Promise<KnowledgeGraphResponse> {
+function mapGraphApiPayload(
+  data: {
+    workspace?: string;
+    nodes?: ApiGraphNode[];
+    edges?: ApiGraphEdge[];
+    truncated?: boolean;
+    filters?: KnowledgeGraphPayload["filters"];
+  },
+  fallbackWorkspace: string
+): KnowledgeGraphPayload {
+  return mapKnowledgeGraph(
+    data.workspace ?? fallbackWorkspace,
+    data.nodes ?? [],
+    data.edges ?? [],
+    { truncated: data.truncated, filters: data.filters }
+  );
+}
+
+export async function getKnowledgeGraphEntityTypes(
+  scope: { workspaceName: string } | { flagged: true }
+): Promise<{ workspace?: string; entityTypes: EntityTypeEntry[] }> {
+  const params =
+    "flagged" in scope
+      ? { flagged: "true" }
+      : { workspace_name: scope.workspaceName };
+
+  const response = await fetch(buildApiUrl("/knowledge-graph/entity-types/", params));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+
+  const data = await response.json();
+
+  if ("flagged" in scope) {
+    const merged = new Map<string, number>();
+    for (const ws of data.workspaces ?? []) {
+      for (const et of ws.entity_types ?? []) {
+        merged.set(et.type, (merged.get(et.type) ?? 0) + (et.count ?? 0));
+      }
+    }
+    const entityTypes: EntityTypeEntry[] = Array.from(merged.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+    return { entityTypes };
+  }
+
+  const entityTypes: EntityTypeEntry[] = (data.entity_types ?? []).sort(
+    (a: EntityTypeEntry, b: EntityTypeEntry) => b.count - a.count
+  );
+  return { workspace: data.workspace, entityTypes };
+}
+
+export function topEntityTypesByCount(
+  types: EntityTypeEntry[],
+  count = KB_INITIAL_TYPE_COUNT
+): string[] {
+  return [...types]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, count)
+    .map((t) => t.type);
+}
+
+export async function getFilteredKnowledgeGraph(
+  scope: { workspaceName: string } | { flagged: true },
+  params?: GraphFetchParams
+): Promise<KnowledgeGraphPayload> {
+  const baseParams =
+    "flagged" in scope
+      ? { flagged: "true" }
+      : { workspace_name: scope.workspaceName };
+
   const response = await fetch(
-    buildApiUrl("/knowledge-graph/", { workspace_name: workspaceName })
+    buildApiUrl("/knowledge-graph/", { ...baseParams, ...graphFetchQueryParams(params) })
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -418,24 +574,152 @@ export async function getKnowledgeGraph(workspaceName: string): Promise<Knowledg
     throw new Error(data.error);
   }
 
-  return mapKnowledgeGraph(
-    data.workspace ?? workspaceName,
-    data.nodes ?? [],
-    data.edges ?? []
+  if ("flagged" in scope) {
+    return mergeFlaggedGraphPayloads(data.graphs ?? []);
+  }
+
+  return mapGraphApiPayload(data, scope.workspaceName);
+}
+
+export async function getKnowledgeGraph(
+  workspaceName: string,
+  params?: GraphFetchParams
+): Promise<KnowledgeGraphResponse> {
+  if (params) {
+    return getFilteredKnowledgeGraph({ workspaceName }, params);
+  }
+  return getFilteredKnowledgeGraph(
+    { workspaceName },
+    { depth: KB_DEFAULT_DEPTH, limit: KB_MAX_LIMIT }
   );
 }
 
-export async function getFlaggedKnowledgeGraphs(): Promise<KnowledgeGraphResponse[]> {
-  const response = await fetch(buildApiUrl("/knowledge-graph/", { flagged: "true" }));
+export async function getFlaggedKnowledgeGraphs(
+  params?: GraphFetchParams
+): Promise<KnowledgeGraphResponse[]> {
+  const response = await fetch(
+    buildApiUrl("/knowledge-graph/", { flagged: "true", ...graphFetchQueryParams(params) })
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
 
   const data = await response.json();
-  const graphs: { workspace: string; nodes: ApiGraphNode[]; edges: ApiGraphEdge[] }[] =
-    data.graphs ?? [];
+  const graphs: {
+    workspace: string;
+    nodes: ApiGraphNode[];
+    edges: ApiGraphEdge[];
+    truncated?: boolean;
+    filters?: KnowledgeGraphPayload["filters"];
+  }[] = data.graphs ?? [];
 
-  return graphs.map((g) => mapKnowledgeGraph(g.workspace, g.nodes ?? [], g.edges ?? []));
+  return graphs.map((g) => mapGraphApiPayload(g, g.workspace));
+}
+
+function mergeFlaggedGraphPayloads(
+  graphs: Array<{
+    workspace: string;
+    nodes?: ApiGraphNode[];
+    edges?: ApiGraphEdge[];
+    truncated?: boolean;
+    filters?: KnowledgeGraphPayload["filters"];
+  }>
+): KnowledgeGraphPayload {
+  if (graphs.length === 0) {
+    return { workspace: "flagged", nodes: [], edges: [], truncated: false };
+  }
+
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const edgeSeen = new Set<string>();
+  let truncated = false;
+
+  for (const g of graphs) {
+    if (g.truncated) truncated = true;
+    const mapped = mapKnowledgeGraph(g.workspace, g.nodes ?? [], g.edges ?? []);
+    const ws = g.workspace;
+    const sid = (id: string) => scopedKnowledgeNodeId(ws, id);
+
+    for (const n of mapped.nodes) {
+      nodes.push({
+        ...n,
+        id: sid(n.id),
+        attributes: { ...n.attributes, __kb_workspace: ws },
+      });
+    }
+    for (const e of mapped.edges) {
+      const source = sid(e.source as string);
+      const target = sid(e.target as string);
+      const key = `${source}\0${target}\0${e.label}`;
+      if (edgeSeen.has(key)) continue;
+      edgeSeen.add(key);
+      edges.push({ ...e, source, target });
+    }
+  }
+
+  return { workspace: "flagged", nodes, edges, truncated };
+}
+
+export async function searchKnowledgeEntities(
+  scope: { workspaceName: string } | { flagged: true },
+  options: {
+    q: string;
+    threshold?: number;
+    depth?: number;
+    limit?: number;
+    entityTypes?: string[];
+    matchLimit?: number;
+  }
+): Promise<EntitySearchResponse & { graphPayload: KnowledgeGraphPayload }> {
+  const baseParams: Record<string, string | undefined> = {
+    q: options.q.trim(),
+    threshold: String(options.threshold ?? KB_DEFAULT_SEARCH_THRESHOLD),
+    ...graphFetchQueryParams({
+      depth: options.depth,
+      limit: options.limit,
+      entityTypes: options.entityTypes,
+    }),
+  };
+  if (options.matchLimit != null) {
+    baseParams.match_limit = String(options.matchLimit);
+  }
+
+  const params =
+    "flagged" in scope
+      ? { flagged: "true", ...baseParams }
+      : { workspace_name: scope.workspaceName, ...baseParams };
+
+  const response = await fetch(buildApiUrl("/knowledge/entities/search/", params));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+
+  const data: EntitySearchResponse = await response.json();
+
+  let graphPayload: KnowledgeGraphPayload;
+  if ("flagged" in scope && data.workspaces) {
+    graphPayload = mergeFlaggedGraphPayloads(
+      data.workspaces.map((w) => ({
+        workspace: w.workspace,
+        nodes: w.graph?.nodes,
+        edges: w.graph?.edges,
+        truncated: w.graph?.truncated,
+        filters: w.graph?.filters,
+      }))
+    );
+    const matches = data.workspaces.flatMap((w) =>
+      (w.matches ?? []).map((m) => ({ ...m, workspace: w.workspace }))
+    );
+    return { ...data, matches, graphPayload };
+  }
+
+  const graph = data.graph;
+  const fallbackWorkspace = "workspaceName" in scope ? scope.workspaceName : "flagged";
+  graphPayload = graph
+    ? mapGraphApiPayload(graph, graph.workspace ?? fallbackWorkspace)
+    : { workspace: fallbackWorkspace, nodes: [], edges: [] };
+
+  return { ...data, matches: data.matches ?? [], graphPayload };
 }
 
 /** Stable id for a node when merging multiple workspace graphs (avoids id collisions). */
@@ -447,42 +731,10 @@ function scopedKnowledgeNodeId(workspace: string, nodeId: string): string {
  * Fetches all flagged (starred) workspace graphs and merges them into one view.
  * Node ids are namespaced per workspace; each node gets `attributes.__kb_workspace`.
  */
-export async function getMergedFlaggedKnowledgeGraph(): Promise<KnowledgeGraphResponse> {
-  const graphs = await getFlaggedKnowledgeGraphs();
-  if (graphs.length === 0) {
-    return { workspace: "flagged", nodes: [], edges: [] };
-  }
-
-  const nodes: GraphNode[] = [];
-  const edges: GraphEdge[] = [];
-  const edgeSeen = new Set<string>();
-
-  for (const g of graphs) {
-    const ws = g.workspace;
-    const sid = (id: string) => scopedKnowledgeNodeId(ws, id);
-
-    for (const n of g.nodes ?? []) {
-      nodes.push({
-        ...n,
-        id: sid(n.id),
-        attributes: { ...n.attributes, __kb_workspace: ws },
-      });
-    }
-    for (const e of g.edges ?? []) {
-      const source = sid(e.source as string);
-      const target = sid(e.target as string);
-      const key = `${source}\0${target}\0${e.label}\0${e.score}`;
-      if (edgeSeen.has(key)) continue;
-      edgeSeen.add(key);
-      edges.push({
-        ...e,
-        source,
-        target,
-      });
-    }
-  }
-
-  return { workspace: "flagged", nodes, edges };
+export async function getMergedFlaggedKnowledgeGraph(
+  params?: GraphFetchParams
+): Promise<KnowledgeGraphPayload> {
+  return getFilteredKnowledgeGraph({ flagged: true }, params);
 }
 
 // --- Legacy search types (provenance display in chat UI) ---

@@ -44,6 +44,11 @@ interface InteractiveGraphVisualizationProps {
   selectedItem: GraphNode | null;
   onGraphBackgroundClick?: () => void;
   showControls?: boolean;
+  bottomLeftOverlay?: React.ReactNode;
+  graphControlsOpen?: boolean;
+  onGraphControlsOpenChange?: (open: boolean) => void;
+  /** Changes on API reload / scope switch — triggers fit-to-view, not client-side filters */
+  viewResetKey?: string;
 }
 
 type D3Node = GraphNode & d3.SimulationNodeDatum & { degree?: number };
@@ -93,6 +98,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   selectedItem,
   onGraphBackgroundClick = () => {},
   showControls = true,
+  bottomLeftOverlay,
+  graphControlsOpen,
+  onGraphControlsOpenChange,
+  viewResetKey,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
@@ -104,8 +113,14 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
   const hoveredNodeIdRef = useRef<string | null>(null);
   const shouldAutoFitRef = useRef(true);
+  const savedTransformRef = useRef<d3.ZoomTransform | null>(null);
   const updateHighlightingRef = useRef<() => void>(() => {});
   const fitViewRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    shouldAutoFitRef.current = true;
+    savedTransformRef.current = null;
+  }, [viewResetKey]);
 
   const d3Refs = useRef<{
     simulation: d3.Simulation<D3Node, D3Edge> | null;
@@ -373,8 +388,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       return;
     }
 
-    shouldAutoFitRef.current = true;
     hoveredNodeIdRef.current = null;
+    const restoreTransform =
+      !shouldAutoFitRef.current ? savedTransformRef.current : null;
+    savedTransformRef.current = null;
 
     const svg = d3.select(svgRef.current);
     const container = svg.node()?.parentElement;
@@ -409,8 +426,9 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.08, 12])
       .filter((event) => {
-        if (event.type === "wheel") return true;
         const target = event.target as Element | null;
+        if (target?.closest?.("[data-kb-overlay]")) return false;
+        if (event.type === "wheel") return true;
         if (target?.closest?.("circle")) return false;
         return true;
       })
@@ -420,6 +438,9 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       });
 
     svg.call(zoom as never);
+    if (restoreTransform) {
+      svg.call(zoom.transform as never, restoreTransform);
+    }
 
     const simulation = d3.forceSimulation<D3Node, D3Edge>(graphData.nodes);
     applySimulationForces(simulation, graphData.edges, cfg, w, h);
@@ -516,6 +537,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     simulation.alpha(1).restart();
 
     return () => {
+      const { g } = d3Refs.current;
+      if (g?.node() && !shouldAutoFitRef.current) {
+        savedTransformRef.current = d3.zoomTransform(g.node()!);
+      }
       simulation.stop();
     };
   }, [graphData, onSelect, drag, onGraphBackgroundClick]);
@@ -554,22 +579,31 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   }, [graphData.edges]);
 
   return (
-    <div className="relative h-full w-full rounded-lg bg-background">
+    <div className="relative h-full w-full overflow-hidden rounded-lg bg-background">
       <svg
         ref={svgRef}
         width="100%"
         height="100%"
         className="absolute inset-0 z-0 touch-none bg-background"
       />
+      {bottomLeftOverlay && (
+        <div className="pointer-events-none absolute bottom-[var(--kb-graph-inset)] left-[var(--kb-graph-inset)] z-[100] flex w-72 max-h-[var(--kb-bottom-overlay-max-h)] min-h-0 flex-col justify-end">
+          {bottomLeftOverlay}
+        </div>
+      )}
       {showControls && graphData.nodes.length > 0 && (
-        <GraphSimulationControls
-          className="absolute bottom-3 left-3 right-3 z-[100] flex max-h-[calc(100%-5rem)] w-auto max-w-none flex-col sm:left-auto sm:right-3 sm:w-72"
-          config={config}
-          onChange={handleConfigChange}
-          onRestartLayout={restartLayout}
-          onFitView={fitView}
-          onResetDefaults={handleResetDefaults}
-        />
+        <div className="pointer-events-none absolute bottom-[var(--kb-graph-inset)] right-[var(--kb-graph-inset)] z-[100] flex w-72 max-h-[var(--kb-bottom-overlay-max-h)] min-h-0 flex-col justify-end">
+          <GraphSimulationControls
+            className="pointer-events-auto w-full min-h-0 max-w-none"
+            config={config}
+            onChange={handleConfigChange}
+            onRestartLayout={restartLayout}
+            onFitView={fitView}
+            onResetDefaults={handleResetDefaults}
+            open={graphControlsOpen}
+            onOpenChange={onGraphControlsOpenChange}
+          />
+        </div>
       )}
     </div>
   );

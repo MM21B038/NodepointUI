@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { FolderOpen, X } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { GraphNode } from "@/database/workspaceStorage";
 import { getGraphNodeWorkspace } from "@/lib/graphWorkspace";
+import { KbGraphSidePanel } from "@/components/knowledge-base/KbGraphSidePanel";
 
 interface FlaggedWorkspacesPanelProps {
   nodes: GraphNode[];
@@ -47,82 +46,77 @@ const FlaggedWorkspacesPanel: React.FC<FlaggedWorkspacesPanelProps> = ({
     onFilterInteraction();
   };
 
-  const handleSelectAll = () => {
-    onSelectedWorkspacesChange(new Set(workspaceNames));
-    onFilterInteraction();
-  };
-
-  const handleClearAll = () => {
-    onSelectedWorkspacesChange(new Set());
-    onFilterInteraction();
-  };
+  const toolbar = (
+    <div className="flex gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 text-xs"
+        onClick={() => {
+          onSelectedWorkspacesChange(new Set(workspaceNames));
+          onFilterInteraction();
+        }}
+        disabled={
+          workspaceNames.length === 0 ||
+          selectedWorkspaces.size === workspaceNames.length
+        }
+      >
+        Select all
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 text-xs"
+        onClick={() => {
+          onSelectedWorkspacesChange(new Set());
+          onFilterInteraction();
+        }}
+        disabled={selectedWorkspaces.size === 0}
+      >
+        Clear all
+      </Button>
+    </div>
+  );
 
   return (
-    <Card className="h-full border-none bg-background/80 shadow-lg backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="flex items-center">
-          <FolderOpen className="mr-2 h-5 w-5" />
-          <CardTitle className="text-xl">Workspaces</CardTitle>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onClose} title="Close workspaces panel">
-          <X className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="flex h-[calc(100%-60px)] flex-col overflow-hidden p-4">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Filter the merged graph to starred workspaces. Select which corpora to show.
-        </p>
-        <div className="mb-4 flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSelectAll}
-            disabled={
-              workspaceNames.length === 0 ||
-              selectedWorkspaces.size === workspaceNames.length
-            }
-            className="flex-1"
-          >
-            Select all
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearAll}
-            disabled={selectedWorkspaces.size === 0}
-            className="flex-1"
-          >
-            Clear all
-          </Button>
-        </div>
-        <ScrollArea className="flex-1 pr-2">
-          <div className="space-y-2">
-            {workspaceNames.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No workspaces in graph data.</p>
-            ) : (
-              workspaceNames.map((name) => (
-                <div key={name} className="flex items-start space-x-2 rounded-md p-2 hover:bg-muted/50">
-                  <Checkbox
-                    id={`ws-filter-${name}`}
-                    checked={selectedWorkspaces.has(name)}
-                    onCheckedChange={(checked) => handleToggle(name, checked === true)}
-                  />
-                  <Label
-                    htmlFor={`ws-filter-${name}`}
-                    className="flex-1 cursor-pointer text-sm font-normal leading-snug"
-                  >
-                    <span className="break-all font-medium">{name}</span>
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      ({nodeCountByWorkspace.get(name) ?? 0} nodes)
-                    </span>
-                  </Label>
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+    <KbGraphSidePanel
+      title="Workspaces"
+      icon={<FolderOpen className="h-4 w-4" />}
+      onClose={onClose}
+      toolbar={toolbar}
+    >
+      <p className="mb-3 text-xs text-muted-foreground">
+        Filter the merged graph to starred workspaces. Select which corpora to show.
+      </p>
+      {workspaceNames.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No workspaces in graph data.</p>
+      ) : (
+        <ul className="space-y-1">
+          {workspaceNames.map((name) => (
+            <li
+              key={name}
+              className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+            >
+              <Checkbox
+                id={`ws-filter-${name}`}
+                checked={selectedWorkspaces.has(name)}
+                onCheckedChange={(checked) => handleToggle(name, checked === true)}
+                className="mt-0.5"
+              />
+              <Label
+                htmlFor={`ws-filter-${name}`}
+                className="min-w-0 flex-1 cursor-pointer text-sm font-normal leading-snug"
+              >
+                <span className="break-all font-medium">{name}</span>
+                <span className="ml-1 text-xs text-muted-foreground">
+                  ({nodeCountByWorkspace.get(name) ?? 0} nodes)
+                </span>
+              </Label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </KbGraphSidePanel>
   );
 };
 

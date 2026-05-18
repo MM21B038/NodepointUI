@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React from "react";
 import Navbar from "./Navbar";
-import { MadeWithDyad } from "./made-with-dyad";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import SidebarNav from "./SidebarNav";
@@ -21,14 +20,22 @@ const pages = [
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
-  const isFullBleed =
-    location.pathname === "/knowledge-base" || location.pathname === "/chat";
+  const path =
+    location.pathname.length > 1
+      ? location.pathname.replace(/\/+$/, "")
+      : location.pathname;
+  const isFullBleed = path === "/knowledge-base" || path === "/chat";
 
   return (
     <div className="flex flex-col h-screen">
       <Navbar />
       
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 overflow-hidden",
+          isFullBleed && "pt-[var(--navbar-height)]"
+        )}
+      >
         <SidebarNav
           pages={pages}
           currentPath={location.pathname}
@@ -36,21 +43,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         <main
           className={cn(
-            "flex flex-1 flex-col min-h-0 min-w-0 hide-scrollbar",
-            isFullBleed ? "overflow-hidden" : "overflow-y-auto"
+            "flex min-h-0 min-w-0 flex-1 flex-col hide-scrollbar",
+            isFullBleed ? "h-full overflow-hidden" : "overflow-y-auto"
           )}
           style={{
             marginLeft: "var(--sidebar-collapsed-width)",
-            ...(isFullBleed
-              ? {
-                  marginTop: "var(--navbar-height)",
-                  height: "calc(100vh - var(--navbar-height))",
-                }
-              : { paddingTop: "var(--navbar-height)" }),
+            ...(!isFullBleed ? { paddingTop: "var(--navbar-height)" } : {}),
           }}
         >
           {isFullBleed ? (
-            <div className="flex flex-1 flex-col min-h-0 w-full bg-background overflow-hidden">
+            <div className="flex h-full min-h-0 flex-1 flex-col w-full overflow-hidden bg-background">
               {children}
             </div>
           ) : (
@@ -60,8 +62,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
         </main>
       </div>
-
-      {!isFullBleed && <MadeWithDyad />}
     </div>
   );
 };

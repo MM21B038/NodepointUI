@@ -4,11 +4,13 @@ import { useState } from "react";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import type { CitationKind } from "@/lib/chatCitations";
 import {
+  formatRecordAsJson,
   normalizeKnowledgeRecord,
   type KnowledgeViewModel,
   type ReferenceId,
 } from "@/lib/knowledgeRecordView";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import { CopyableSectionHeader } from "@/components/chat/CopyableSectionHeader";
 import { CopyButton } from "@/components/chat/CopyButton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +25,33 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </h4>
+  );
+}
+
+function formatAttributesCopy(attributes: { label: string; value: string }[]): string {
+  return attributes.map((attr) => `${attr.label}: ${attr.value}`).join("\n");
+}
+
+function JsonRecordSection({ jsonText }: { jsonText: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border/60 pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground">
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-180")}
+          />
+          Raw JSON
+        </CollapsibleTrigger>
+        <CopyButton text={jsonText} label="Copy JSON" className="h-7 w-7 shrink-0" />
+      </div>
+      <CollapsibleContent className="pt-3">
+        <pre className="max-h-64 overflow-auto rounded-md border border-border/80 bg-muted/30 p-3 font-mono text-[11px] leading-relaxed text-foreground/90">
+          {jsonText}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -80,7 +109,13 @@ function MetadataFooter({ metadata }: { metadata: Record<string, string> }) {
   );
 }
 
-function EntityRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "entity" }> }) {
+function EntityRecordView({
+  vm,
+  jsonText,
+}: {
+  vm: Extract<KnowledgeViewModel, { kind: "entity" }>;
+  jsonText: string;
+}) {
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -101,7 +136,7 @@ function EntityRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "ent
 
       {vm.description && (
         <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-          <SectionTitle>Description</SectionTitle>
+          <CopyableSectionHeader title="Description" copyText={vm.description} />
           <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
             {vm.description}
           </p>
@@ -110,7 +145,10 @@ function EntityRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "ent
 
       {vm.attributes.length > 0 && (
         <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-          <SectionTitle>Attributes</SectionTitle>
+          <CopyableSectionHeader
+            title="Attributes"
+            copyText={formatAttributesCopy(vm.attributes)}
+          />
           <ul className="space-y-2.5">
             {vm.attributes.map((attr) => (
               <li key={attr.label} className="text-sm">
@@ -132,15 +170,37 @@ function EntityRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "ent
       )}
 
       <MetadataFooter metadata={vm.metadata} />
+      <JsonRecordSection jsonText={jsonText} />
     </div>
   );
 }
 
-function RelationRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "relation" }> }) {
+function formatRelationCopy(
+  vm: Extract<KnowledgeViewModel, { kind: "relation" }>
+): string {
+  const lines = [
+    `Source: ${vm.source.name}${vm.source.type ? ` (${vm.source.type})` : ""}`,
+    `Target: ${vm.target.name}${vm.target.type ? ` (${vm.target.type})` : ""}`,
+  ];
+  if (vm.relationLabel) lines.push(`Relation: ${vm.relationLabel}`);
+  if (vm.relationType) lines.push(`Type: ${vm.relationType}`);
+  if (vm.description) lines.push("", vm.description);
+  if (vm.keywords) lines.push(`Keywords: ${vm.keywords}`);
+  if (vm.score != null) lines.push(`Score: ${vm.score}`);
+  return lines.join("\n").trim();
+}
+
+function RelationRecordView({
+  vm,
+  jsonText,
+}: {
+  vm: Extract<KnowledgeViewModel, { kind: "relation" }>;
+  jsonText: string;
+}) {
   return (
     <div className="space-y-5">
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-        <SectionTitle>Relationship</SectionTitle>
+        <CopyableSectionHeader title="Relationship" copyText={formatRelationCopy(vm)} />
         <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
           <EndpointCard label="Source" name={vm.source.name} type={vm.source.type} />
           <div className="flex flex-col items-center gap-1 px-1 text-center">
@@ -166,14 +226,14 @@ function RelationRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "r
 
       {vm.description && (
         <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-          <SectionTitle>Description</SectionTitle>
+          <CopyableSectionHeader title="Description" copyText={vm.description} />
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{vm.description}</p>
         </section>
       )}
 
       {vm.keywords && (
         <section>
-          <SectionTitle>Keywords</SectionTitle>
+          <CopyableSectionHeader title="Keywords" copyText={vm.keywords} />
           <p className="text-sm text-muted-foreground">{vm.keywords}</p>
         </section>
       )}
@@ -192,6 +252,7 @@ function RelationRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "r
       )}
 
       <MetadataFooter metadata={vm.metadata} />
+      <JsonRecordSection jsonText={jsonText} />
     </div>
   );
 }
@@ -220,7 +281,13 @@ function EndpointCard({
   );
 }
 
-function ChunkRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "chunk" }> }) {
+function ChunkRecordView({
+  vm,
+  jsonText,
+}: {
+  vm: Extract<KnowledgeViewModel, { kind: "chunk" }>;
+  jsonText: string;
+}) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -235,7 +302,7 @@ function ChunkRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "chun
       </div>
 
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-        <SectionTitle>Chunk text</SectionTitle>
+        <CopyableSectionHeader title="Chunk text" copyText={vm.text} />
         {vm.text ? (
           <div className="max-h-none text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground">
             {vm.text}
@@ -253,11 +320,18 @@ function ChunkRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "chun
       )}
 
       <MetadataFooter metadata={vm.metadata} />
+      <JsonRecordSection jsonText={jsonText} />
     </div>
   );
 }
 
-function DocumentRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "doc" }> }) {
+function DocumentRecordView({
+  vm,
+  jsonText,
+}: {
+  vm: Extract<KnowledgeViewModel, { kind: "doc" }>;
+  jsonText: string;
+}) {
   return (
     <div className="space-y-5">
       <div>
@@ -270,7 +344,7 @@ function DocumentRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "d
       </div>
 
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
-        <SectionTitle>Document</SectionTitle>
+        <CopyableSectionHeader title="Document" copyText={vm.body} />
         {vm.body ? (
           vm.isMarkdown ? (
             <ChatMarkdown content={vm.body} className="text-sm" />
@@ -292,6 +366,7 @@ function DocumentRecordView({ vm }: { vm: Extract<KnowledgeViewModel, { kind: "d
       )}
 
       <MetadataFooter metadata={vm.metadata} />
+      <JsonRecordSection jsonText={jsonText} />
     </div>
   );
 }
@@ -308,15 +383,19 @@ export function KnowledgeRecordPanel({ record, citationKind }: KnowledgeRecordPa
     return <p className="text-sm text-muted-foreground">Unable to display this record.</p>;
   }
 
+  const jsonText = formatRecordAsJson(
+    typeof record === "object" && record != null ? record : vm.raw
+  );
+
   switch (vm.kind) {
     case "entity":
-      return <EntityRecordView vm={vm} />;
+      return <EntityRecordView vm={vm} jsonText={jsonText} />;
     case "relation":
-      return <RelationRecordView vm={vm} />;
+      return <RelationRecordView vm={vm} jsonText={jsonText} />;
     case "chunk":
-      return <ChunkRecordView vm={vm} />;
+      return <ChunkRecordView vm={vm} jsonText={jsonText} />;
     case "doc":
-      return <DocumentRecordView vm={vm} />;
+      return <DocumentRecordView vm={vm} jsonText={jsonText} />;
   }
 }
 

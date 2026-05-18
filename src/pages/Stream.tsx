@@ -39,8 +39,10 @@ import { toast } from "sonner";
 const TEXTAREA_MAX_HEIGHT = 160;
 /** Message thread max width */
 const CHAT_THREAD_MAX_CLASS = "max-w-6xl";
-/** Composer bar max width (slightly narrower than thread) */
-const CHAT_COMPOSER_MAX_CLASS = "max-w-4xl";
+/** Composer bar max width (narrower than message thread) */
+const CHAT_COMPOSER_MAX_CLASS = "max-w-2xl";
+/** Reserve space above fixed composer (input + hint) */
+const CHAT_COMPOSER_RESERVE_CLASS = "pb-[7.5rem]";
 
 const Stream: React.FC = () => {
   const { currentWorkspace } = useWorkspace();
@@ -250,63 +252,78 @@ const Stream: React.FC = () => {
     "—";
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <header className="shrink-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 bg-background">
-        <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-base font-semibold shrink-0">Chat</h1>
-          <Badge variant="secondary" className="font-normal truncate max-w-[200px]">
-            {chatScope === "global" ? (
-              <>
-                <Globe className="h-3 w-3 mr-1 inline" />
-                Flagged-scope
-              </>
-            ) : (
-              <>
-                <FolderOpen className="h-3 w-3 mr-1 inline" />
-                {displayWorkspace}
-              </>
-            )}
-          </Badge>
-        </div>
+    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <header className="z-10 shrink-0 bg-background px-4 pb-2 pt-3">
+        <div className={cn("mx-auto w-full", CHAT_THREAD_MAX_CLASS)}>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 shadow-sm sm:px-4 sm:py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="shrink-0 text-base font-semibold tracking-tight">Chat</h1>
+              <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
+              <Badge
+                variant="secondary"
+                className="max-w-[min(100%,12rem)] truncate border border-border/60 font-normal"
+              >
+                {chatScope === "global" ? (
+                  <>
+                    <Globe className="mr-1 inline h-3 w-3 shrink-0" />
+                    Flagged-scope
+                  </>
+                ) : (
+                  <>
+                    <FolderOpen className="mr-1 inline h-3 w-3 shrink-0" />
+                    {displayWorkspace}
+                  </>
+                )}
+              </Badge>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <Tabs value={chatScope} onValueChange={(v) => handleScopeChange(v as ChatScope)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="workspace" disabled={isStreaming} className="text-xs px-3">
-                Workspace
-              </TabsTrigger>
-              <TabsTrigger value="global" disabled={isStreaming} className="text-xs px-3">
-                Flagged
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tabs value={chatScope} onValueChange={(v) => handleScopeChange(v as ChatScope)}>
+                <TabsList className="h-8 border border-border/60 bg-muted/40 p-0.5">
+                  <TabsTrigger value="workspace" disabled={isStreaming} className="text-xs px-3">
+                    Workspace
+                  </TabsTrigger>
+                  <TabsTrigger value="global" disabled={isStreaming} className="text-xs px-3">
+                    Flagged
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-          {loadError && (
-            <Button variant="outline" size="sm" className="h-8" onClick={() => loadChat()}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1" />
-              Retry
-            </Button>
-          )}
+              <span className="hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden />
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={handleClearChat}
-            disabled={isStreaming || !workspaceKey}
-            title="Clear chat history"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            Clear
-          </Button>
+              <div className="flex items-center gap-1.5">
+                {loadError && (
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => loadChat()}>
+                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={handleClearChat}
+                  disabled={isStreaming || !workspaceKey}
+                  title="Clear chat history"
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
       <div
         ref={messagesRef}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-2"
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4",
+          CHAT_COMPOSER_RESERVE_CLASS
+        )}
       >
-        <div className={cn("mx-auto w-full px-3 sm:px-6 py-6 space-y-6", CHAT_THREAD_MAX_CLASS)}>
+        <div className={cn("mx-auto w-full px-3 sm:px-6 py-4 space-y-3", CHAT_THREAD_MAX_CLASS)}>
           {emptyState === "no-workspace" && (
             <Alert>
               <AlertTitle>Select a workspace</AlertTitle>
@@ -344,16 +361,20 @@ const Stream: React.FC = () => {
             </div>
           )}
 
-          {turns.map((turn) => {
+          {turns.map((turn, index) => {
             const userText = turn.content?.trim() ?? "";
             const assistantText = getAssistantResponseText(turn.blocks);
+            const prevTurn = index > 0 ? turns[index - 1] : null;
+            const followsUser =
+              turn.role === "assistant" && prevTurn?.role === "user";
 
             return (
             <div
               key={turn.id}
               className={cn(
-                "flex gap-2 group",
-                turn.role === "user" ? "justify-end" : "justify-start"
+                "flex gap-1.5 group",
+                turn.role === "user" ? "justify-end" : "justify-start",
+                followsUser && "-mt-1"
               )}
             >
               {turn.role === "assistant" && (
@@ -366,37 +387,45 @@ const Stream: React.FC = () => {
 
               <div
                 className={cn(
-                  "relative rounded-2xl px-5 py-4 shadow-sm",
+                  "flex min-w-0 flex-col gap-0.5",
                   turn.role === "user"
-                    ? "max-w-[min(100%,28rem)] shrink-0 bg-primary text-primary-foreground"
-                    : "flex-1 min-w-0 w-full bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
+                    ? "max-w-[min(100%,28rem)] shrink-0 items-end"
+                    : "flex-1 min-w-0 w-full items-start"
                 )}
               >
-                {turn.role === "user" && (
-                  <CopyButton
-                    text={userText}
-                    label="Copy message"
-                    variant="ghostOnPrimary"
-                    className="absolute right-1 top-1 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                  />
-                )}
-                {turn.role === "assistant" && (
-                  <CopyButton
-                    text={assistantText}
-                    label="Copy response"
-                    className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                  />
-                )}
-                {turn.role === "user" ? (
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed pr-8">{turn.content}</p>
-                ) : (
-                  <div className="pr-8">
+                <div
+                  className={cn(
+                    "w-full rounded-2xl px-4 py-3 shadow-sm",
+                    turn.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
+                  )}
+                >
+                  {turn.role === "user" ? (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{turn.content}</p>
+                  ) : (
                     <AssistantActivityView
                       blocks={turn.blocks}
                       isStreaming={turn.isStreaming}
                     />
-                  </div>
-                )}
+                  )}
+                </div>
+                <div
+                  className={cn(
+                    "flex max-h-0 items-center overflow-hidden opacity-0 transition-[max-height,opacity] duration-150",
+                    "group-hover:max-h-8 group-hover:opacity-100",
+                    "group-focus-within:max-h-8 group-focus-within:opacity-100",
+                    "[&:has(button:focus-visible)]:max-h-8 [&:has(button:focus-visible)]:opacity-100",
+                    turn.role === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
+                  <CopyButton
+                    text={turn.role === "user" ? userText : assistantText}
+                    label={turn.role === "user" ? "Copy message" : "Copy response"}
+                    variant="ghost"
+                    className="h-7 w-7"
+                  />
+                </div>
               </div>
 
               {turn.role === "user" && (
@@ -414,8 +443,11 @@ const Stream: React.FC = () => {
         </div>
       </div>
 
-      <footer className="shrink-0 z-20 border-t border-border bg-background shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.45)]">
-        <div className={cn("mx-auto w-full px-4 py-3", CHAT_COMPOSER_MAX_CLASS)}>
+      <footer
+        className="fixed bottom-0 z-30 bg-background px-4 pb-3 pt-2"
+        style={{ left: "var(--sidebar-collapsed-width)", right: 0 }}
+      >
+        <div className={cn("mx-auto w-full", CHAT_COMPOSER_MAX_CLASS)}>
           <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
             <Textarea
               ref={textareaRef}

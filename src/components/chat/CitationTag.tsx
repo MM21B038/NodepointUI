@@ -2,7 +2,11 @@
 
 import type { KeyboardEvent } from "react";
 import type { CitationKind, ParsedCitation } from "@/lib/chatCitations";
-import { CITATION_KIND_LABELS, extractCitationResourceId } from "@/lib/chatCitations";
+import {
+  CITATION_KIND_LABELS,
+  extractCitationResourceId,
+  getCitationDisplayLabel,
+} from "@/lib/chatCitations";
 import { useCitationModalOptional } from "@/components/chat/CitationModalContext";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +49,7 @@ export function CitationTag({ kind, label, href, interactive = true }: CitationT
   const modal = useCitationModalOptional();
   const style = CITATION_STYLES[kind];
   const kindLabel = CITATION_KIND_LABELS[kind];
+  const displayLabel = getCitationDisplayLabel({ kind, label, href });
   const resourceId = extractCitationResourceId({ kind, label, href });
   const canOpen = interactive && !!modal && !!resourceId;
 
@@ -81,7 +86,7 @@ export function CitationTag({ kind, label, href, interactive = true }: CitationT
       >
         {kindLabel}
       </span>
-      {label ? <span className="min-w-0 truncate">{label}</span> : null}
+      {displayLabel ? <span className="min-w-0 truncate">{displayLabel}</span> : null}
     </>
   );
 
@@ -92,8 +97,8 @@ export function CitationTag({ kind, label, href, interactive = true }: CitationT
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         className={className}
-        title={label ? `${kindLabel}: ${label}` : `View ${kindLabel}`}
-        aria-label={label ? `View ${kindLabel}: ${label}` : `View ${kindLabel}`}
+        title={displayLabel ? `${kindLabel}: ${displayLabel}` : `View ${kindLabel}`}
+        aria-label={displayLabel ? `View ${kindLabel}: ${displayLabel}` : `View ${kindLabel}`}
       >
         {inner}
       </button>
@@ -101,7 +106,7 @@ export function CitationTag({ kind, label, href, interactive = true }: CitationT
   }
 
   return (
-    <span className={className} title={label ? `${kindLabel}: ${label}` : kindLabel}>
+    <span className={className} title={displayLabel ? `${kindLabel}: ${displayLabel}` : kindLabel}>
       {inner}
     </span>
   );

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain,
   CheckCircle2,
   ChevronRight,
   Loader2,
+  Sparkles,
   Wrench,
   XCircle,
   AlertCircle,
@@ -13,6 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 import type { ChatBlock } from "@/lib/chatTypes";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type ToolItem = {
   id: string;
@@ -164,6 +170,137 @@ function StatusIcon({ status }: { status: "running" | "completed" | "failed" | "
   return <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />;
 }
 
+function activitySummary(activitySegments: ActivitySegment[]) {
+  const thinkingCount = activitySegments.filter((s) => s.kind === "thinking").length;
+  const toolCalls = activitySegments
+    .filter((s): s is Extract<ActivitySegment, { kind: "tools" }> => s.kind === "tools")
+    .reduce((n, s) => n + s.tools.length, 0);
+  const parts: string[] = [];
+  if (thinkingCount > 0) {
+    parts.push(`${thinkingCount} thinking`);
+  }
+  if (toolCalls > 0) {
+    parts.push(`${toolCalls} tool${toolCalls === 1 ? "" : "s"}`);
+  }
+  return parts.join(" · ");
+}
+
+interface ActivityTreeProps {
+  segments: ActivitySegment[];
+  onToggle: (id: string) => void;
+  isExpanded: (seg: ActivitySegment) => boolean;
+}
+
+function ActivityTree({ segments, onToggle, isExpanded }: ActivityTreeProps) {
+  return (
+    <div className="space-y-0.5 py-1">
+      {segments.map((seg, segIndex) => {
+        const isLastSeg = segIndex === segments.length - 1;
+        const open = isExpanded(seg);
+
+        if (seg.kind === "thinking") {
+          const showContent = open && (seg.content || seg.isStreaming);
+          return (
+            <div key={seg.id} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onToggle(seg.id)}
+                className="flex w-full items-center gap-1 py-0.5 text-left hover:bg-muted/40 rounded-sm pr-1 transition-colors"
+              >
+                <TreeGuide isLast={isLastSeg && !showContent} />
+                <ChevronRight
+                  className={cn(
+                    "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200",
+                    open && "rotate-90"
+                  )}
+                />
+                <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                <span className="text-xs text-muted-foreground">Thinking</span>
+                <span className="ml-1">
+                  <StatusIcon status={seg.isStreaming ? "thinking" : "completed"} />
+                </span>
+              </button>
+              {showContent && (
+                <div className="ml-6 pl-2 border-l border-muted-foreground/15 mb-1 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                  <p className="text-xs text-muted-foreground/90 italic leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                    {seg.content}
+                    {seg.isStreaming && (
+                      <span className="inline-block w-1 h-3 ml-0.5 bg-muted-foreground/40 animate-pulse align-middle" />
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        if (seg.kind === "tools") {
+          const showTools = open;
+          const running = seg.tools.some((t) => t.status === "running");
+          return (
+            <div key={seg.id} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onToggle(seg.id)}
+                className="flex w-full items-center gap-1 py-0.5 text-left hover:bg-muted/40 rounded-sm pr-1 transition-colors"
+              >
+                <TreeGuide isLast={isLastSeg && !showTools} />
+                <ChevronRight
+                  className={cn(
+                    "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200",
+                    showTools && "rotate-90"
+                  )}
+                />
+                <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Tools ({seg.tools.length})</span>
+                {running && (
+                  <Loader2 className="h-3 w-3 ml-1 animate-spin text-muted-foreground" />
+                )}
+              </button>
+              {showTools && (
+                <div className="ml-6 pl-2 border-l border-muted-foreground/15 space-y-0.5 mb-1 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                  {seg.tools.map((tool, toolIndex) => {
+                    const isLastTool = toolIndex === seg.tools.length - 1;
+                    return (
+                      <div key={tool.id} className="flex items-center gap-1 py-0.5 min-w-0">
+                        <TreeGuide isLast={isLastTool} />
+                        <Wrench
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0",
+                            tool.status === "completed" && "text-emerald-600",
+                            tool.status === "failed" && "text-red-600",
+                            tool.status === "running" && "text-muted-foreground"
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "text-xs font-mono truncate",
+                            tool.status === "completed" &&
+                              "text-emerald-800 dark:text-emerald-200",
+                            tool.status === "failed" && "text-red-700 dark:text-red-300",
+                            tool.status === "running" && "text-muted-foreground"
+                          )}
+                        >
+                          {tool.name}
+                        </span>
+                        <span className="ml-auto shrink-0 pl-2">
+                          <StatusIcon status={tool.status} />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return null;
+      })}
+    </div>
+  );
+}
+
 interface AssistantActivityViewProps {
   blocks: ChatBlock[];
   isStreaming?: boolean;
@@ -176,29 +313,51 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     [segments, isStreaming]
   );
 
+  const activitySegments = segments.filter(
+    (s) => s.kind === "thinking" || s.kind === "tools"
+  );
+  const responseSegments = segments.filter((s) => s.kind === "response");
+  const errorSegments = segments.filter((s) => s.kind === "error");
+
+  const hasResponse = responseSegments.length > 0;
+  const responseStreaming =
+    isStreaming || responseSegments.some((s) => s.isStreaming);
+  const shouldBundleActivity = activitySegments.length > 0 && hasResponse;
+
+  const summary = useMemo(() => activitySummary(activitySegments), [activitySegments]);
+  const activityStillRunning = activitySegments.some(
+    (s) =>
+      (s.kind === "thinking" && s.isStreaming) ||
+      (s.kind === "tools" && s.tools.some((t) => t.status === "running"))
+  );
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [activityOpen, setActivityOpen] = useState(false);
+  const wasBundledRef = useRef(false);
 
   useEffect(() => {
-    setExpanded((prev) => {
-      const next = { ...prev };
-      for (const seg of segments) {
-        if (seg.kind === "thinking" || seg.kind === "tools") {
+    if (!shouldBundleActivity) {
+      wasBundledRef.current = false;
+      setExpanded((prev) => {
+        const next = { ...prev };
+        for (const seg of activitySegments) {
           const isActive = seg.id === activeId;
-          if (isActive) {
-            if (next[seg.id] !== false) {
-              next[seg.id] = true;
-            }
-          } else if (activeId && seg.id !== activeId) {
-            next[seg.id] = false;
-          }
+          if (isActive) next[seg.id] = true;
+          else if (activeId) next[seg.id] = false;
         }
-      }
-      return next;
-    });
-  }, [activeId, segments]);
+        return next;
+      });
+      return;
+    }
+
+    if (!wasBundledRef.current) {
+      wasBundledRef.current = true;
+      setActivityOpen(false);
+      setExpanded({});
+    }
+  }, [activeId, activitySegments, shouldBundleActivity]);
 
   const isExpanded = (seg: ActivitySegment) => {
-    if (seg.kind === "response" || seg.kind === "error") return true;
     if (expanded[seg.id] !== undefined) return expanded[seg.id];
     return seg.id === activeId;
   };
@@ -207,17 +366,7 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const activitySegments = segments.filter(
-    (s) => s.kind === "thinking" || s.kind === "tools"
-  );
-  const responseSegments = segments.filter((s) => s.kind === "response");
-  const errorSegments = segments.filter((s) => s.kind === "error");
-
-  if (
-    segments.length === 0 &&
-    isStreaming &&
-    blocks.length === 0
-  ) {
+  if (segments.length === 0 && isStreaming && blocks.length === 0) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -227,125 +376,67 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
   }
 
   return (
-    <div className="min-w-0 space-y-3 font-chat text-[13px]">
+    <div className="min-w-0 space-y-2 font-chat text-[13px]">
       {activitySegments.length > 0 && (
-        <div className="rounded-md border-l-2 border-muted-foreground/20 pl-1 py-1">
-          {activitySegments.map((seg, segIndex) => {
-            const isLastSeg = segIndex === activitySegments.length - 1;
-            const open = isExpanded(seg);
-
-            if (seg.kind === "thinking") {
-              const showContent = open && (seg.content || seg.isStreaming);
-              return (
-                <div key={seg.id} className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => toggle(seg.id)}
-                    className="flex w-full items-center gap-1 py-0.5 text-left hover:bg-muted/40 rounded-sm pr-1 transition-colors"
-                  >
-                    <TreeGuide isLast={isLastSeg && !showContent && activitySegments.length === 1} />
-                    <ChevronRight
-                      className={cn(
-                        "h-3 w-3 shrink-0 text-muted-foreground transition-transform",
-                        open && "rotate-90"
-                      )}
-                    />
-                    <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
-                    <span className="text-xs text-muted-foreground">Thinking</span>
-                    <span className="ml-1">
-                      <StatusIcon status={seg.isStreaming ? "thinking" : "completed"} />
-                    </span>
-                  </button>
-                  {showContent && (
-                    <div className="ml-6 pl-2 border-l border-muted-foreground/15 mb-1">
-                      <p className="text-xs text-muted-foreground/90 italic leading-relaxed whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                        {seg.content}
-                        {seg.isStreaming && (
-                          <span className="inline-block w-1 h-3 ml-0.5 bg-muted-foreground/40 animate-pulse align-middle" />
-                        )}
-                      </p>
-                    </div>
+        <>
+          {shouldBundleActivity ? (
+            <Collapsible open={activityOpen} onOpenChange={setActivityOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg border border-border/60",
+                    "bg-muted/25 px-3 py-2 text-left text-xs transition-colors",
+                    "hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   )}
-                </div>
-              );
-            }
-
-            if (seg.kind === "tools") {
-              const showTools = open;
-              return (
-                <div key={seg.id} className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => toggle(seg.id)}
-                    className="flex w-full items-center gap-1 py-0.5 text-left hover:bg-muted/40 rounded-sm pr-1 transition-colors"
-                  >
-                    <TreeGuide
-                      isLast={
-                        isLastSeg && !showTools && activitySegments.length === 1
-                      }
-                    />
-                    <ChevronRight
-                      className={cn(
-                        "h-3 w-3 shrink-0 text-muted-foreground transition-transform",
-                        showTools && "rotate-90"
-                      )}
-                    />
-                    <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      Tools ({seg.tools.length})
-                    </span>
-                    {seg.tools.some((t) => t.status === "running") && (
-                      <Loader2 className="h-3 w-3 ml-1 animate-spin text-muted-foreground" />
+                >
+                  <ChevronRight
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+                      activityOpen && "rotate-90"
                     )}
-                  </button>
-                  {showTools && (
-                    <div className="ml-6 pl-2 border-l border-muted-foreground/15 space-y-0.5 mb-1">
-                      {seg.tools.map((tool, toolIndex) => {
-                        const isLastTool = toolIndex === seg.tools.length - 1;
-                        return (
-                          <div
-                            key={tool.id}
-                            className="flex items-center gap-1 py-0.5 min-w-0"
-                          >
-                            <TreeGuide isLast={isLastTool} />
-                            <Wrench
-                              className={cn(
-                                "h-3.5 w-3.5 shrink-0",
-                                tool.status === "completed" && "text-emerald-600",
-                                tool.status === "failed" && "text-red-600",
-                                tool.status === "running" && "text-muted-foreground"
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                "text-xs font-mono truncate",
-                                tool.status === "completed" &&
-                                  "text-emerald-800 dark:text-emerald-200",
-                                tool.status === "failed" && "text-red-700 dark:text-red-300",
-                                tool.status === "running" && "text-muted-foreground"
-                              )}
-                            >
-                              {tool.name}
-                            </span>
-                            <span className="ml-auto shrink-0 pl-2">
-                              <StatusIcon status={tool.status} />
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  />
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <span className="font-medium text-foreground/90">Reasoning & tools</span>
+                  {summary ? (
+                    <span className="truncate text-muted-foreground">{summary}</span>
+                  ) : null}
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {activityStillRunning || responseStreaming ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    )}
+                  </span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="overflow-hidden">
+                <div className="mt-1.5 rounded-md border border-border/50 bg-muted/15 pl-1">
+                  <ActivityTree
+                    segments={activitySegments}
+                    onToggle={toggle}
+                    isExpanded={isExpanded}
+                  />
                 </div>
-              );
-            }
-
-            return null;
-          })}
-        </div>
+              </CollapsibleContent>
+            </Collapsible>
+          ) : (
+            <div className="rounded-md border-l-2 border-violet-500/25 bg-violet-500/5 pl-1 py-1">
+              <ActivityTree
+                segments={activitySegments}
+                onToggle={toggle}
+                isExpanded={(seg) => {
+                  if (expanded[seg.id] !== undefined) return expanded[seg.id];
+                  return seg.id === activeId;
+                }}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {responseSegments.map((seg) => (
-        <div key={seg.id} className="min-w-0 pt-0.5">
+        <div key={seg.id} className="min-w-0">
           {(seg.content || seg.isStreaming) && (
             <ChatMarkdown content={seg.content} isStreaming={seg.isStreaming} />
           )}

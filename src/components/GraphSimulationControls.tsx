@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, Maximize2, RotateCcw, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   Collapsible,
@@ -24,6 +25,8 @@ interface GraphSimulationControlsProps {
   onFitView: () => void;
   onResetDefaults: () => void;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 function ConfigSlider({
@@ -59,30 +62,21 @@ function ConfigSlider({
         <Label className="text-xs text-muted-foreground">{label}</Label>
         <span className="text-xs tabular-nums text-foreground">{display}</span>
       </div>
-      <input
-        type="range"
+      <Slider
         min={min}
         max={max}
         step={step}
-        value={localValue}
+        value={[localValue]}
         aria-label={label}
-        className="graph-control-range h-2 w-full cursor-grab appearance-none rounded-full bg-secondary accent-primary active:cursor-grabbing [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-primary [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-primary-foreground/30 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-secondary [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary-foreground/30 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-md"
+        className="graph-control-range w-full"
         onPointerDown={(e) => {
           e.stopPropagation();
           isDraggingRef.current = true;
         }}
-        onInput={(e) => {
-          setLocalValue(Number(e.currentTarget.value));
-        }}
-        onPointerUp={(e) => {
-          e.stopPropagation();
+        onPointerUp={(e) => e.stopPropagation()}
+        onValueChange={([v]) => setLocalValue(v)}
+        onValueCommit={([v]) => {
           isDraggingRef.current = false;
-          const v = Number(e.currentTarget.value);
-          setLocalValue(v);
-          onChange(v);
-        }}
-        onKeyUp={(e) => {
-          const v = Number(e.currentTarget.value);
           setLocalValue(v);
           onChange(v);
         }}
@@ -98,16 +92,21 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
   onFitView,
   onResetDefaults,
   className,
+  open: openProp,
+  onOpenChange,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp ?? openInternal;
+  const setOpen = onOpenChange ?? setOpenInternal;
 
   return (
     <Collapsible
       open={open}
       onOpenChange={setOpen}
       data-graph-controls
+      data-kb-overlay
       className={cn(
-        "pointer-events-auto isolate flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-background/95 shadow-lg backdrop-blur-sm",
+        "pointer-events-auto isolate flex max-h-[var(--kb-bottom-overlay-max-h)] min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-background/95 shadow-lg backdrop-blur-sm",
         className
       )}
     >
@@ -133,7 +132,7 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
 
       <CollapsibleContent className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=closed]:hidden">
         <div
-          className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 pb-3 scroll-smooth overscroll-contain [-webkit-overflow-scrolling:touch]"
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-3 py-2 scroll-smooth overscroll-contain [-webkit-overflow-scrolling:touch]"
           onWheel={(e) => e.stopPropagation()}
         >
           <div className="space-y-3">
@@ -251,38 +250,38 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="flex flex-wrap gap-2 border-t pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={onRestartLayout}
-            >
-              <RotateCcw className="mr-1 h-3 w-3" />
-              Restart
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={onFitView}
-            >
-              <Maximize2 className="mr-1 h-3 w-3" />
-              Fit view
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={onResetDefaults}
-            >
-              Reset defaults
-            </Button>
-          </div>
+        <div className="flex shrink-0 flex-wrap gap-2 border-t border-border/60 px-3 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={onRestartLayout}
+          >
+            <RotateCcw className="mr-1 h-3 w-3" />
+            Restart
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={onFitView}
+          >
+            <Maximize2 className="mr-1 h-3 w-3" />
+            Fit view
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={onResetDefaults}
+          >
+            Reset defaults
+          </Button>
         </div>
       </CollapsibleContent>
     </Collapsible>

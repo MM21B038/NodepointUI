@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type MouseEvent, type PointerEvent } from "react";
 import { Check, Copy } from "lucide-react";
 import { copyTextToClipboard } from "@/lib/copyToClipboard";
 import { Button } from "@/components/ui/button";
@@ -32,13 +32,18 @@ export function CopyButton({
 }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(async () => {
-    if (!text || disabled) return;
-    const ok = await copyTextToClipboard(text);
-    if (!ok) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  }, [text, disabled]);
+  const handleCopy = useCallback(
+    async (e?: MouseEvent | PointerEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
+      if (!text || disabled) return;
+      const ok = await copyTextToClipboard(text);
+      if (!ok) return;
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    },
+    [text, disabled]
+  );
 
   const isDisabled = disabled || !text.trim();
 
@@ -55,6 +60,7 @@ export function CopyButton({
         className
       )}
       onClick={handleCopy}
+      onPointerDown={(e) => e.stopPropagation()}
       disabled={isDisabled}
       aria-label={copied ? "Copied" : label}
     >

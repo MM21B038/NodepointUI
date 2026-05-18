@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import React, { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { FileText, X } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GraphNode, GraphEdge } from "@/database/workspaceStorage";
+import { KbGraphSidePanel } from "@/components/knowledge-base/KbGraphSidePanel";
 
 interface SourceFilesPanelProps {
   nodes: GraphNode[];
@@ -15,7 +14,7 @@ interface SourceFilesPanelProps {
   selectedSourceFiles: Set<string>;
   onSelectedSourceFilesChange: (files: Set<string>) => void;
   onClose: () => void;
-  onFilterInteraction: () => void; // New prop
+  onFilterInteraction: () => void;
 }
 
 const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
@@ -28,84 +27,92 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
 }) => {
   const uniqueSourceFiles = useMemo(() => {
     const files = new Set<string>();
-    nodes.forEach(node => node.source.forEach(s => files.add(s)));
-    edges.forEach(edge => edge.source_file.forEach(s => files.add(s)));
+    nodes.forEach((node) => node.source.forEach((s) => files.add(s)));
+    edges.forEach((edge) => edge.source_file.forEach((s) => files.add(s)));
     return Array.from(files).sort();
   }, [nodes, edges]);
 
   const handleSourceFileChange = (file: string, checked: boolean) => {
     onSelectedSourceFilesChange((prev) => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(file);
-      } else {
-        newSet.delete(file);
-      }
-      return newSet;
+      const next = new Set(prev);
+      if (checked) next.add(file);
+      else next.delete(file);
+      return next;
     });
-    onFilterInteraction(); // Notify parent about filter interaction
+    onFilterInteraction();
   };
 
-  const handleSelectAll = () => {
-    onSelectedSourceFilesChange(new Set(uniqueSourceFiles));
-    onFilterInteraction(); // Notify parent about filter interaction
-  };
-
-  const handleClearAll = () => {
-    onSelectedSourceFilesChange(new Set());
-    onFilterInteraction(); // Notify parent about filter interaction
-  };
+  const toolbar = (
+    <div className="flex gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 text-xs"
+        onClick={() => {
+          onSelectedSourceFilesChange(new Set(uniqueSourceFiles));
+          onFilterInteraction();
+        }}
+        disabled={
+          uniqueSourceFiles.length === 0 ||
+          selectedSourceFiles.size === uniqueSourceFiles.length
+        }
+      >
+        Select all
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 text-xs"
+        onClick={() => {
+          onSelectedSourceFilesChange(new Set());
+          onFilterInteraction();
+        }}
+        disabled={selectedSourceFiles.size === 0}
+      >
+        Clear all
+      </Button>
+    </div>
+  );
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* Removed onClick={e => e.stopPropagation()} */}
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <div className="flex items-center">
-          <FileText className="h-5 w-5 mr-2" />
-          <CardTitle className="text-xl">Source Files</CardTitle>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onClose} title="Close Source Files Panel">
-          <X className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-hidden">
-        <div className="flex space-x-2 mb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSelectAll}
-            disabled={uniqueSourceFiles.length === 0 || selectedSourceFiles.size === uniqueSourceFiles.length}
-            className="flex-1"
-          >
-            Select All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearAll}
-            disabled={selectedSourceFiles.size === 0}
-            className="flex-1"
-          >
-            Clear All
-          </Button>
-        </div>
-        <ScrollArea className="flex-grow pr-4 hide-scrollbar">
-          <div className="grid gap-2">
-            {uniqueSourceFiles.map((file) => (
-              <div key={file} className="flex items-center space-x-2"> {/* Removed onClick here */}
-                <Checkbox
-                  id={`source-file-${file}`}
-                  checked={selectedSourceFiles.has(file)}
-                  onCheckedChange={(checked) => handleSourceFileChange(file, checked as boolean)}
-                />
-                <Label htmlFor={`source-file-${file}`} className="text-sm cursor-pointer">
-                  {file}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+    <KbGraphSidePanel
+      title="Source files"
+      icon={<FileText className="h-4 w-4" />}
+      onClose={onClose}
+      toolbar={toolbar}
+    >
+      <p className="mb-3 text-xs text-muted-foreground">
+        Show nodes and edges tied to selected documents only.
+      </p>
+      {uniqueSourceFiles.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No source files in this graph.</p>
+      ) : (
+        <ul className="space-y-1">
+          {uniqueSourceFiles.map((file) => (
+            <li
+              key={file}
+              className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+            >
+              <Checkbox
+                id={`source-file-${file}`}
+                checked={selectedSourceFiles.has(file)}
+                onCheckedChange={(checked) =>
+                  handleSourceFileChange(file, checked === true)
+                }
+                className="mt-0.5"
+              />
+              <Label
+                htmlFor={`source-file-${file}`}
+                className="min-w-0 flex-1 cursor-pointer text-sm font-normal leading-snug"
+                title={file}
+              >
+                <span className="block truncate">{file}</span>
+              </Label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </KbGraphSidePanel>
   );
 };
 

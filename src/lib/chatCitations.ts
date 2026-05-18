@@ -110,11 +110,11 @@ export function encodeCitationPayload(payload: string): string {
 }
 
 export function formatCitationMarkdown(citation: ParsedCitation): string {
-  const label = citation.label.trim();
   const resourceId = extractCitationResourceId(citation);
-  const payload = resourceId || label || CITATION_KIND_LABELS[citation.kind];
-  const display = label || resourceId || CITATION_KIND_LABELS[citation.kind];
-  return `[${citation.kind}: ${display}](#citation-${citation.kind}-${encodeCitationPayload(payload)})`;
+  const payload = resourceId || citation.label.trim() || CITATION_KIND_LABELS[citation.kind];
+  const display = getCitationDisplayLabel(citation);
+  const linkText = display ? `${citation.kind}: ${display}` : citation.kind;
+  return `[${linkText}](#citation-${citation.kind}-${encodeCitationPayload(payload)})`;
 }
 
 /** Resolve a markdown [label](href) pair into a citation, if any. */
@@ -204,6 +204,33 @@ export function parseCitationFromLink(
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** True when the string is a resource id, not a human-readable citation title. */
+export function isOpaqueCitationId(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  if (UUID_RE.test(v)) return true;
+  if (/^[0-9a-f]{16,}$/i.test(v.replace(/-/g, ""))) return true;
+  return false;
+}
+
+/** Label shown on citation chips — never exposes raw resource ids. */
+export function getCitationDisplayLabel(citation: ParsedCitation): string {
+  const label = citation.label.trim();
+  if (!label || isOpaqueCitationId(label)) return "";
+
+  const resourceId = extractCitationResourceId(citation);
+  if (resourceId && label === resourceId) return "";
+
+  const kindPrefix = new RegExp(`^${citation.kind}:\\s*`, "i");
+  const withoutKind = label.replace(kindPrefix, "").trim();
+  if (withoutKind && !isOpaqueCitationId(withoutKind) && withoutKind !== resourceId) {
+    return withoutKind;
+  }
+
+  if (KIND_ONLY_RE.test(label)) return "";
+  return label;
+}
 
 /** Resource id (usually UUID) used for knowledge detail GET routes. */
 export function extractCitationResourceId(citation: ParsedCitation): string | null {

@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CitationTag } from "@/components/chat/CitationTag";
-import { CopyButton } from "@/components/chat/CopyButton";
 import {
   KnowledgeRecordPanel,
   getViewModelTitle,
@@ -28,12 +27,7 @@ import {
   extractCitationResourceId,
   type ParsedCitation,
 } from "@/lib/chatCitations";
-import {
-  formatRecordAsJson,
-  formatRecordAsText,
-  getReferenceIds,
-  normalizeKnowledgeRecord,
-} from "@/lib/knowledgeRecordView";
+import { normalizeKnowledgeRecord } from "@/lib/knowledgeRecordView";
 import {
   fetchKnowledgeRecord,
   findRecordOption,
@@ -46,62 +40,6 @@ interface CitationDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   citation: ParsedCitation | null;
-}
-
-function CitationModalToolbar({
-  record,
-  citationKind,
-}: {
-  record: unknown;
-  citationKind: ParsedCitation["kind"];
-}) {
-  const vm = useMemo(
-    () => normalizeKnowledgeRecord(record, citationKind),
-    [record, citationKind]
-  );
-
-  if (!vm) return null;
-
-  const contentText = formatRecordAsText(vm);
-  const jsonText = formatRecordAsJson(
-    typeof record === "object" && record != null ? record : vm.raw
-  );
-  const refs = getReferenceIds(vm);
-
-  return (
-    <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-md border border-border bg-muted/30">
-          <CopyButton text={contentText} label="Copy content" size="sm" className="h-8 w-8" />
-          <span className="pr-2.5 text-xs text-muted-foreground">Content</span>
-        </span>
-        <span className="inline-flex items-center rounded-md border border-border bg-muted/30">
-          <CopyButton text={jsonText} label="Copy JSON" size="sm" className="h-8 w-8" />
-          <span className="pr-2.5 text-xs text-muted-foreground">JSON</span>
-        </span>
-      </div>
-      {refs.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-full text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:w-auto">
-            Copy ID
-          </span>
-          {refs.map((ref) => (
-            <span
-              key={`${ref.key}-${ref.value}`}
-              className="inline-flex items-center rounded-md border border-border/80 bg-muted/40 pl-2 pr-0.5"
-            >
-              <span className="mr-1 text-[10px] text-muted-foreground">{ref.label}</span>
-              <CopyButton
-                text={ref.value}
-                label={`Copy ${ref.label}`}
-                className="h-7 w-7 shrink-0"
-              />
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function CitationDetailModal({ open, onOpenChange, citation }: CitationDetailModalProps) {
@@ -228,9 +166,6 @@ export function CitationDetailModal({ open, onOpenChange, citation }: CitationDe
             <p className="break-all font-mono text-xs text-muted-foreground">{activeId}</p>
           )}
 
-          {!loading && !error && activeRecord != null && citation && (
-            <CitationModalToolbar record={activeRecord} citationKind={citation.kind} />
-          )}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">

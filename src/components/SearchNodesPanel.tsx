@@ -1,115 +1,141 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, X, ChevronDown } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Slider } from "@/components/ui/slider";
+import type { EntitySearchMatch } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 
 interface SearchNodesPanelProps {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  searchDepth: number;
-  onSearchDepthChange: (depth: number) => void;
+  searchThreshold: number;
+  onSearchThresholdChange: (threshold: number) => void;
+  depth: number;
+  limit: number;
+  matches: EntitySearchMatch[];
+  isSearchMode: boolean;
+  onRunSearch: () => void;
+  onClearSearch: () => void;
+  onHighlightMatch?: (nodeId: string, workspace?: string) => void;
   onClose: () => void;
-  onFilterInteraction: () => void;
+  loading?: boolean;
 }
 
 const SearchNodesPanel: React.FC<SearchNodesPanelProps> = ({
   searchQuery,
   onSearchQueryChange,
-  searchDepth,
-  onSearchDepthChange,
+  searchThreshold,
+  onSearchThresholdChange,
+  depth,
+  limit,
+  matches,
+  isSearchMode,
+  onRunSearch,
+  onClearSearch,
+  onHighlightMatch,
   onClose,
-  onFilterInteraction,
+  loading,
 }) => {
-  const [isDepthDropdownOpen, setIsDepthDropdownOpen] = useState(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSearchQueryChange(e.target.value);
-    onFilterInteraction();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchQuery.trim().length >= 2) {
+      onRunSearch();
+    }
   };
-
-  const handleDepthSelect = (depth: number) => {
-    onSearchDepthChange(depth);
-    setIsDepthDropdownOpen(false); // Close dropdown after selection
-  };
-
-  const depthOptions = Array.from({ length: 6 }, (_, i) => i);
 
   return (
-    <Card className="h-full bg-background/80 backdrop-blur-sm border-none shadow-lg"> {/* Removed onClick={e => e.stopPropagation()} */}
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+    <Card className="h-full border-none bg-background/80 shadow-lg backdrop-blur-sm">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center">
-          <Search className="h-5 w-5 mr-2" />
-          <CardTitle className="text-xl flex-1 min-w-0 break-words">Search Nodes</CardTitle>
+          <Search className="mr-2 h-5 w-5" />
+          <CardTitle className="text-xl">Search entities</CardTitle>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} title="Close Search Panel">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="h-[calc(100%-60px)] flex flex-col p-4 overflow-y-auto hide-scrollbar"> {/* Added hide-scrollbar */}
-        <Label htmlFor="node-search" className="sr-only">Search Nodes</Label>
-        <Input
-          id="node-search"
-          placeholder="Search by label or ID..."
-          value={searchQuery}
-          onChange={handleChange}
-          className="mt-1 bg-background/50 border-primary/20"
-        />
-
-        <div className="mt-6 space-y-2">
-          <Label htmlFor="search-depth" className="text-sm font-medium">
-            Search Depth:
+      <CardContent className="flex h-[calc(100%-60px)] flex-col gap-4 overflow-hidden p-4">
+        <div>
+          <Label htmlFor="entity-search" className="sr-only">
+            Search entity name
           </Label>
-          <DropdownMenu
-            open={isDepthDropdownOpen}
-            onOpenChange={(isOpen) => {
-              setIsDepthDropdownOpen(isOpen);
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-between bg-background/50 border-primary/20 whitespace-normal"
-                disabled={!searchQuery}
-              >
-                <span className="flex-1 text-left truncate">
-                  {searchDepth} {searchDepth === 0 ? "(Only searched nodes)" : "hops"}
-                </span>
-                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-full search-depth-dropdown-content">
-              {depthOptions.map((depth) => (
-                <DropdownMenuItem
-                  key={depth}
-                  onClick={() => {
-                    handleDepthSelect(depth);
-                    setIsDepthDropdownOpen(false);
-                  }}
-                  className={cn(
-                    "cursor-pointer max-w-full break-words whitespace-normal",
-                    searchDepth === depth && "bg-accent text-accent-foreground"
-                  )}
-                >
-                  {depth} {depth === 0 ? "(Only searched nodes)" : "hops"}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <p className="text-xs text-muted-foreground break-words max-w-full">
-            Controls how many "hops" away from the searched node(s) are displayed.
-          </p>
+          <Input
+            id="entity-search"
+            placeholder="Fuzzy search by name (min 2 chars)…"
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="mt-1 border-primary/20 bg-background/50"
+          />
         </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">Match threshold</Label>
+            <span className="font-mono text-xs text-muted-foreground">
+              {searchThreshold.toFixed(2)}
+            </span>
+          </div>
+          <Slider
+            min={0}
+            max={1}
+            step={0.05}
+            value={[searchThreshold]}
+            onValueChange={([v]) => onSearchThresholdChange(v)}
+            className="graph-control-range"
+          />
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Uses graph load depth <span className="font-mono">{depth}</span> and limit{" "}
+          <span className="font-mono">{limit}</span> from Graph load panel.
+        </p>
+
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            onClick={onRunSearch}
+            disabled={loading || searchQuery.trim().length < 2}
+          >
+            Search
+          </Button>
+          {isSearchMode && (
+            <Button variant="outline" onClick={onClearSearch} disabled={loading}>
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {matches.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60 p-2">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              Matches ({matches.length})
+            </p>
+            <ul className="space-y-1">
+              {matches.map((m) => (
+                <li key={`${m.workspace ?? ""}-${m.id}`}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60",
+                      "flex items-center justify-between gap-2"
+                    )}
+                    onClick={() => onHighlightMatch?.(m.id, m.workspace)}
+                  >
+                    <span className="truncate font-medium">{m.name}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      {m.score.toFixed(2)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

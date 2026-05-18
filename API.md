@@ -25,24 +25,50 @@ Complete reference for REST and WebSocket APIs. Base URL example: `http://localh
 | Surface | Prefix | Purpose |
 |---------|--------|---------|
 | REST | `/api/` | CRUD for workspaces, documents, graphs, chat |
-| WebSocket | `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
+| WebSocket | `/ws/chat/flagged/`, `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
 | Admin | `/admin/` | Django admin |
 | Media (DEBUG) | `/media/` | Uploaded files |
 
 ```text
-Client                          Server
-  |  GET  /api/chat/<workspace_name>/  →  load history (lazy-create chat)
-  |  WS   /ws/chat/<workspace_name>/   →  stream agent reply token-by-token
-  |  DELETE /api/chat/<workspace_name>/ →  clear chat (full reset)
+Flagged-scope (cross-workspace)          Per-workspace
+  GET  /api/chat/?flagged=true             GET  /api/chat/<name>/
+  WS   /ws/chat/flagged/                   WS   /ws/chat/<name>/
+  GET  /api/knowledge-graph/entity-types/?flagged=true
+  GET  /api/knowledge-graph/?flagged=true  GET  /api/knowledge-graph/?workspace_name=<name>
 ```
 
-**One chat per workspace** — Each workspace has at most one implicit conversation (no create/list-by-UUID). Use the workspace **name** in URLs (`PRAJNA`, etc.) or the alias `default` (see below). The workspace must already exist.
+### Starred workspaces (`is_flag=true`)
 
-**Starred workspaces (`is_flag=true`)** — Star a workspace via `PATCH /api/workspace/<name>/toggle-flag/`. Starred workspaces are included in bulk APIs (`?flagged=true`) and in `Knowledge.search_graph` during chat (current chat workspace + all starred).
+Star a workspace: `PATCH /api/workspace/<name>/toggle-flag/`.
 
-**Default alias** — `GET /api/chat/default/` and `ws://.../ws/chat/default/` resolve to the **first starred workspace** by `created_at` (oldest). `chat.ready` returns the real workspace name. The name `default` cannot be used when creating a workspace.
+| Use | API |
+|-----|-----|
+| Entity type counts per starred workspace | `GET /api/knowledge-graph/entity-types/?flagged=true` |
+| Filtered subgraph per starred workspace | `GET /api/knowledge-graph/?flagged=true` (+ optional `entity_type`, `depth`, `limit`) |
+| Chat metadata for starred workspaces | `GET /api/chat/summary/?flagged=true` |
+| Semantic search during **flagged-scope** chat | `Knowledge.search_graph` (starred workspaces only) |
+| Semantic search during **per-workspace** chat | `Knowledge.search_graph` (that workspace + all starred) |
 
-**Upload without `workspace_name`** — Targets the same first starred workspace; returns `400` if none are starred.
+Documents and KG rows always live under **real** workspace names. There is no separate global KG database.
+
+### Two chat modes (separate threads)
+
+| Mode | REST | WebSocket | Message storage |
+|------|------|-----------|-----------------|
+| **Flagged-scope** | `GET/DELETE /api/chat/?flagged=true` | `/ws/chat/flagged/` | Internal `__flagged_chat__` (not listed in workspace list) |
+| **Per-workspace** | `GET/DELETE /api/chat/<workspace_name>/` | `/ws/chat/<workspace_name>/` | That workspace’s conversation |
+
+- No conversation UUID, no `POST` to create chat — lazy-create on first GET or WebSocket connect.
+- Flagged-scope chat does **not** require any starred workspace to open; search needs at least one starred workspace for useful KG results.
+- `GET /api/chat/123/` and flagged-scope chat are **different histories**, even if `123` is starred.
+
+### Upload default
+
+If `workspace_name` is omitted on upload, the file goes to the **first starred** workspace (`created_at` ascending). Returns `400` if no workspace is starred.
+
+### Reserved names
+
+Cannot create a workspace named `flagged`. Internal name `__flagged_chat__` is used only for flagged-scope message storage.
 
 **Authentication** — None on these endpoints (add at the gateway if needed).
 
@@ -97,13 +123,13 @@ Create a workspace and its media directory.
 
 | Status | Condition |
 |--------|-----------|
-| `400` | `name` missing |
+| `400` | `name` missing or reserved (`flagged`) |
 
 ---
 
 ### `GET /api/workspace/list/`
 
-**Response `200`** — array, newest first
+**Response `200`** — array, newest first. Internal `__flagged_chat__` is omitted.
 
 ```json
 [
@@ -166,7 +192,7 @@ Flips `is_flag` boolean. No body.
 
 Allowed extensions: **`.txt`**, **`.md`**, **`.text`**.
 
-Upload triggers background preprocessing (KG extraction → Postgres → Qdrant vectors).
+Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#preprocess)).
 
 ### `POST /api/document/upload/`
 
@@ -182,6 +208,21 @@ Upload triggers background preprocessing (KG extraction → Postgres → Qdrant 
 ```json
 {
   "message": "File uploaded successfully",
+  "pipeline": {
+    "message": "Preprocess pipeline queued: prepare document → chunk KG (parallel) → embeddings → mongo repair",
+    "steps": [
+      "prepare_document",
+      "chunk_preprocess",
+      "vector_preprocess",
+      "chunk_mongo_repair"
+    ],
+    "jobs": {
+      "prepare_document": "rq-job-id-1",
+      "chunk_preprocess": "rq-job-id-2",
+      "vector_preprocess": "rq-job-id-3",
+      "chunk_mongo_repair": "rq-job-id-4"
+    }
+  },
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "file_name": "notes.md",
   "file_path": "/path/to/media/workspaces/PRAJNA/notes.md",
@@ -192,7 +233,7 @@ Upload triggers background preprocessing (KG extraction → Postgres → Qdrant 
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Missing fields or bad extension |
+| `400` | Missing file, bad extension, or no starred workspace when `workspace_name` omitted |
 | `404` | Workspace not found |
 
 ---
@@ -238,37 +279,212 @@ Upload triggers background preprocessing (KG extraction → Postgres → Qdrant 
 
 ### `POST /api/workspace/preprocess/<workspace_name>/`
 
-Re-queues KG + vector pipeline for every document in the workspace.
+Queues the **full workspace preprocess pipeline** for the named workspace (no single-document upload). One call runs **prepare legacy → chunk KG (parallel workers) → embeddings → mongo repair** — no separate manual preprocess needed to migrate old documents.
+
+**Pipeline steps (RQ orchestrator)**
+
+| Step | Job | What it does |
+|------|-----|----------------|
+| 1 (upload only) | `run_prepare_document` | Split the new file → Postgres `DocumentChunk` rows + Mongo `chunk_content` |
+| 1 (POST only) | `run_prepare_legacy_batch` | For documents in this workspace with zero chunks or `content=false`, run `prepare_document` (chunk migration) |
+| 2 | `run_chunk_preprocess_batch` | Enqueue `process_chunk` (5 min timeout) for incomplete chunks in the workspace |
+| 3 | `run_vector_preprocess_batch` | Enqueue embeddings for entities, relations, and **chunks** (PENDING/FAILED vectors) in the workspace |
+| 4 | `run_chunk_mongo_repair_batch` | Rebuild Mongo chunk text for `content=false` or missing chunk bodies in the workspace |
+
+**Order (sequential steps, parallel workers inside step 2):** prepare → chunk batch → **vectors after chunk batch** → mongo repair. Vectors no longer run in parallel with chunk KG.
+
+**Legacy documents:** Files uploaded before chunk migration may show `document_status: COMPLETED` with **no** `DocumentChunk` rows and `chunk_id=null` on KG rows. POST preprocess backfills chunks; poll preprocess-status until `overall.ready` is true.
+
+**Per chunk:** Mongo stores chunk text; KG extraction runs in parallel RQ workers (`process_chunk`). A document is marked `COMPLETED` only when **all** its chunks reach `COMPLETED`.
 
 **Response `200`**
 
 ```json
 {
-  "message": "Preprocessing queued for workspace 'PRAJNA'"
+  "message": "Preprocess pipeline queued: prepare legacy → chunk KG (parallel) → embeddings → mongo repair (workspace=PRAJNA)",
+  "pipeline": {
+    "message": "Preprocess pipeline queued: prepare legacy → chunk KG (parallel) → embeddings → mongo repair (workspace=PRAJNA)",
+    "steps": [
+      "prepare_legacy",
+      "chunk_preprocess",
+      "vector_preprocess",
+      "chunk_mongo_repair"
+    ],
+    "jobs": {
+      "prepare_legacy": "rq-job-id-1",
+      "chunk_preprocess": "rq-job-id-2",
+      "vector_preprocess": "rq-job-id-3",
+      "chunk_mongo_repair": "rq-job-id-4"
+    }
+  }
 }
 ```
+
+---
+
+### `GET /api/workspace/<workspace_name>/preprocess-status/`
+
+Read-only pipeline status for a workspace: upload queue → document processing → KG in Postgres → Qdrant embeddings.
+
+Poll after upload until `overall.ready` is `true` and `overall.phase` is `ready`.
+
+**Response `200`**
+
+```json
+{
+  "workspace": "PRAJNA",
+  "overall": {
+    "phase": "embedding",
+    "ready": false,
+    "documents_total": 2,
+    "documents_failed": 0
+  },
+  "documents": {
+    "by_status": {
+      "PENDING": 0,
+      "QUEUED": 0,
+      "INPROGRESS": 0,
+      "COMPLETED": 2,
+      "FAILED": 0,
+      "INVALID": 0,
+      "TERMINATED": 0
+    }
+  },
+  "vectors": {
+    "entities": { "total": 10, "pending": 2, "completed": 8, "failed": 0 },
+    "relations": { "total": 5, "pending": 1, "completed": 4, "failed": 0 },
+    "chunks": { "total": 3, "pending": 0, "completed": 3, "failed": 0 }
+  },
+  "files": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "file_name": "notes.md",
+      "document_status": "COMPLETED",
+      "content": true,
+      "legacy": false,
+      "phase": "embedding",
+      "uploaded_at": "2026-05-15T12:00:00.123456Z",
+      "chunks": {
+        "total": 3,
+        "pending": 0,
+        "queued": 0,
+        "in_progress": 0,
+        "completed": 3,
+        "failed": 0
+      },
+      "entities": { "total": 5, "pending": 1, "completed": 4, "failed": 0 },
+      "relations": { "total": 2, "pending": 0, "completed": 2, "failed": 0 },
+      "chunk_vectors": { "total": 3, "pending": 1, "completed": 2, "failed": 0 },
+      "embedding_progress": 0.8571
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `overall.phase` | Workspace-wide stage: `idle`, `needs_prepare`, `queued`, `processing`, `kg_ready`, `embedding`, `ready`, `failed` |
+| `overall.ready` | All files are `ready` and none failed |
+| `document_status` | Raw `Document.status` from Postgres (COMPLETED when all chunks are COMPLETED) |
+| `phase` (per file) | Derived from chunk KG status + vector progress (see table below) |
+| `legacy` | `true` when the document has `content=true` but no `DocumentChunk` rows yet (pre-migration KG only) |
+| `chunks` | Per-file chunk processing counts by `DocumentChunk.status` |
+| `chunk_vectors` | Per-file Qdrant embedding progress for chunk points |
+| `embedding_progress` | Share of entity + relation + chunk vectors with `COMPLETED` (0–1) |
+| `vectors` | Workspace totals for entity, relation, and chunk vector jobs |
+
+**Per-file `phase` values**
+
+| `phase` | When |
+|---------|------|
+| `idle` | No documents (workspace-level only) |
+| `needs_prepare` | No chunks yet (`content=false`) or completed doc with no chunks/KG (run POST preprocess to migrate) |
+| `queued` | Document `PENDING` or `QUEUED` (awaiting chunk workers) |
+| `processing` | Chunks still running KG (`process_chunk`) or document `INPROGRESS` during prepare |
+| `kg_ready` | All chunks `COMPLETED` but no entity rows yet |
+| `embedding` | Chunk KG done (or legacy doc with entity rows only) and some vectors not `COMPLETED` |
+| `ready` | All vectors `COMPLETED` (legacy: entity/relation vectors only when there are no chunks) |
+| `failed` | Document `FAILED`, `INVALID`, or `TERMINATED`, or chunk failures |
+
+**Important:** `document_status: COMPLETED` with zero chunks usually means a **legacy** document (KG before chunk migration). Use `phase` `needs_prepare` / `legacy: true` and POST preprocess to backfill chunks. After migration, `COMPLETED` means all chunks finished KG ingest. Embeddings run in pipeline step 3 (`vector_preprocess`); use `phase` or `embedding_progress` for Qdrant readiness.
+
+| Status | Condition |
+|--------|-----------|
+| `404` | Workspace not found |
 
 ---
 
 ## Knowledge graph
 
 Source of truth: **Postgres** (`KnowledgeEntity`, `KnowledgeRelation`).  
-Semantic search: **Qdrant** (via agent tool `Knowledge.search_graph`).
+Semantic search: **Qdrant** (via agent tool `Knowledge.search_graph` during chat).
 
-### `GET /api/knowledge-graph/`
+Entities and relations are always stored per **document** under a **named workspace**. Flagged-scope chat does not create its own nodes or edges; use `?flagged=true` to read the union of all starred workspaces’ graphs.
 
-Provide **exactly one** query mode.
+### `GET /api/knowledge-graph/entity-types/`
 
-| Query | Result |
-|-------|--------|
-| `?workspace_name=PRAJNA` | Single graph object |
-| `?flagged=true` | `{ "graphs": [ ... ] }` for all `is_flag` workspaces |
+Provide **exactly one** scope: `workspace_name` or `flagged=true`.
+
+Returns distinct `entity_type` values with entity counts, sorted by count descending.
 
 **Single workspace `200`**
 
 ```json
 {
   "workspace": "PRAJNA",
+  "entity_types": [
+    { "type": "PER", "count": 42 },
+    { "type": "ORG", "count": 10 }
+  ]
+}
+```
+
+**Flagged `200`**
+
+```json
+{
+  "workspaces": [
+    { "workspace": "PRAJNA", "entity_types": [{ "type": "PER", "count": 42 }] }
+  ]
+}
+```
+
+| Status | Condition |
+|--------|-----------|
+| `400` | Both or neither scope param; invalid filters on graph endpoint only |
+| `404` | Unknown `workspace_name` |
+
+---
+
+### `GET /api/knowledge-graph/`
+
+Provide **exactly one** scope: `workspace_name` or `flagged=true`.
+
+Optional filters (same for both modes; applied **per workspace** in flagged responses):
+
+| Query | Default | Max | Description |
+|-------|---------|-----|-------------|
+| `entity_type` | — | — | Comma-separated, e.g. `PER,ORG` (case-sensitive) |
+| `depth` | `1` | `5` | BFS hops from seed entities |
+| `limit` | `500` | `5000` | Max nodes per workspace |
+
+**Traversal**
+
+1. **Seeds:** entities matching `entity_type` when set; otherwise all entities in the workspace.
+2. **BFS:** expand via relations up to `depth` hops; stop at `limit` nodes.
+3. **Edges:** relations whose `source_id` and `target_id` are both in the node set (edges between seeds appear even when `depth=0`).
+
+**Single workspace `200`**
+
+```bash
+curl "http://localhost:8000/api/knowledge-graph/?workspace_name=PRAJNA&entity_type=PER,ORG&depth=1&limit=500"
+```
+
+```json
+{
+  "workspace": "PRAJNA",
+  "filters": { "entity_types": ["PER", "ORG"], "depth": 1, "limit": 500 },
+  "truncated": false,
   "nodes": [
     {
       "id": "…",
@@ -282,29 +498,60 @@ Provide **exactly one** query mode.
     }
   ],
   "edges": [
-    { "source": "Alice", "target": "Acme Corp" }
+    {
+      "id": "…",
+      "source": "Alice",
+      "target": "Acme Corp",
+      "source_id": "…",
+      "target_id": "…",
+      "type_description": "works at"
+    }
   ]
 }
 ```
 
-| Node field | Notes |
-|------------|-------|
-| `edges[].source` / `target` | Entity **names** only (not UUIDs) |
-| `vector` | Entity vector index status |
+**Flagged `200`**
 
-**Flagged bulk `200`**
+```bash
+curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&limit=100"
+```
 
 ```json
 {
   "graphs": [
-    { "workspace": "PRAJNA", "nodes": [], "edges": [] }
+    {
+      "workspace": "main",
+      "filters": { "entity_types": ["PER"], "depth": 1, "limit": 100 },
+      "truncated": false,
+      "nodes": [...],
+      "edges": [...]
+    }
   ]
 }
 ```
 
+| Field | Notes |
+|-------|-------|
+| `filters.entity_types` | `null` when no `entity_type` query param |
+| `truncated` | `true` if seeds or BFS hit `limit` |
+| `edges[]` | Includes `id`, `source_id`, `target_id`, `type_description` |
+
+**Client notes**
+
+- No merged global `nodes` array; use one panel per `graphs[i]`.
+- Empty `graphs: []` — no starred workspaces (internal `__flagged_chat__` excluded).
+- Request higher `limit` / `depth` explicitly for larger subgraphs (defaults cap at 500 nodes).
+
+**Relation to chat**
+
+| API | Data |
+|-----|------|
+| `GET /api/knowledge-graph/?flagged=true` | Filtered Postgres subgraph per starred workspace |
+| Flagged chat `Knowledge.search_graph` | Top semantic hits (Qdrant → Postgres → markdown) |
+
 | Status | Condition |
 |--------|-----------|
-| `400` | Both or neither query param |
+| `400` | Both or neither scope; invalid `depth`/`limit`; empty `entity_type` after parse |
 | `404` | Unknown `workspace_name` |
 
 ---
@@ -317,8 +564,8 @@ REST returns **persisted** user-visible messages (root branch only). **Live stre
 **Agent behavior (WebSocket):**
 
 - Fixed system prompt: answer only from `Knowledge.search_graph` tool output and prior search tool messages in the thread.
-- **Single tool:** `Knowledge.search_graph` only (no MCP tools in chat).
-- Citations in replies: **`[source: file_name]`** (exact `file_name` from tool output).
+- **Knowledge tools:** `search_graph`, `get_entity_record`, `get_relation_record`, `get_chunk_record`, `get_document_record`, `search_entity_by_name` (no MCP tools in chat).
+- Citations in replies: **`[entity](uuid)`**, **`[relation](uuid)`**, **`[chunk](uuid)`**, or **`[doc](uuid)`** only — never `[source: file_name]`.
 - No hallucination: if search has no relevant records, the agent must say so.
 
 | Concern | REST | WebSocket |
@@ -327,9 +574,61 @@ REST returns **persisted** user-visible messages (root branch only). **Live stre
 | Live reply | No | Token-by-token stream |
 | Tools | Not in GET response | `tool_calls` / `tool_completed` events |
 
+### `GET /api/chat/?flagged=true`
+
+Flagged-scope chat only. Query parameter **required**.
+
+| Query | Required |
+|-------|----------|
+| `flagged=true` | yes |
+
+`GET /api/chat/` without `flagged=true` → `400`.
+
+Lazy-creates on first access. Always `200` even when `starred_workspaces` is empty.
+
+**Response `200`**
+
+```json
+{
+  "flagged": true,
+  "starred_workspaces": ["main", "research"],
+  "messages": [
+    {
+      "id": "…",
+      "role": "system",
+      "content": "You are a workspace knowledge assistant…",
+      "sequence": 0,
+      "created_at": "2026-05-15T12:00:00Z"
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `flagged` | Always `true` for this endpoint |
+| `starred_workspaces` | Names of workspaces with `is_flag=true` (KG search scope) |
+| `messages` | Root-branch history for flagged-scope chat only |
+
+### `DELETE /api/chat/?flagged=true`
+
+Full reset of **flagged-scope** chat only (does not clear per-workspace chats).
+
+**Response `200`**
+
+```json
+{
+  "message": "Flagged-scope chat cleared",
+  "flagged": true,
+  "starred_workspaces": ["main", "research"]
+}
+```
+
+---
+
 ### `GET /api/chat/<workspace_name>/`
 
-Lazy-creates the workspace chat on first access. Use a real workspace name or `default` (first starred). Unknown workspace / no starred when using `default` → `404`.
+Lazy-creates that workspace's chat on first access. Unknown or reserved name → `404`.
 
 **Response `200`**
 
@@ -381,7 +680,7 @@ Full reset: clears messages, compression history, and internal branches; recreat
 
 | Status | Condition |
 |--------|-----------|
-| `404` | Unknown workspace, or `default` with no starred workspace |
+| `404` | Unknown or reserved workspace name |
 
 ---
 
@@ -419,17 +718,29 @@ Same query rules as knowledge graph: `workspace_name` **or** `flagged=true`.
 
 ## Chat (WebSocket)
 
-**URL:** `ws://<host>/ws/chat/<workspace_name>/`
-
 **Requires:** ASGI server (`uvicorn config.asgi:application`) and Redis (Channels layer).
 
-### Typical client flow
+| URL | Chat mode |
+|-----|-----------|
+| `ws://<host>/ws/chat/flagged/` | Flagged-scope (cross-workspace search) |
+| `ws://<host>/ws/chat/<workspace_name>/` | Single workspace |
 
-1. `GET /api/chat/global/` → load history (creates chat if needed)
-2. Connect WebSocket `ws://<host>/ws/chat/global/` → receive `chat.ready`
-3. Send `chat.send` → receive streamed events → `chat.done`
-4. `GET /api/chat/global/` again → persisted messages updated
-5. Optional: `DELETE /api/chat/global/` → clear chat
+Reserved path segment: `flagged` is not a user workspace name.
+
+### Typical client flow (flagged-scope)
+
+1. Star workspaces: `PATCH /api/workspace/main/toggle-flag/`
+2. `GET /api/knowledge-graph/entity-types/?flagged=true` and `GET /api/knowledge-graph/?flagged=true&entity_type=...` — optional KG UI data
+3. `GET /api/chat/?flagged=true` — load flagged chat history
+4. Connect `ws://<host>/ws/chat/flagged/` → `chat.ready`
+5. Send `chat.send` → stream → `chat.done`
+6. `GET /api/chat/?flagged=true` again — refresh messages
+
+### Typical client flow (per-workspace)
+
+1. `GET /api/chat/PRAJNA/` → load history
+2. Connect `ws://<host>/ws/chat/PRAJNA/` → `chat.ready`
+3. Same send/stream/refresh pattern
 
 ---
 
@@ -631,18 +942,32 @@ Tools and control events are **single frames** (full payload per event):
 
 #### `chat.ready` (on connect)
 
+**Per-workspace** (`/ws/chat/PRAJNA/`):
+
 ```json
 {
   "type": "chat.ready",
-  "workspace": "main"
+  "workspace": "PRAJNA"
+}
+```
+
+**Flagged-scope** (`/ws/chat/flagged/`):
+
+```json
+{
+  "type": "chat.ready",
+  "flagged": true,
+  "starred_workspaces": ["main", "research"]
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
-| `workspace` | Resolved workspace for this chat (real name, not the alias `default`) |
+| `workspace` | Per-workspace mode only |
+| `flagged` | Flagged-scope mode only |
+| `starred_workspaces` | Workspaces included in `Knowledge.search_graph` for this connection |
 
-Close codes: `4000` invalid URL; `4004` workspace not found or no starred workspace for `default`.
+Close codes: `4000` invalid URL; `4004` unknown workspace (per-workspace mode).
 
 #### `chat.done` (after each `chat.send` turn)
 
@@ -650,7 +975,10 @@ Close codes: `4000` invalid URL; `4004` workspace not found or no starred worksp
 { "type": "chat.done" }
 ```
 
-Persisted messages are then available via REST `GET /api/chat/<workspace_name>/`.
+Persisted messages:
+
+- Flagged-scope → `GET /api/chat/?flagged=true`
+- Per-workspace → `GET /api/chat/<workspace_name>/`
 
 ---
 
@@ -689,37 +1017,153 @@ Registered when `nodepoint/registry/tools/Knowledge.py` has `active: true` in it
 
 ### `Knowledge.search_graph`
 
-Semantic search in **Qdrant**, then **resolves each hit ID** to full Postgres entity/relation rows. Returns a **markdown search document** (string), not raw JSON hits.
+**Hybrid search:** Qdrant semantic retrieval (`candidate_limit`, default **4000**), then **BM25 + fuzzy** rerank on resolved text, then weighted fusion. Returns structured **markdown** with record ids, `chunk_id`, content, and score breakdown.
 
-Workspace scope is **automatic** during chat:
+Also available: `Knowledge.get_entity_record`, `Knowledge.get_relation_record`, `Knowledge.get_chunk_record`, `Knowledge.get_document_record`, `Knowledge.search_entity_by_name`.
 
-| Scope | Included |
-|-------|----------|
-| Chat workspace | Current conversation’s workspace |
-| Flagged | Every workspace with `is_flag=true` |
+Tool output includes a **cite** line per result, e.g. `[entity](uuid)` and parent `[doc](document-uuid)`. The model must copy these — not `[source: file_name]`.
 
-The model **must not** pass `workspace`. Prior search hit IDs from the same chat session are merged into later searches.
+Workspace scope is **automatic** (model must not pass `workspace`):
+
+| Chat connection | Workspaces searched in Qdrant |
+|-----------------|-------------------------------|
+| `/ws/chat/flagged/` | All starred (`is_flag=true`) only |
+| `/ws/chat/<name>/` | That workspace **plus** all starred |
+
+If flagged-scope chat runs and **no** workspace is starred, the tool returns plain text:
+
+```text
+No workspace is flagged (starred). Star at least one workspace (is_flag=true) to include it in knowledge search.
+```
+
+Prior search hit IDs from the same chat session are merged into later searches in that session.
 
 **Arguments**
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `query` | string | required | Natural-language query |
-| `limit` | int | `10` | Max Qdrant hits |
-| `record_type` | string \| null | `null` | Filter: `entity` or `relation` |
+| `limit` | int | `10` | Final results after rerank |
+| `record_type` | string \| null | `null` | Filter: `entity`, `relation`, or `chunk` |
+| `candidate_limit` | int | `4000` | Qdrant pool size before BM25/fuzzy |
+| `semantic_weight` | float | `0.6` | Weight for cosine score (normalized) |
+| `lexical_weight` | float | `0.4` | Weight for BM25+fuzzy blend |
+| `bm25_weight` | float | `0.5` | Share of lexical from BM25 vs fuzzy |
 
-**Return:** markdown string with `## [source: file_name]` sections for citations.
+**Return:** markdown with `## Result N — kind [kind](uuid)`, ids, chunk_id, content, and scores.
 
-```markdown
-# Knowledge search: "who is Alice"
+### `Knowledge.get_entity_record` / `get_relation_record` / `get_chunk_record` / `get_document_record`
 
-## [source: notes.md]
-**Entity** (score 0.8700)
-- name: Alice
-- type: PER
-- attributes: {'role': 'eng'}
-- workspace: PRAJNA
+| Name | Type | Description |
+|------|------|-------------|
+| `entity_id` / `relation_id` / `chunk_id` / `document_id` | string | Postgres UUID |
+
+Returns full record markdown including content. Documents return assembled text (Mongo chunks or file). Cite as `[doc](document_id)`.
+
+### `Knowledge.search_entity_by_name`
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `name` | string | required | Entity name (exact or substring) |
+| `exact` | bool | `false` | `iexact` vs `icontains` |
+| `limit` | int | `20` | Max entities |
+
+Returns matches with outgoing/incoming relations (relation ids and peer entity ids).
+
+---
+
+### `GET /api/knowledge/entities/search/`
+
+Fuzzy entity **name** search (rapidfuzz `token_set_ratio`) plus a subgraph around matches using `depth` and `limit`.
+
+**Scope:** exactly one of `workspace_name` or `flagged=true` (same rules as knowledge-graph).
+
+| Query | Required | Default | Max | Description |
+|-------|----------|---------|-----|-------------|
+| `q` | yes | — | — | Name query (typos tolerated via fuzzy) |
+| `threshold` | no | `0.6` | `1.0` | Min match score `0`–`1` |
+| `match_limit` | no | `20` | `100` | Max ranked entity matches (seeds) |
+| `depth` | no | `1` | `5` | BFS hops from seeds into the graph |
+| `limit` | no | `500` | `5000` | Max nodes in `graph` |
+| `entity_type` | no | — | — | Comma-separated filter on candidates, e.g. `PER,ORG` |
+
+**Single workspace `200`**
+
+```bash
+curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_name=PRAJNA&threshold=0.6&depth=1&limit=100"
 ```
+
+```json
+{
+  "query": "Alcie",
+  "workspace": "PRAJNA",
+  "filters": {
+    "entity_types": null,
+    "depth": 1,
+    "limit": 100,
+    "threshold": 0.6,
+    "match_limit": 20
+  },
+  "matches": [
+    {
+      "id": "…",
+      "name": "Alice",
+      "entity_type": "PER",
+      "score": 0.92,
+      "workspace": "PRAJNA",
+      "document_id": "…",
+      "file_name": "notes.md",
+      "vector": "COMPLETED",
+      "created_at": "…"
+    }
+  ],
+  "graph": {
+    "workspace": "PRAJNA",
+    "truncated": false,
+    "nodes": […],
+    "edges": […]
+  }
+}
+```
+
+- **`matches`:** entities with `score >= threshold` (empty if none).
+- **`graph`:** BFS from match entity ids; edges are the induced subgraph on returned nodes.
+
+**Flagged `200`**
+
+```json
+{
+  "query": "Alice",
+  "filters": { "depth": 1, "limit": 500, "threshold": 0.6, "match_limit": 20, "entity_types": null },
+  "workspaces": [
+    {
+      "workspace": "main",
+      "matches": […],
+      "graph": { "workspace": "main", "truncated": false, "nodes": […], "edges": […] }
+    }
+  ]
+}
+```
+
+| Status | Condition |
+|--------|-----------|
+| `400` | Missing `q`; invalid scope; invalid `threshold` / `depth` / `limit` / `match_limit` |
+| `404` | Unknown `workspace_name` |
+
+Chat tool `Knowledge.search_entity_by_name` uses the same fuzzy matcher when `exact=false`.
+
+---
+
+## Knowledge records (REST)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/knowledge/entity/<uuid>/` | Entity JSON (`id`, `chunk_id`, `content`, …) |
+| GET | `/api/knowledge/relation/<uuid>/` | Relation JSON |
+| GET | `/api/knowledge/chunk/<uuid>/` | Chunk JSON (full Mongo text in `content`) |
+| GET | `/api/knowledge/document/<uuid>/` | Document JSON (`kind`: `doc`, full `content` text) |
+
+Optional query: `?workspace_name=` — returns `404` if the record is not in that workspace.
 
 ---
 
@@ -728,6 +1172,9 @@ The model **must not** pass `workspace`. Prior search hit IDs from the same chat
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CHAT_COMPRESS_TOKEN_THRESHOLD` | `64000` | Trigger internal branch compression |
+| `CHAT_MAX_CONCURRENT_SEARCHES` | `8` | Max parallel Knowledge tool runs per web worker |
+| `WEB_WORKERS` | `4` | Uvicorn worker processes for ASGI |
+| `DB_CONN_MAX_AGE` | `60` | Postgres connection reuse (seconds) |
 | `CHAT_DEFAULT_SYSTEM` | (see settings) | New conversation system prompt |
 | `BASE_URL`, `API_KEY` | — | LLM provider for `Agent` |
 | `POSTGRES_*`, `MONGO_*`, Redis, Qdrant | — | Data stores (`settings.toml`, `.env`) |
@@ -748,8 +1195,17 @@ The model **must not** pass `workspace`. Prior search hit IDs from the same chat
 | POST | `/api/document/upload/` |
 | GET | `/api/document/<workspace_name>/` |
 | DELETE | `/api/document/delete/<workspace_name>/<file_name>/` |
+| GET | `/api/workspace/<workspace_name>/preprocess-status/` |
 | POST | `/api/workspace/preprocess/<workspace_name>/` |
 | GET | `/api/knowledge-graph/` |
+| GET | `/api/knowledge-graph/entity-types/` |
+| GET | `/api/knowledge/entities/search/` |
+| GET | `/api/knowledge/entity/<uuid>/` |
+| GET | `/api/knowledge/relation/<uuid>/` |
+| GET | `/api/knowledge/chunk/<uuid>/` |
+| GET | `/api/knowledge/document/<uuid>/` |
+| GET | `/api/chat/?flagged=true` |
+| DELETE | `/api/chat/?flagged=true` |
 | GET | `/api/chat/<workspace_name>/` |
 | DELETE | `/api/chat/<workspace_name>/` |
 | GET | `/api/chat/summary/` |
@@ -758,6 +1214,6 @@ The model **must not** pass `workspace`. Prior search hit IDs from the same chat
 
 | Direction | Path / event |
 |-----------|----------------|
-| Connect | `ws://<host>/ws/chat/<workspace_name>/` |
+| Connect | `ws://<host>/ws/chat/flagged/` or `ws://<host>/ws/chat/<workspace_name>/` |
 | Client | `ping`, `chat.send`, `chat.cancel` |
 | Server | `chat.ready`, token stream, sections, tools, `chat.compressed`, `chat.done`, `error`, `pong` |

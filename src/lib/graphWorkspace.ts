@@ -6,6 +6,11 @@ export function getGraphNodeWorkspace(node: GraphNode): string | null {
   return typeof ws === "string" && ws.length > 0 ? ws : null;
 }
 
+/** Matches merged flagged-graph node ids from workspaceStorage. */
+export function scopedGraphNodeId(workspace: string, nodeId: string): string {
+  return `${encodeURIComponent(workspace)}:${nodeId}`;
+}
+
 export function collectGraphWorkspaceNames(nodes: GraphNode[]): string[] {
   const names = new Set<string>();
   for (const node of nodes) {

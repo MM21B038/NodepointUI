@@ -120,23 +120,203 @@ function stripAlertFromChildren(children: React.ReactNode, kind: AlertKind): Rea
   return items.slice(1);
 }
 
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  const label = language || "text";
-
+function CopyableBlockChrome({
+  label,
+  copyText,
+  copyLabel,
+  children,
+  headerClassName,
+  copyButtonClassName,
+}: {
+  label: string;
+  copyText: string;
+  copyLabel: string;
+  children: React.ReactNode;
+  headerClassName?: string;
+  copyButtonClassName?: string;
+}) {
   return (
-    <div className="group relative my-4 overflow-hidden rounded-lg border border-border bg-zinc-950 text-zinc-50 dark:bg-zinc-900/90">
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-700/80 bg-zinc-900/80 px-3 py-1.5">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">{label}</span>
+    <div className="group relative my-4 overflow-hidden rounded-lg border border-border shadow-sm">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-border/80 bg-muted/50 px-3 py-1.5",
+          headerClassName
+        )}
+      >
+        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          {label}
+        </span>
         <CopyButton
-          text={code}
-          label="Copy code"
-          className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          text={copyText}
+          label={copyLabel}
+          className={cn("relative z-10 h-7 w-7", copyButtonClassName)}
         />
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed">
+      {children}
+    </div>
+  );
+}
+
+function normalizeCellText(node: React.ReactNode): string {
+  return getTextContent(node).replace(/\s+/g, " ").trim();
+}
+
+/** Works with native table nodes and react-markdown custom row/cell components. */
+function tableNodeToTsv(node: React.ReactNode): string {
+  const rows: string[][] = [];
+
+  const isRowLike = (el: React.ReactElement): boolean => {
+    const tag = typeof el.type === "string" ? el.type.toLowerCase() : "";
+    if (tag === "tr") return true;
+    const kids = React.Children.toArray(
+      (el.props as { children?: React.ReactNode }).children
+    ).filter(isValidElement) as React.ReactElement[];
+    if (kids.length === 0) return false;
+    return kids.every((k) => {
+      const t = typeof k.type === "string" ? k.type.toLowerCase() : "";
+      return t === "th" || t === "td" || typeof k.type === "function";
+    });
+  };
+
+  const isCellLike = (el: React.ReactElement): boolean => {
+    const tag = typeof el.type === "string" ? el.type.toLowerCase() : "";
+    if (tag === "th" || tag === "td") return true;
+    if (isRowLike(el)) return false;
+    return typeof el.type === "function";
+  };
+
+  const cellsFromRow = (rowEl: React.ReactElement): string[] => {
+    const cells: string[] = [];
+    const visit = (n: React.ReactNode) => {
+      if (n == null || typeof n === "boolean") return;
+      if (Array.isArray(n)) {
+        n.forEach(visit);
+        return;
+      }
+      if (!isValidElement(n)) return;
+      if (isCellLike(n) && !isRowLike(n)) {
+        cells.push(normalizeCellText(n));
+        return;
+      }
+      visit((n.props as { children?: React.ReactNode }).children);
+    };
+    visit((rowEl.props as { children?: React.ReactNode }).children);
+    return cells;
+  };
+
+  const walk = (n: React.ReactNode) => {
+    if (n == null || typeof n === "boolean") return;
+    if (Array.isArray(n)) {
+      n.forEach(walk);
+      return;
+    }
+    if (!isValidElement(n)) return;
+    if (isRowLike(n)) {
+      const cells = cellsFromRow(n);
+      if (cells.length > 0) rows.push(cells);
+      return;
+    }
+    walk((n.props as { children?: React.ReactNode }).children);
+  };
+
+  walk(node);
+
+  const tsv = rows.map((row) => row.join("\t")).join("\n");
+  return tsv.trim() ? tsv : normalizeCellText(node);
+}
+
+function extractFencedCode(
+  children: React.ReactNode
+): { language: string; code: string } | null {
+  let match: React.ReactElement | null = null;
+
+  const findCode = (n: React.ReactNode) => {
+    if (match) return;
+    if (!isValidElement(n)) return;
+    const props = n.props as { className?: string; children?: React.ReactNode };
+    const className = props.className ?? "";
+    const isNativeCode =
+      typeof n.type === "string" && n.type.toLowerCase() === "code";
+    if (className.includes("language-") || isNativeCode) {
+      match = n;
+      return;
+    }
+    React.Children.forEach(props.children, findCode);
+  };
+
+  findCode(children);
+
+  if (!match) {
+    try {
+      const only = React.Children.only(children);
+      if (isValidElement(only)) match = only;
+    } catch {
+      /* not a single child */
+    }
+  }
+
+  if (!match) return null;
+
+  const props = match.props as { className?: string; children?: React.ReactNode };
+  const code = getTextContent(props.children);
+  if (!code) return null;
+
+  const langMatch = /language-([\w+#.-]+)/i.exec(props.className ?? "");
+  return { language: langMatch?.[1] ?? "", code };
+}
+
+function TableBlock({ children }: { children: React.ReactNode }) {
+  const tableText = useMemo(() => tableNodeToTsv(children), [children]);
+
+  return (
+    <CopyableBlockChrome label="table" copyText={tableText} copyLabel="Copy table">
+      <div className="overflow-x-auto [&_table]:w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-sm [&_thead]:bg-muted/60 [&_tr]:border-b [&_tr]:border-border/60 [&_tr:last-child]:border-0 [&_th]:border-b [&_th]:border-border [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-sm [&_th]:font-semibold [&_td]:border-b [&_td]:border-border/60 [&_td]:px-4 [&_td]:py-2.5 [&_td]:align-top [&_td]:text-sm">
+        <table>{children}</table>
+      </div>
+    </CopyableBlockChrome>
+  );
+}
+
+function InlineCode({ children, className, ...props }: React.ComponentPropsWithoutRef<"code">) {
+  const text = getTextContent(children);
+
+  return (
+    <span className="group/inline-code relative inline-flex max-w-full align-baseline">
+      <code
+        className={cn(
+          "rounded-md border border-border/60 bg-muted/90 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </code>
+      {text.trim() ? (
+        <CopyButton
+          text={text}
+          label="Copy code"
+          className="pointer-events-none absolute -right-1 -top-3 z-10 h-6 w-6 opacity-0 shadow-sm transition-opacity group-hover/inline-code:pointer-events-auto group-hover/inline-code:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+        />
+      ) : null}
+    </span>
+  );
+}
+
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const label = language || "code";
+
+  return (
+    <CopyableBlockChrome
+      label={label}
+      copyText={code}
+      copyLabel="Copy code"
+      headerClassName="border-zinc-700/80 bg-zinc-900/80"
+      copyButtonClassName="text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+    >
+      <pre className="overflow-x-auto bg-zinc-950 p-4 font-mono text-[13px] leading-relaxed text-zinc-50 dark:bg-zinc-900/90">
         <code className={language ? `language-${language}` : undefined}>{code}</code>
       </pre>
-    </div>
+    </CopyableBlockChrome>
   );
 }
 
@@ -220,27 +400,23 @@ const markdownComponents: Components = {
       );
     }
     return (
-      <code
-        className="rounded-md border border-border/60 bg-muted/90 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
-        {...props}
-      >
+      <InlineCode className={className} {...props}>
         {children}
-      </code>
+      </InlineCode>
     );
   },
   pre: ({ children }) => {
-    const child = React.Children.only(children);
-    if (isValidElement(child) && child.type === "code") {
-      const className = (child.props as { className?: string }).className ?? "";
-      const langMatch = /language-([\w+#.-]+)/i.exec(className);
-      const language = langMatch?.[1] ?? "";
-      const code = getTextContent((child.props as { children?: React.ReactNode }).children);
-      return <CodeBlock language={language} code={code} />;
+    const fenced = extractFencedCode(children);
+    if (fenced) {
+      return <CodeBlock language={fenced.language} code={fenced.code} />;
     }
+    const code = getTextContent(children);
     return (
-      <pre className="my-4 overflow-x-auto rounded-lg border border-border bg-muted/80 p-4 font-mono text-[13px] leading-relaxed">
-        {children}
-      </pre>
+      <CopyableBlockChrome label="code" copyText={code} copyLabel="Copy code">
+        <pre className="overflow-x-auto bg-muted/80 p-4 font-mono text-[13px] leading-relaxed">
+          {children}
+        </pre>
+      </CopyableBlockChrome>
     );
   },
   blockquote: ({ children }) => {
@@ -304,20 +480,7 @@ const markdownComponents: Components = {
       )}
     </figure>
   ),
-  table: ({ children }) => (
-    <div className="my-4 overflow-x-auto rounded-lg border border-border shadow-sm">
-      <table className="w-full border-collapse text-left text-sm">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
-  tbody: ({ children }) => <tbody>{children}</tbody>,
-  tr: ({ children }) => <tr className="border-b border-border/60 last:border-0">{children}</tr>,
-  th: ({ children }) => (
-    <th className="border-b border-border px-4 py-3 text-left text-sm font-semibold">{children}</th>
-  ),
-  td: ({ children }) => (
-    <td className="border-b border-border/60 px-4 py-2.5 align-top text-sm">{children}</td>
-  ),
+  table: ({ children }) => <TableBlock>{children}</TableBlock>,
   input: ({ type, checked, disabled }) => {
     if (type === "checkbox") {
       return (
