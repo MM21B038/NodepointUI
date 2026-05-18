@@ -379,7 +379,8 @@ export interface EntitySearchMatch {
 }
 
 export const KB_DEFAULT_DEPTH = 1;
-export const KB_DEFAULT_LIMIT = 100;
+/** Safe default cap for KG subgraph loads (avoids loading full graphs). */
+export const KB_DEFAULT_LIMIT = 200;
 export const KB_MAX_LIMIT = 500;
 export const KB_INITIAL_TYPE_COUNT = 3;
 export const KB_DEFAULT_SEARCH_THRESHOLD = 0.6;
@@ -590,7 +591,7 @@ export async function getKnowledgeGraph(
   }
   return getFilteredKnowledgeGraph(
     { workspaceName },
-    { depth: KB_DEFAULT_DEPTH, limit: KB_MAX_LIMIT }
+    { depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT }
   );
 }
 

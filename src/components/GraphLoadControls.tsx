@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import type { EntityTypeEntry } from "@/database/workspaceStorage";
-import { KB_MAX_LIMIT } from "@/database/workspaceStorage";
+import { KB_DEFAULT_LIMIT, KB_MAX_LIMIT } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 import { colorScale } from "./InteractiveGraphVisualization";
 
@@ -125,7 +125,7 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="graph-load-limit" className="text-xs text-muted-foreground">
-              Node limit (max {KB_MAX_LIMIT})
+              Node limit (default {KB_DEFAULT_LIMIT}, max {KB_MAX_LIMIT})
             </Label>
             <Input
               id="graph-load-limit"

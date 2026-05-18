@@ -222,7 +222,7 @@ const KnowledgeBase = () => {
     [applyGraphResponse]
   );
 
-  const loadEntityTypesAndGraph = useCallback(
+  const loadEntityTypeCatalog = useCallback(
     async (scope: ChatScope, workspaceName: string | null) => {
       setLoading(true);
       setError(null);
@@ -232,6 +232,7 @@ const KnowledgeBase = () => {
       setIsSearchMode(false);
       setSearchMatches([]);
       setNodeSearchQuery("");
+      setTruncated(false);
 
       try {
         const { entityTypes } =
@@ -242,16 +243,17 @@ const KnowledgeBase = () => {
         setEntityTypeCatalog(entityTypes);
         const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
         setApiSelectedEntityTypes(initialTypes);
-
         const loadParams = {
           depth: KB_DEFAULT_DEPTH,
           limit: KB_DEFAULT_LIMIT,
         };
         setGraphLoadParams(loadParams);
 
-        await loadBrowseGraph(scope, workspaceName, initialTypes, loadParams);
+        if (initialTypes.size > 0) {
+          await loadBrowseGraph(scope, workspaceName, initialTypes, loadParams);
+        }
       } catch (err: unknown) {
-        console.error("KnowledgeBase: loadEntityTypesAndGraph error:", err);
+        console.error("KnowledgeBase: loadEntityTypeCatalog error:", err);
         setError(
           scope === "global"
             ? "Failed to load entity types for starred workspaces."
@@ -377,11 +379,11 @@ const KnowledgeBase = () => {
         clearGraphState();
         return;
       }
-      void loadEntityTypesAndGraph("workspace", currentWorkspace);
+      void loadEntityTypeCatalog("workspace", currentWorkspace);
       return;
     }
-    void loadEntityTypesAndGraph("global", null);
-  }, [kbScope, currentWorkspace, refreshCounter, loadEntityTypesAndGraph, clearGraphState]);
+    void loadEntityTypeCatalog("global", null);
+  }, [kbScope, currentWorkspace, refreshCounter, loadEntityTypeCatalog, clearGraphState]);
 
   const graphReady =
     (kbScope === "global" || !!currentWorkspace?.trim()) && !loading && !error;
