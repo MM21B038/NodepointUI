@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 import type { ChatTurn } from "@/lib/chatTypes";
 import { createEmptyAssistantTurn } from "@/lib/chatStreamReducer";
 import { AssistantActivityView } from "@/components/chat/AssistantActivityView";
+import { CitationTag } from "@/components/chat/CitationTag";
+import { CopyButton } from "@/components/chat/CopyButton";
+import { getAssistantResponseText } from "@/lib/chatCopyText";
 import { createBlockId } from "@/lib/chatTypes";
 import { toast } from "sonner";
 
@@ -341,11 +344,15 @@ const Stream: React.FC = () => {
             </div>
           )}
 
-          {turns.map((turn) => (
+          {turns.map((turn) => {
+            const userText = turn.content?.trim() ?? "";
+            const assistantText = getAssistantResponseText(turn.blocks);
+
+            return (
             <div
               key={turn.id}
               className={cn(
-                "flex gap-3 group",
+                "flex gap-2 group",
                 turn.role === "user" ? "justify-end" : "justify-start"
               )}
             >
@@ -359,19 +366,36 @@ const Stream: React.FC = () => {
 
               <div
                 className={cn(
-                  "rounded-2xl px-5 py-4 shadow-sm",
+                  "relative rounded-2xl px-5 py-4 shadow-sm",
                   turn.role === "user"
                     ? "max-w-[min(100%,28rem)] shrink-0 bg-primary text-primary-foreground"
                     : "flex-1 min-w-0 w-full bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
                 )}
               >
-                {turn.role === "user" ? (
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{turn.content}</p>
-                ) : (
-                  <AssistantActivityView
-                    blocks={turn.blocks}
-                    isStreaming={turn.isStreaming}
+                {turn.role === "user" && (
+                  <CopyButton
+                    text={userText}
+                    label="Copy message"
+                    variant="ghostOnPrimary"
+                    className="absolute right-1 top-1 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   />
+                )}
+                {turn.role === "assistant" && (
+                  <CopyButton
+                    text={assistantText}
+                    label="Copy response"
+                    className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  />
+                )}
+                {turn.role === "user" ? (
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed pr-8">{turn.content}</p>
+                ) : (
+                  <div className="pr-8">
+                    <AssistantActivityView
+                      blocks={turn.blocks}
+                      isStreaming={turn.isStreaming}
+                    />
+                  </div>
                 )}
               </div>
 
@@ -383,7 +407,8 @@ const Stream: React.FC = () => {
                 </Avatar>
               )}
             </div>
-          ))}
+            );
+          })}
 
           <div ref={scrollEndRef} className="h-px" />
         </div>
@@ -420,11 +445,17 @@ const Stream: React.FC = () => {
               )}
             </Button>
           </div>
-          <p className="text-[10px] text-center text-muted-foreground mt-2">
-            {chatScope === "global"
-              ? "Separate from per-workspace chat · searches all starred workspaces"
-              : `Workspace ${displayWorkspace} chat + starred corpora in search`}{" "}
-            · Citations [source: file_name]
+          <p className="text-[10px] text-center text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+            <span>
+              {chatScope === "global"
+                ? "Separate from per-workspace chat · searches all starred workspaces"
+                : `Workspace ${displayWorkspace} chat + starred corpora in search`}
+            </span>
+            <span className="text-muted-foreground/80">· Citations</span>
+            <CitationTag kind="doc" label="" />
+            <CitationTag kind="entity" label="" />
+            <CitationTag kind="relation" label="" />
+            <CitationTag kind="chunk" label="" />
           </p>
         </div>
       </footer>

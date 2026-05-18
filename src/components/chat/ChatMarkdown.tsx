@@ -1,8 +1,14 @@
 "use client";
 
+import React, { useMemo, isValidElement } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ExternalLink } from "lucide-react";
+import { CopyButton } from "@/components/chat/CopyButton";
+import { normalizeChatMarkdown } from "@/lib/normalizeChatMarkdown";
+import { resolveCitation } from "@/lib/chatCitations";
+import { CitationTag } from "@/components/chat/CitationTag";
 import { cn } from "@/lib/utils";
 
 interface ChatMarkdownProps {
@@ -11,86 +17,344 @@ interface ChatMarkdownProps {
   className?: string;
 }
 
-const markdownComponents: Components = {
-  hr: () => (
-    <div className="my-10 flex items-center gap-3" role="separator">
-      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/35 to-transparent" />
-      <div className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
-      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/35 to-transparent" />
+type AlertKind = "note" | "tip" | "important" | "warning" | "caution";
+
+const ALERT_STYLES: Record<
+  AlertKind,
+  { label: string; border: string; bg: string; title: string; icon: string }
+> = {
+  note: {
+    label: "Note",
+    border: "border-sky-500/40",
+    bg: "bg-sky-500/10",
+    title: "text-sky-700 dark:text-sky-300",
+    icon: "text-sky-600",
+  },
+  tip: {
+    label: "Tip",
+    border: "border-emerald-500/40",
+    bg: "bg-emerald-500/10",
+    title: "text-emerald-700 dark:text-emerald-300",
+    icon: "text-emerald-600",
+  },
+  important: {
+    label: "Important",
+    border: "border-violet-500/40",
+    bg: "bg-violet-500/10",
+    title: "text-violet-700 dark:text-violet-300",
+    icon: "text-violet-600",
+  },
+  warning: {
+    label: "Warning",
+    border: "border-amber-500/40",
+    bg: "bg-amber-500/10",
+    title: "text-amber-800 dark:text-amber-200",
+    icon: "text-amber-600",
+  },
+  caution: {
+    label: "Caution",
+    border: "border-red-500/40",
+    bg: "bg-red-500/10",
+    title: "text-red-700 dark:text-red-300",
+    icon: "text-red-600",
+  },
+};
+
+function getTextContent(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(getTextContent).join("");
+  if (isValidElement(node)) {
+    return getTextContent((node.props as { children?: React.ReactNode }).children);
+  }
+  return "";
+}
+
+function parseAlertKind(text: string): { kind: AlertKind; body: string } | null {
+  const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*)/i);
+  if (!match) return null;
+  const kind = match[1].toLowerCase() as AlertKind;
+  return { kind, body: match[2].trim() };
+}
+
+function AlertCallout({ kind, children }: { kind: AlertKind; children: React.ReactNode }) {
+  const style = ALERT_STYLES[kind];
+  return (
+    <div
+      className={cn(
+        "my-4 rounded-lg border px-4 py-3",
+        style.border,
+        style.bg,
+        "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0"
+      )}
+      role="note"
+    >
+      <p className={cn("mb-2 text-xs font-semibold uppercase tracking-wide", style.title)}>
+        {style.label}
+      </p>
+      <div className="text-sm leading-relaxed text-foreground">{children}</div>
     </div>
+  );
+}
+
+function stripAlertFromChildren(children: React.ReactNode, kind: AlertKind): React.ReactNode {
+  const items = React.Children.toArray(children);
+  if (items.length === 0) return children;
+
+  const first = items[0];
+  if (!isValidElement(first)) return children;
+
+  const text = getTextContent(first);
+  const parsed = parseAlertKind(text);
+  if (!parsed || parsed.kind !== kind) return children;
+
+  if (!parsed.body) return items.slice(1);
+
+  const firstChildren = (first.props as { children?: React.ReactNode }).children;
+  if (typeof firstChildren === "string") {
+    const rest = firstChildren.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, "").trim();
+    if (!rest) return items.slice(1);
+    return [React.cloneElement(first, { key: "alert-body" }, rest), ...items.slice(1)];
+  }
+
+  return items.slice(1);
+}
+
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const label = language || "text";
+
+  return (
+    <div className="group relative my-4 overflow-hidden rounded-lg border border-border bg-zinc-950 text-zinc-50 dark:bg-zinc-900/90">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-700/80 bg-zinc-900/80 px-3 py-1.5">
+        <span className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">{label}</span>
+        <CopyButton
+          text={code}
+          label="Copy code"
+          className="h-7 w-7 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        />
+      </div>
+      <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed">
+        <code className={language ? `language-${language}` : undefined}>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+const markdownComponents: Components = {
+  p: ({ children }) => (
+    <p className="my-3 text-[15px] leading-[1.75] text-foreground first:mt-0 last:mb-0">{children}</p>
   ),
+  ul: ({ children, className, ...props }) => (
+    <ul
+      className={cn(
+        "my-3 list-outside list-disc space-y-1.5 pl-6 text-[15px] leading-relaxed",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </ul>
+  ),
+  ol: ({ children, className, ...props }) => (
+    <ol
+      className={cn(
+        "my-3 list-outside list-decimal space-y-1.5 pl-6 text-[15px] leading-relaxed",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </ol>
+  ),
+  li: ({ children, className, ...props }) => (
+    <li
+      className={cn(
+        "pl-1 leading-relaxed [&>p]:my-1",
+        "[&>ul]:my-1.5 [&>ol]:my-1.5",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </li>
+  ),
+  a: ({ href, children }) => {
+    if (!href) return <span className="text-primary">{children}</span>;
+    const safeHref = href.trim();
+    const linkText = getTextContent(children);
+    const citation = resolveCitation(linkText, safeHref);
+    if (citation) {
+      return <CitationTag {...citation} href={safeHref} />;
+    }
+    const isExternal = /^https?:\/\//i.test(safeHref) || safeHref.startsWith("//");
+    return (
+      <a
+        href={safeHref}
+        className="inline-flex items-center gap-0.5 font-medium text-primary underline decoration-primary/40 underline-offset-2 transition-colors hover:text-primary/90 hover:decoration-primary"
+        target={isExternal ? "_blank" : undefined}
+        rel={isExternal ? "noopener noreferrer" : undefined}
+      >
+        {children}
+        {isExternal && <ExternalLink className="inline h-3 w-3 shrink-0 opacity-70" aria-hidden />}
+      </a>
+    );
+  },
+  strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+  em: ({ children }) => <em className="italic text-foreground">{children}</em>,
+  del: ({ children }) => (
+    <del className="text-muted-foreground line-through decoration-muted-foreground/80">{children}</del>
+  ),
+  ins: ({ children }) => <ins className="text-foreground underline">{children}</ins>,
+  kbd: ({ children }) => (
+    <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.85em] shadow-sm">
+      {children}
+    </kbd>
+  ),
+  code: ({ className, children, ...props }) => {
+    const isFenced = className?.includes("language-");
+    if (isFenced) {
+      return (
+        <code className={cn("font-mono text-[13px] text-inherit", className)} {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code
+        className="rounded-md border border-border/60 bg-muted/90 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => {
+    const child = React.Children.only(children);
+    if (isValidElement(child) && child.type === "code") {
+      const className = (child.props as { className?: string }).className ?? "";
+      const langMatch = /language-([\w+#.-]+)/i.exec(className);
+      const language = langMatch?.[1] ?? "";
+      const code = getTextContent((child.props as { children?: React.ReactNode }).children);
+      return <CodeBlock language={language} code={code} />;
+    }
+    return (
+      <pre className="my-4 overflow-x-auto rounded-lg border border-border bg-muted/80 p-4 font-mono text-[13px] leading-relaxed">
+        {children}
+      </pre>
+    );
+  },
+  blockquote: ({ children }) => {
+    const fullText = getTextContent(children).trim();
+    const alert = parseAlertKind(fullText);
+    if (alert) {
+      const body =
+        alert.body.length > 0 ? (
+          stripAlertFromChildren(children, alert.kind)
+        ) : (
+          stripAlertFromChildren(children, alert.kind)
+        );
+      return <AlertCallout kind={alert.kind}>{body}</AlertCallout>;
+    }
+    return (
+      <blockquote className="my-4 border-l-4 border-primary/40 bg-muted/30 py-2 pl-4 pr-2 text-muted-foreground [&>p]:text-[15px]">
+        {children}
+      </blockquote>
+    );
+  },
+  hr: () => <hr className="my-8 border-border" />,
   h1: ({ children }) => (
-    <h1 className="mt-8 mb-4 text-2xl font-bold tracking-tight text-foreground first:mt-0 md:text-3xl">
+    <h1 className="mb-4 mt-8 text-2xl font-bold tracking-tight text-foreground first:mt-0 md:text-3xl">
       {children}
     </h1>
   ),
   h2: ({ children }) => (
-    <h2 className="mt-7 mb-3 border-b border-border pb-2 text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+    <h2 className="mb-3 mt-7 border-b border-border pb-2 text-xl font-semibold tracking-tight text-foreground md:text-2xl">
       {children}
     </h2>
   ),
   h3: ({ children }) => (
-    <h3 className="mt-6 mb-2 text-lg font-semibold text-foreground">{children}</h3>
+    <h3 className="mb-2 mt-6 text-lg font-semibold text-foreground">{children}</h3>
   ),
   h4: ({ children }) => (
-    <h4 className="mt-5 mb-2 text-base font-semibold text-foreground">{children}</h4>
+    <h4 className="mb-2 mt-5 text-base font-semibold text-foreground">{children}</h4>
   ),
   h5: ({ children }) => (
-    <h5 className="mt-4 mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+    <h5 className="mb-1.5 mt-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </h5>
   ),
   h6: ({ children }) => (
-    <h6 className="mt-4 mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <h6 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
       {children}
     </h6>
   ),
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
-  pre: ({ children }) => (
-    <pre className="overflow-x-auto font-mono text-[13px] leading-relaxed">{children}</pre>
+  img: ({ src, alt, title }) => (
+    <figure className="my-4">
+      <img
+        src={src}
+        alt={alt ?? ""}
+        title={title}
+        className="max-h-[420px] w-full max-w-full rounded-lg border border-border object-contain bg-muted/30"
+        loading="lazy"
+      />
+      {(alt || title) && (
+        <figcaption className="mt-2 text-center text-xs text-muted-foreground">
+          {alt || title}
+        </figcaption>
+      )}
+    </figure>
   ),
   table: ({ children }) => (
     <div className="my-4 overflow-x-auto rounded-lg border border-border shadow-sm">
-      <table className="w-full border-collapse text-left">{children}</table>
+      <table className="w-full border-collapse text-left text-sm">{children}</table>
     </div>
   ),
+  thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-b border-border/60 last:border-0">{children}</tr>,
   th: ({ children }) => (
-    <th className="border-b border-border bg-muted/60 px-4 py-3 text-left font-semibold">{children}</th>
+    <th className="border-b border-border px-4 py-3 text-left text-sm font-semibold">{children}</th>
   ),
   td: ({ children }) => (
-    <td className="border-b border-border/60 px-4 py-2.5 align-top">{children}</td>
+    <td className="border-b border-border/60 px-4 py-2.5 align-top text-sm">{children}</td>
   ),
+  input: ({ type, checked, disabled }) => {
+    if (type === "checkbox") {
+      return (
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          readOnly
+          className="mr-2 mt-1 h-3.5 w-3.5 shrink-0 rounded border-border accent-primary"
+        />
+      );
+    }
+    return <input type={type} checked={checked} disabled={disabled} readOnly />;
+  },
 };
 
 export function ChatMarkdown({ content, isStreaming, className }: ChatMarkdownProps) {
-  if (!content && !isStreaming) return null;
+  const normalized = useMemo(() => normalizeChatMarkdown(content), [content]);
+
+  if (!normalized && !isStreaming) return null;
 
   return (
     <div
       className={cn(
-        "font-chat prose prose-base dark:prose-invert max-w-none text-foreground",
-        "text-left [text-wrap:pretty]",
-        "prose-p:my-3 prose-p:leading-[1.75] prose-p:text-[15px]",
-        "prose-a:text-primary prose-a:underline-offset-2 hover:prose-a:underline prose-a:font-medium",
-        "prose-strong:text-foreground prose-strong:font-semibold",
-        "prose-code:rounded-md prose-code:bg-muted/90 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.9em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none",
-        "prose-pre:my-4 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:rounded-lg prose-pre:p-4 prose-pre:text-[13px] prose-pre:leading-relaxed",
-        "prose-blockquote:my-4 prose-blockquote:border-l-4 prose-blockquote:border-primary/40 prose-blockquote:pl-4 prose-blockquote:py-0.5 prose-blockquote:not-italic prose-blockquote:text-muted-foreground",
-        "prose-ul:my-4 prose-ol:my-4 prose-ul:pl-6 prose-ol:pl-6",
-        "prose-li:my-1.5 prose-li:leading-relaxed prose-li:marker:text-muted-foreground",
-        "prose-table:my-4 prose-table:text-[14px]",
+        "chat-markdown font-chat min-w-0 max-w-none text-left text-foreground [text-wrap:pretty]",
+        "[&_ul_ul]:mt-1.5 [&_ul_ul]:list-[circle] [&_ol_ol]:mt-1.5",
+        "[&_ul_ul_ul]:list-[square]",
+        "[&_a]:break-words",
+        "[&_li>input[type=checkbox]]:align-middle",
         className
       )}
     >
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {content}
+        {normalized}
       </ReactMarkdown>
       {isStreaming && (
-        <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse align-middle" />
+        <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary/60 align-middle" />
       )}
     </div>
   );

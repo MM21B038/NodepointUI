@@ -263,11 +263,23 @@ export type PreprocessPhase =
   | "processing"
   | "embedding"
   | "ready"
-  | "failed";
+  | "failed"
+  | "kg_ready";
 
+/** Entity / relation / chunk vector job counts (Qdrant pipeline). */
 export interface VectorPipelineCounts {
   total: number;
   pending: number;
+  completed: number;
+  failed: number;
+}
+
+/** Per-file chunk KG pipeline (`DocumentChunk.status`). */
+export interface ChunkPipelineCounts {
+  total: number;
+  pending: number;
+  queued: number;
+  in_progress: number;
   completed: number;
   failed: number;
 }
@@ -290,8 +302,10 @@ export interface PreprocessFileStatus {
   content: boolean;
   phase: PreprocessPhase;
   uploaded_at: string;
+  chunks: ChunkPipelineCounts;
   entities: VectorPipelineCounts;
   relations: VectorPipelineCounts;
+  chunk_vectors: VectorPipelineCounts;
   embedding_progress: number;
 }
 
@@ -302,6 +316,7 @@ export interface WorkspacePreprocessStatusResponse {
   vectors: {
     entities: VectorPipelineCounts;
     relations: VectorPipelineCounts;
+    chunks: VectorPipelineCounts;
   };
   files: PreprocessFileStatus[];
 }

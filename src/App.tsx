@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { CitationModalProvider } from "@/components/chat/CitationModalContext";
 import Layout from "./components/Layout";
 import Documents from "./pages/Documents";
 import KnowledgeBase from "./pages/KnowledgeBase";
@@ -19,7 +20,7 @@ const App = () => (
     <ThemeProvider>
       <TooltipProvider>
         <WorkspaceProvider>
-          <>
+          <CitationModalProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter>
@@ -37,7 +38,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
-          </>
+          </CitationModalProvider>
         </WorkspaceProvider>
       </TooltipProvider>
     </ThemeProvider>
