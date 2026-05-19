@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { GraphControlSlider } from "@/components/GraphControlSlider";
 import {
   Popover,
   PopoverContent,
@@ -133,13 +133,14 @@ const GraphEntitySearchBar: React.FC<GraphEntitySearchBarProps> = ({
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Slider
+                  <GraphControlSlider
                     min={0}
                     max={1}
                     step={0.05}
-                    value={[searchThreshold]}
-                    onValueChange={([v]) => setThreshold(v)}
-                    className="graph-control-range flex-1"
+                    value={searchThreshold}
+                    onChange={setThreshold}
+                    className="flex-1"
+                    aria-label="Match threshold"
                   />
                   <Input
                     type="number"

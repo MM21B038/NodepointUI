@@ -19,16 +19,21 @@ import GraphEntitySearchBar from "@/components/GraphEntitySearchBar";
 import FlaggedWorkspacesPanel from "@/components/FlaggedWorkspacesPanel";
 import DetailPanel from "@/components/DetailPanel";
 import { KbGraphSidePanel } from "@/components/knowledge-base/KbGraphSidePanel";
+import { EntityTypeLegendDropdown } from "@/components/knowledge-base/EntityTypeLegendDropdown";
 import { collectGraphWorkspaceNames, getGraphNodeWorkspace } from "@/lib/graphWorkspace";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   getKnowledgeGraphEntityTypes,
   getFilteredKnowledgeGraph,
+  getFlaggedWorkspaceCount,
   searchKnowledgeEntities,
   topEntityTypesByCount,
   KB_DEFAULT_DEPTH,
   KB_DEFAULT_LIMIT,
+  KB_MAX_LIMIT,
+  kbDefaultLimitForFlagged,
+  kbMaxLimitForFlagged,
   KB_DEFAULT_SEARCH_THRESHOLD,
   KB_INITIAL_TYPE_COUNT,
   type EntityTypeEntry,
@@ -93,11 +98,31 @@ const KnowledgeBase = () => {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [graphLoadOpen, setGraphLoadOpen] = useState(false);
   const [graphControlsOpen, setGraphControlsOpen] = useState(false);
+  const [flaggedWorkspaceCount, setFlaggedWorkspaceCount] = useState(0);
 
   const flaggedWorkspaceNames = useMemo(
     () => (kbScope === "global" ? collectGraphWorkspaceNames(allNodes) : []),
     [kbScope, allNodes]
   );
+
+  /** Starred workspace count used to split aggregate node budgets (selected filter wins). */
+  const flaggedLimitWorkspaceCount = useMemo(() => {
+    if (kbScope !== "global") return 1;
+    if (selectedFlaggedWorkspaces.size > 0) return selectedFlaggedWorkspaces.size;
+    return Math.max(1, flaggedWorkspaceCount || flaggedWorkspaceNames.length);
+  }, [
+    kbScope,
+    selectedFlaggedWorkspaces.size,
+    flaggedWorkspaceCount,
+    flaggedWorkspaceNames.length,
+  ]);
+
+  const selectedFlaggedWorkspacesKey = useMemo(
+    () => [...selectedFlaggedWorkspaces].sort().join("\0"),
+    [selectedFlaggedWorkspaces]
+  );
+
+  const prevFlaggedSelectionKeyRef = useRef<string | null>(null);
 
   const onFilterInteraction = useCallback(() => {
     setHasFiltersBeenInteracted(true);
@@ -108,6 +133,7 @@ const KnowledgeBase = () => {
     setStoredChatScope(scope);
     setSelectedFlaggedWorkspaces(new Set());
     setActiveFilterPanel("none");
+    prevFlaggedSelectionKeyRef.current = null;
   }, []);
 
   const applyGraphResponse = useCallback(
@@ -152,6 +178,7 @@ const KnowledgeBase = () => {
     setSearchMatches([]);
     setTruncated(false);
     setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
+    setFlaggedWorkspaceCount(0);
     setGraphLoadParams({ depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT });
     setSelectedNodeTypes(new Set());
     setSelectedSourceFiles(new Set());
@@ -235,10 +262,44 @@ const KnowledgeBase = () => {
       setTruncated(false);
 
       try {
-        const { entityTypes } =
-          scope === "global"
-            ? await getKnowledgeGraphEntityTypes({ flagged: true })
-            : await getKnowledgeGraphEntityTypes({ workspaceName: workspaceName! });
+        if (scope === "global") {
+          const [entityTypesResult, flaggedCountResult] = await Promise.allSettled([
+            getKnowledgeGraphEntityTypes({ flagged: true }),
+            getFlaggedWorkspaceCount(),
+          ]);
+          if (entityTypesResult.status === "rejected") {
+            throw entityTypesResult.reason;
+          }
+          const { entityTypes } = entityTypesResult.value;
+          const count =
+            flaggedCountResult.status === "fulfilled"
+              ? flaggedCountResult.value.count
+              : 0;
+          if (flaggedCountResult.status === "rejected") {
+            console.warn(
+              "KnowledgeBase: flagged workspace count unavailable",
+              flaggedCountResult.reason
+            );
+          }
+          setFlaggedWorkspaceCount(count);
+          setEntityTypeCatalog(entityTypes);
+          const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
+          setApiSelectedEntityTypes(initialTypes);
+          const loadParams = {
+            depth: KB_DEFAULT_DEPTH,
+            limit: kbDefaultLimitForFlagged(count),
+          };
+          setGraphLoadParams(loadParams);
+
+          if (initialTypes.size > 0 && count > 0) {
+            await loadBrowseGraph(scope, workspaceName, initialTypes, loadParams);
+          }
+          return;
+        }
+
+        const { entityTypes } = await getKnowledgeGraphEntityTypes({
+          workspaceName: workspaceName!,
+        });
 
         setEntityTypeCatalog(entityTypes);
         const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
@@ -320,7 +381,20 @@ const KnowledgeBase = () => {
 
   const handleClearAllFilters = useCallback(() => {
     const initialTypes = new Set(topEntityTypesByCount(entityTypeCatalog, KB_INITIAL_TYPE_COUNT));
-    const loadParams = { depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT };
+    const flaggedDivisor =
+      kbScope === "global"
+        ? Math.max(1, flaggedWorkspaceCount || flaggedWorkspaceNames.length)
+        : 1;
+    const loadParams = {
+      depth: KB_DEFAULT_DEPTH,
+      limit:
+        kbScope === "global"
+          ? kbDefaultLimitForFlagged(flaggedDivisor)
+          : KB_DEFAULT_LIMIT,
+    };
+    if (kbScope === "global" && flaggedWorkspaceNames.length > 0) {
+      setSelectedFlaggedWorkspaces(new Set(flaggedWorkspaceNames));
+    }
     setApiSelectedEntityTypes(initialTypes);
     setGraphLoadParams(loadParams);
     setNodeSearchQuery("");
@@ -329,8 +403,16 @@ const KnowledgeBase = () => {
     setShowSearchMatches(false);
     setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
     setHasFiltersBeenInteracted(false);
+    prevFlaggedSelectionKeyRef.current = null;
     void loadBrowseGraph(kbScope, currentWorkspace ?? null, initialTypes, loadParams);
-  }, [entityTypeCatalog, kbScope, currentWorkspace, loadBrowseGraph]);
+  }, [
+    entityTypeCatalog,
+    kbScope,
+    currentWorkspace,
+    flaggedWorkspaceCount,
+    flaggedWorkspaceNames,
+    loadBrowseGraph,
+  ]);
 
   const handleApplyGraphLoad = useCallback(() => {
     setHasFiltersBeenInteracted(true);
@@ -372,6 +454,44 @@ const KnowledgeBase = () => {
     },
     [kbScope, allNodes]
   );
+
+  useEffect(() => {
+    if (kbScope !== "global" || flaggedLimitWorkspaceCount < 1) return;
+
+    const defaultLimit = kbDefaultLimitForFlagged(flaggedLimitWorkspaceCount);
+
+    const selectionChanged =
+      prevFlaggedSelectionKeyRef.current !== null &&
+      prevFlaggedSelectionKeyRef.current !== selectedFlaggedWorkspacesKey;
+
+    prevFlaggedSelectionKeyRef.current = selectedFlaggedWorkspacesKey;
+
+    let reloadParams: GraphLoadParams | null = null;
+    setGraphLoadParams((prev) => {
+      reloadParams = { depth: prev.depth, limit: defaultLimit };
+      return reloadParams;
+    });
+
+    if (
+      !selectionChanged ||
+      !hasFiltersBeenInteracted ||
+      apiSelectedEntityTypes.size === 0 ||
+      isSearchMode ||
+      !reloadParams
+    ) {
+      return;
+    }
+
+    void loadBrowseGraph("global", null, apiSelectedEntityTypes, reloadParams);
+  }, [
+    kbScope,
+    flaggedLimitWorkspaceCount,
+    selectedFlaggedWorkspacesKey,
+    hasFiltersBeenInteracted,
+    apiSelectedEntityTypes,
+    isSearchMode,
+    loadBrowseGraph,
+  ]);
 
   useEffect(() => {
     if (kbScope === "workspace") {
@@ -444,7 +564,9 @@ const KnowledgeBase = () => {
 
       if (
         target instanceof Element &&
-        target.closest("[data-graph-controls], [data-graph-search], .graph-control-range")
+        target.closest(
+          "[data-graph-controls], [data-graph-search], .graph-control-range, [role='slider']"
+        )
       ) {
         return;
       }
@@ -596,6 +718,21 @@ const KnowledgeBase = () => {
     selectedFlaggedWorkspaces.size > 0 &&
     selectedFlaggedWorkspaces.size < flaggedWorkspaceNames.length;
 
+  const entityTypeLegendItems = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of filteredNodes) {
+      counts.set(node.type, (counts.get(node.type) ?? 0) + 1);
+    }
+    if (counts.size > 0) {
+      return Array.from(counts.entries())
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count);
+    }
+    return [...entityTypeCatalog]
+      .map(({ type, count }) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredNodes, entityTypeCatalog]);
+
   let alertMessage = "";
   if (kbScope === "workspace" && !currentWorkspace?.trim()) {
     alertMessage =
@@ -726,6 +863,17 @@ const KnowledgeBase = () => {
                 loading={loading}
                 open={graphLoadOpen}
                 onOpenChange={handleGraphLoadOpenChange}
+                limitMax={
+                  kbScope === "global"
+                    ? kbMaxLimitForFlagged(flaggedLimitWorkspaceCount)
+                    : KB_MAX_LIMIT
+                }
+                limitDefaultHint={
+                  kbScope === "global"
+                    ? kbDefaultLimitForFlagged(flaggedLimitWorkspaceCount)
+                    : KB_DEFAULT_LIMIT
+                }
+                limitPerWorkspace={kbScope === "global"}
               />
             }
           />
@@ -840,7 +988,15 @@ const KnowledgeBase = () => {
               </Button>
             </div>
 
-            <div className="absolute right-0 top-0 h-9 w-9" aria-hidden />
+            <div
+              className="pointer-events-auto absolute right-0 top-0 z-[100]"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <EntityTypeLegendDropdown
+                items={entityTypeLegendItems}
+                disabled={loading}
+              />
+            </div>
           </div>
 
           <div

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { GraphControlSlider } from "@/components/GraphControlSlider";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -34,6 +34,12 @@ interface GraphLoadControlsProps {
   className?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Max node limit (per workspace when limitPerWorkspace). Defaults to KB_MAX_LIMIT. */
+  limitMax?: number;
+  /** Shown as default in the limit label. Defaults to KB_DEFAULT_LIMIT. */
+  limitDefaultHint?: number;
+  /** When true, limit applies per starred workspace (flagged scope). */
+  limitPerWorkspace?: boolean;
 }
 
 export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
@@ -48,11 +54,21 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
   className,
   open: openProp,
   onOpenChange,
+  limitMax = KB_MAX_LIMIT,
+  limitDefaultHint = KB_DEFAULT_LIMIT,
+  limitPerWorkspace = false,
 }) => {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp ?? openInternal;
   const setOpen = onOpenChange ?? setOpenInternal;
   const sortedTypes = [...entityTypes].sort((a, b) => b.count - a.count);
+  const sliderMin = Math.min(10, limitMax);
+
+  useEffect(() => {
+    if (params.limit > limitMax) {
+      onParamsChange({ depth: params.depth, limit: limitMax });
+    }
+  }, [limitMax, params.limit, params.depth, onParamsChange]);
 
   const setDepth = (depth: number) => {
     onParamsChange({ ...params, depth: Math.min(5, Math.max(1, depth)) });
@@ -61,7 +77,7 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
   const setLimit = (limit: number) => {
     onParamsChange({
       ...params,
-      limit: Math.min(KB_MAX_LIMIT, Math.max(1, Math.floor(limit))),
+      limit: Math.min(limitMax, Math.max(1, Math.floor(limit))),
     });
   };
 
@@ -113,36 +129,38 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
               <Label className="text-xs text-muted-foreground">Traversal depth</Label>
               <span className="font-mono text-xs tabular-nums">{params.depth}</span>
             </div>
-            <Slider
+            <GraphControlSlider
               min={1}
               max={5}
               step={1}
-              value={[params.depth]}
-              onValueChange={([v]) => setDepth(v)}
-              className="graph-control-range"
+              value={params.depth}
+              onChange={setDepth}
+              aria-label="Traversal depth"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="graph-load-limit" className="text-xs text-muted-foreground">
-              Node limit (default {KB_DEFAULT_LIMIT}, max {KB_MAX_LIMIT})
+              {limitPerWorkspace
+                ? `Node limit per workspace (default ${limitDefaultHint}, max ${limitMax})`
+                : `Node limit (default ${limitDefaultHint}, max ${limitMax})`}
             </Label>
             <Input
               id="graph-load-limit"
               type="number"
               min={1}
-              max={KB_MAX_LIMIT}
+              max={limitMax}
               value={params.limit}
               onChange={(e) => setLimit(Number(e.target.value))}
               className="h-8 font-mono text-xs"
             />
-            <Slider
-              min={10}
-              max={KB_MAX_LIMIT}
-              step={10}
-              value={[params.limit]}
-              onValueChange={([v]) => setLimit(v)}
-              className="graph-control-range"
+            <GraphControlSlider
+              min={sliderMin}
+              max={limitMax}
+              step={Math.max(1, Math.floor(limitMax / 50))}
+              value={Math.min(params.limit, limitMax)}
+              onChange={setLimit}
+              aria-label="Node limit"
             />
           </div>
 

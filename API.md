@@ -143,6 +143,30 @@ Create a workspace and its media directory.
 
 ---
 
+### `GET /api/workspace/flagged/count/`
+
+How many workspaces are **starred** (`is_flag=true`), for UI decisions before calling flagged-scope KG/chat APIs.
+
+Uses the same scope as `?flagged=true` on knowledge-graph and entity search (excludes internal `__flagged_chat__`).
+
+**Response `200`**
+
+```json
+{
+  "count": 2,
+  "workspaces": ["main", "PRAJNA"]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `count` | Number of starred workspaces |
+| `workspaces` | Their names, sorted alphabetically |
+
+`count: 0` means no workspace is starred — flagged chat search and `?flagged=true` graph APIs return empty scope.
+
+---
+
 ### `DELETE /api/workspace/delete/<name>/`
 
 Deletes workspace row and `media/workspaces/<name>/`.
@@ -1064,17 +1088,18 @@ Returns full record markdown including content. Documents return assembled text 
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `name` | string | required | Entity name (exact or substring) |
-| `exact` | bool | `false` | `iexact` vs `icontains` |
+| `name` | string | required | Entity name to search |
+| `exact` | bool | `false` | If true, case-insensitive exact name; if false, fuzzy match |
 | `limit` | int | `20` | Max entities |
+| `threshold` | float | `0.6` | Min fuzzy score 0–1 (ignored when `exact=true`) |
 
-Returns matches with outgoing/incoming relations (relation ids and peer entity ids).
+Returns matches with `score` (fuzzy mode), outgoing/incoming relations (relation ids and peer entity ids).
 
 ---
 
 ### `GET /api/knowledge/entities/search/`
 
-Fuzzy entity **name** search (rapidfuzz `token_set_ratio`) plus a subgraph around matches using `depth` and `limit`.
+Fuzzy entity **name** search (rapidfuzz WRatio / partial / token_set, plus broad candidate pool for typos) and a subgraph around matches using `depth` and `limit`.
 
 **Scope:** exactly one of `workspace_name` or `flagged=true` (same rules as knowledge-graph).
 
@@ -1189,6 +1214,7 @@ Optional query: `?workspace_name=` — returns `404` if the record is not in tha
 |--------|------|
 | POST | `/api/workspace/create/` |
 | GET | `/api/workspace/list/` |
+| GET | `/api/workspace/flagged/count/` |
 | DELETE | `/api/workspace/delete/<name>/` |
 | GET | `/api/workspace/<name>/flag-status/` |
 | PATCH | `/api/workspace/<name>/toggle-flag/` |

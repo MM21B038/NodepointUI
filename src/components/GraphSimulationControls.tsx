@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { ChevronDown, Maximize2, RotateCcw, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { GraphControlSlider } from "@/components/GraphControlSlider";
 import { Switch } from "@/components/ui/switch";
 import {
   Collapsible,
@@ -27,62 +27,6 @@ interface GraphSimulationControlsProps {
   className?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-}
-
-function ConfigSlider({
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  formatValue,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  formatValue?: (v: number) => string;
-  onChange: (v: number) => void;
-}) {
-  const [localValue, setLocalValue] = useState(value);
-  const isDraggingRef = useRef(false);
-  useEffect(() => {
-    if (!isDraggingRef.current) {
-      setLocalValue(value);
-    }
-  }, [value]);
-
-  const display = formatValue ? formatValue(localValue) : localValue;
-
-  return (
-    <div className="relative z-10 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label className="text-xs text-muted-foreground">{label}</Label>
-        <span className="text-xs tabular-nums text-foreground">{display}</span>
-      </div>
-      <Slider
-        min={min}
-        max={max}
-        step={step}
-        value={[localValue]}
-        aria-label={label}
-        className="graph-control-range w-full"
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          isDraggingRef.current = true;
-        }}
-        onPointerUp={(e) => e.stopPropagation()}
-        onValueChange={([v]) => setLocalValue(v)}
-        onValueCommit={([v]) => {
-          isDraggingRef.current = false;
-          setLocalValue(v);
-          onChange(v);
-        }}
-      />
-    </div>
-  );
 }
 
 export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = ({
@@ -139,14 +83,14 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Forces
             </p>
-            <ConfigSlider
+            <GraphControlSlider
               label="Link distance"
               value={config.linkDistance}
               min={50}
               max={400}
               onChange={(linkDistance) => onChange({ linkDistance })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Link strength"
               value={config.linkStrength}
               min={0}
@@ -155,14 +99,14 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
               formatValue={(v) => v.toFixed(2)}
               onChange={(linkStrength) => onChange({ linkStrength })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Repulsion (charge)"
               value={config.chargeStrength}
               min={-800}
               max={0}
               onChange={(chargeStrength) => onChange({ chargeStrength })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Center gravity"
               value={config.centerStrength}
               min={0}
@@ -171,7 +115,7 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
               formatValue={(v) => v.toFixed(2)}
               onChange={(centerStrength) => onChange({ centerStrength })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="X pull"
               value={config.xStrength}
               min={0}
@@ -180,7 +124,7 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
               formatValue={(v) => v.toFixed(2)}
               onChange={(xStrength) => onChange({ xStrength })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Y pull"
               value={config.yStrength}
               min={0}
@@ -189,14 +133,14 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
               formatValue={(v) => v.toFixed(2)}
               onChange={(yStrength) => onChange({ yStrength })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Collision radius"
               value={config.collisionRadius}
               min={0}
               max={40}
               onChange={(collisionRadius) => onChange({ collisionRadius })}
             />
-            <ConfigSlider
+            <GraphControlSlider
               label="Friction (velocity decay)"
               value={config.velocityDecay}
               min={0.1}
@@ -211,7 +155,7 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Display
             </p>
-            <ConfigSlider
+            <GraphControlSlider
               label="Node size"
               value={config.nodeRadius}
               min={4}

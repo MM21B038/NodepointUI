@@ -156,6 +156,32 @@ export async function undoFlagWorkspace(workspaceName: string): Promise<{ flag: 
   return { flag: result.is_flag, message: result.message };
 }
 
+export interface FlaggedWorkspaceCountResponse {
+  count: number;
+  workspaces: string[];
+}
+
+export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountResponse> {
+  try {
+    const response = await fetch(buildApiUrl("/workspace/flagged/count/"));
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        count: typeof data.count === "number" ? data.count : 0,
+        workspaces: Array.isArray(data.workspaces) ? data.workspaces : [],
+      };
+    }
+  } catch (err) {
+    console.warn("getFlaggedWorkspaceCount: dedicated endpoint unavailable, using list fallback", err);
+  }
+
+  const workspaces = (await getWorkspaces())
+    .filter((ws) => ws.is_flag)
+    .map((ws) => ws.name)
+    .sort((a, b) => a.localeCompare(b));
+  return { count: workspaces.length, workspaces };
+}
+
 // --- Documents ---
 
 export type DocumentStatus =
@@ -379,11 +405,37 @@ export interface EntitySearchMatch {
 }
 
 export const KB_DEFAULT_DEPTH = 1;
-/** Safe default cap for KG subgraph loads (avoids loading full graphs). */
+/**
+ * Safe default node budget for KG subgraph loads.
+ * Single workspace: used as the request `limit` directly.
+ * Flagged scope: divided by starred workspace count for per-workspace `limit`.
+ */
 export const KB_DEFAULT_LIMIT = 200;
+/**
+ * Max node budget for Graph load slider.
+ * Single workspace: used as per-request max directly.
+ * Flagged scope: divided by starred workspace count for per-workspace max.
+ */
 export const KB_MAX_LIMIT = 500;
 export const KB_INITIAL_TYPE_COUNT = 3;
 export const KB_DEFAULT_SEARCH_THRESHOLD = 0.6;
+
+/** Per-workspace `limit` when splitting an aggregate budget across starred workspaces. */
+export function kbPerWorkspaceLimitFromBudget(
+  budget: number,
+  flaggedCount: number
+): number {
+  const n = Math.max(1, Math.floor(flaggedCount));
+  return Math.max(1, Math.floor(budget / n));
+}
+
+export function kbDefaultLimitForFlagged(flaggedCount: number): number {
+  return kbPerWorkspaceLimitFromBudget(KB_DEFAULT_LIMIT, flaggedCount);
+}
+
+export function kbMaxLimitForFlagged(flaggedCount: number): number {
+  return kbPerWorkspaceLimitFromBudget(KB_MAX_LIMIT, flaggedCount);
+}
 
 export interface FileReference {
   file_name: string;
