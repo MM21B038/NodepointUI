@@ -34,6 +34,7 @@ import {
   KB_MAX_LIMIT,
   kbDefaultLimitForFlagged,
   kbMaxLimitForFlagged,
+  flaggedLimitDivisor,
   KB_DEFAULT_SEARCH_THRESHOLD,
   KB_INITIAL_TYPE_COUNT,
   type EntityTypeEntry,
@@ -99,30 +100,52 @@ const KnowledgeBase = () => {
   const [graphLoadOpen, setGraphLoadOpen] = useState(false);
   const [graphControlsOpen, setGraphControlsOpen] = useState(false);
   const [flaggedWorkspaceCount, setFlaggedWorkspaceCount] = useState(0);
+  const [flaggedWorkspaceNamesFromApi, setFlaggedWorkspaceNamesFromApi] = useState<string[]>(
+    []
+  );
 
   const flaggedWorkspaceNames = useMemo(
     () => (kbScope === "global" ? collectGraphWorkspaceNames(allNodes) : []),
     [kbScope, allNodes]
   );
 
-  /** Starred workspace count used to split aggregate node budgets (selected filter wins). */
-  const flaggedLimitWorkspaceCount = useMemo(() => {
+  const workspaceFilterActive = useMemo(
+    () =>
+      kbScope === "global" &&
+      flaggedWorkspaceCount > 0 &&
+      selectedFlaggedWorkspaces.size > 0 &&
+      selectedFlaggedWorkspaces.size < flaggedWorkspaceCount &&
+      hasFiltersBeenInteracted,
+    [
+      kbScope,
+      flaggedWorkspaceCount,
+      selectedFlaggedWorkspaces.size,
+      hasFiltersBeenInteracted,
+    ]
+  );
+
+  const limitDivisor = useMemo(() => {
     if (kbScope !== "global") return 1;
-    if (selectedFlaggedWorkspaces.size > 0) return selectedFlaggedWorkspaces.size;
-    return Math.max(1, flaggedWorkspaceCount || flaggedWorkspaceNames.length);
-  }, [
-    kbScope,
-    selectedFlaggedWorkspaces.size,
-    flaggedWorkspaceCount,
-    flaggedWorkspaceNames.length,
-  ]);
+    return flaggedLimitDivisor(
+      flaggedWorkspaceCount,
+      selectedFlaggedWorkspaces.size,
+      workspaceFilterActive
+    );
+  }, [kbScope, flaggedWorkspaceCount, selectedFlaggedWorkspaces.size, workspaceFilterActive]);
 
   const selectedFlaggedWorkspacesKey = useMemo(
     () => [...selectedFlaggedWorkspaces].sort().join("\0"),
     [selectedFlaggedWorkspaces]
   );
 
-  const prevFlaggedSelectionKeyRef = useRef<string | null>(null);
+  const resetBrowseUiFilters = useCallback(() => {
+    setHasFiltersBeenInteracted(false);
+    setIsSearchMode(false);
+    setSearchMatches([]);
+    setNodeSearchQuery("");
+    setShowSearchMatches(false);
+    setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
+  }, []);
 
   const onFilterInteraction = useCallback(() => {
     setHasFiltersBeenInteracted(true);
@@ -133,7 +156,6 @@ const KnowledgeBase = () => {
     setStoredChatScope(scope);
     setSelectedFlaggedWorkspaces(new Set());
     setActiveFilterPanel("none");
-    prevFlaggedSelectionKeyRef.current = null;
   }, []);
 
   const applyGraphResponse = useCallback(
@@ -179,20 +201,12 @@ const KnowledgeBase = () => {
     setTruncated(false);
     setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
     setFlaggedWorkspaceCount(0);
+    setFlaggedWorkspaceNamesFromApi([]);
     setGraphLoadParams({ depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT });
     setSelectedNodeTypes(new Set());
     setSelectedSourceFiles(new Set());
     setSelectedFlaggedWorkspaces(new Set());
   }, []);
-
-  useEffect(() => {
-    if (kbScope !== "global" || flaggedWorkspaceNames.length === 0) return;
-    setSelectedFlaggedWorkspaces((prev) => {
-      if (prev.size === 0) return new Set(flaggedWorkspaceNames);
-      const next = new Set([...prev].filter((w) => flaggedWorkspaceNames.includes(w)));
-      return next.size > 0 ? next : new Set(flaggedWorkspaceNames);
-    });
-  }, [kbScope, flaggedWorkspaceNames]);
 
   const loadBrowseGraph = useCallback(
     async (
@@ -255,11 +269,8 @@ const KnowledgeBase = () => {
       setError(null);
       setAllNodes([]);
       setAllEdges([]);
-      setHasFiltersBeenInteracted(false);
-      setIsSearchMode(false);
-      setSearchMatches([]);
-      setNodeSearchQuery("");
       setTruncated(false);
+      resetBrowseUiFilters();
 
       try {
         if (scope === "global") {
@@ -271,23 +282,28 @@ const KnowledgeBase = () => {
             throw entityTypesResult.reason;
           }
           const { entityTypes } = entityTypesResult.value;
-          const count =
+          const flaggedMeta =
             flaggedCountResult.status === "fulfilled"
-              ? flaggedCountResult.value.count
-              : 0;
+              ? flaggedCountResult.value
+              : { count: 0, workspaces: [] as string[] };
           if (flaggedCountResult.status === "rejected") {
             console.warn(
               "KnowledgeBase: flagged workspace count unavailable",
               flaggedCountResult.reason
             );
           }
+          const count = flaggedMeta.count;
+          const apiWorkspaces = flaggedMeta.workspaces;
           setFlaggedWorkspaceCount(count);
+          setFlaggedWorkspaceNamesFromApi(apiWorkspaces);
+          setSelectedFlaggedWorkspaces(new Set(apiWorkspaces));
           setEntityTypeCatalog(entityTypes);
           const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
           setApiSelectedEntityTypes(initialTypes);
+          const divisor = flaggedLimitDivisor(count, apiWorkspaces.length, false);
           const loadParams = {
             depth: KB_DEFAULT_DEPTH,
-            limit: kbDefaultLimitForFlagged(count),
+            limit: kbDefaultLimitForFlagged(divisor),
           };
           setGraphLoadParams(loadParams);
 
@@ -329,7 +345,7 @@ const KnowledgeBase = () => {
         setLoading(false);
       }
     },
-    [loadBrowseGraph]
+    [loadBrowseGraph, resetBrowseUiFilters]
   );
 
   const runSearch = useCallback(async () => {
@@ -354,6 +370,15 @@ const KnowledgeBase = () => {
       setIsSearchMode(true);
       setSearchMatches(result.matches ?? []);
       applyGraphResponse(result.graphPayload);
+
+      if (kbScope === "global") {
+        const wsInGraph = collectGraphWorkspaceNames(result.graphPayload?.nodes ?? []);
+        const apiSet = new Set(flaggedWorkspaceNamesFromApi);
+        const inScope = wsInGraph.filter((w) => apiSet.has(w));
+        setSelectedFlaggedWorkspaces(
+          new Set(inScope.length > 0 ? inScope : wsInGraph)
+        );
+      }
     } catch (err: unknown) {
       console.error("KnowledgeBase: runSearch error:", err);
       showError("Entity search failed.");
@@ -369,49 +394,61 @@ const KnowledgeBase = () => {
     graphLoadParams,
     apiSelectedEntityTypes,
     applyGraphResponse,
+    flaggedWorkspaceNamesFromApi,
   ]);
 
   const handleClearSearch = useCallback(() => {
-    setNodeSearchQuery("");
-    setIsSearchMode(false);
-    setSearchMatches([]);
-    setShowSearchMatches(false);
-    void loadBrowseGraph(kbScope, currentWorkspace ?? null, apiSelectedEntityTypes, graphLoadParams);
-  }, [kbScope, currentWorkspace, apiSelectedEntityTypes, graphLoadParams, loadBrowseGraph]);
-
-  const handleClearAllFilters = useCallback(() => {
-    const initialTypes = new Set(topEntityTypesByCount(entityTypeCatalog, KB_INITIAL_TYPE_COUNT));
-    const flaggedDivisor =
+    resetBrowseUiFilters();
+    const apiDivisor =
       kbScope === "global"
-        ? Math.max(1, flaggedWorkspaceCount || flaggedWorkspaceNames.length)
+        ? flaggedLimitDivisor(flaggedWorkspaceCount, flaggedWorkspaceCount, false)
         : 1;
     const loadParams = {
       depth: KB_DEFAULT_DEPTH,
       limit:
-        kbScope === "global"
-          ? kbDefaultLimitForFlagged(flaggedDivisor)
-          : KB_DEFAULT_LIMIT,
+        kbScope === "global" ? kbDefaultLimitForFlagged(apiDivisor) : KB_DEFAULT_LIMIT,
     };
-    if (kbScope === "global" && flaggedWorkspaceNames.length > 0) {
-      setSelectedFlaggedWorkspaces(new Set(flaggedWorkspaceNames));
+    if (kbScope === "global" && flaggedWorkspaceNamesFromApi.length > 0) {
+      setSelectedFlaggedWorkspaces(new Set(flaggedWorkspaceNamesFromApi));
+    }
+    setGraphLoadParams(loadParams);
+    void loadBrowseGraph(kbScope, currentWorkspace ?? null, apiSelectedEntityTypes, loadParams);
+  }, [
+    kbScope,
+    currentWorkspace,
+    apiSelectedEntityTypes,
+    flaggedWorkspaceCount,
+    flaggedWorkspaceNamesFromApi,
+    loadBrowseGraph,
+    resetBrowseUiFilters,
+  ]);
+
+  const handleClearAllFilters = useCallback(() => {
+    const initialTypes = new Set(topEntityTypesByCount(entityTypeCatalog, KB_INITIAL_TYPE_COUNT));
+    const apiDivisor =
+      kbScope === "global"
+        ? flaggedLimitDivisor(flaggedWorkspaceCount, flaggedWorkspaceCount, false)
+        : 1;
+    const loadParams = {
+      depth: KB_DEFAULT_DEPTH,
+      limit:
+        kbScope === "global" ? kbDefaultLimitForFlagged(apiDivisor) : KB_DEFAULT_LIMIT,
+    };
+    if (kbScope === "global" && flaggedWorkspaceNamesFromApi.length > 0) {
+      setSelectedFlaggedWorkspaces(new Set(flaggedWorkspaceNamesFromApi));
     }
     setApiSelectedEntityTypes(initialTypes);
     setGraphLoadParams(loadParams);
-    setNodeSearchQuery("");
-    setIsSearchMode(false);
-    setSearchMatches([]);
-    setShowSearchMatches(false);
-    setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
-    setHasFiltersBeenInteracted(false);
-    prevFlaggedSelectionKeyRef.current = null;
+    resetBrowseUiFilters();
     void loadBrowseGraph(kbScope, currentWorkspace ?? null, initialTypes, loadParams);
   }, [
     entityTypeCatalog,
     kbScope,
     currentWorkspace,
     flaggedWorkspaceCount,
-    flaggedWorkspaceNames,
+    flaggedWorkspaceNamesFromApi,
     loadBrowseGraph,
+    resetBrowseUiFilters,
   ]);
 
   const handleApplyGraphLoad = useCallback(() => {
@@ -456,41 +493,29 @@ const KnowledgeBase = () => {
   );
 
   useEffect(() => {
-    if (kbScope !== "global" || flaggedLimitWorkspaceCount < 1) return;
-
-    const defaultLimit = kbDefaultLimitForFlagged(flaggedLimitWorkspaceCount);
-
-    const selectionChanged =
-      prevFlaggedSelectionKeyRef.current !== null &&
-      prevFlaggedSelectionKeyRef.current !== selectedFlaggedWorkspacesKey;
-
-    prevFlaggedSelectionKeyRef.current = selectedFlaggedWorkspacesKey;
-
-    let reloadParams: GraphLoadParams | null = null;
-    setGraphLoadParams((prev) => {
-      reloadParams = { depth: prev.depth, limit: defaultLimit };
-      return reloadParams;
-    });
-
-    if (
-      !selectionChanged ||
-      !hasFiltersBeenInteracted ||
-      apiSelectedEntityTypes.size === 0 ||
-      isSearchMode ||
-      !reloadParams
-    ) {
+    if (kbScope !== "global" || !hasFiltersBeenInteracted || flaggedWorkspaceCount < 1) {
       return;
     }
 
-    void loadBrowseGraph("global", null, apiSelectedEntityTypes, reloadParams);
+    const divisor = flaggedLimitDivisor(
+      flaggedWorkspaceCount,
+      selectedFlaggedWorkspaces.size,
+      workspaceFilterActive
+    );
+    const defaultLimit = kbDefaultLimitForFlagged(divisor);
+    const maxLimit = kbMaxLimitForFlagged(divisor);
+
+    setGraphLoadParams((prev) => ({
+      depth: prev.depth,
+      limit: Math.min(maxLimit, Math.max(1, defaultLimit)),
+    }));
   }, [
     kbScope,
-    flaggedLimitWorkspaceCount,
-    selectedFlaggedWorkspacesKey,
     hasFiltersBeenInteracted,
-    apiSelectedEntityTypes,
-    isSearchMode,
-    loadBrowseGraph,
+    workspaceFilterActive,
+    flaggedWorkspaceCount,
+    selectedFlaggedWorkspacesKey,
+    selectedFlaggedWorkspaces.size,
   ]);
 
   useEffect(() => {
@@ -649,17 +674,6 @@ const KnowledgeBase = () => {
 
   // Centralized filtering logic
   const { filteredNodes, filteredEdges } = useMemo(() => {
-    // Condition to explicitly show an empty graph if filters have been interacted with
-    // AND either no node types or no source files are selected.
-    const workspaceFilterActive =
-      kbScope === "global" &&
-      flaggedWorkspaceNames.length > 0 &&
-      selectedFlaggedWorkspaces.size < flaggedWorkspaceNames.length;
-
-    if (apiSelectedEntityTypes.size === 0 && !isSearchMode) {
-      return { filteredNodes: [], filteredEdges: [] };
-    }
-
     if (
       hasFiltersBeenInteracted &&
       (selectedNodeTypes.size === 0 ||
@@ -708,15 +722,24 @@ const KnowledgeBase = () => {
     selectedNodeTypes,
     selectedSourceFiles,
     selectedFlaggedWorkspaces,
-    flaggedWorkspaceNames,
+    workspaceFilterActive,
     hasFiltersBeenInteracted,
   ]);
 
-  const workspaceFilterActive =
-    kbScope === "global" &&
-    flaggedWorkspaceNames.length > 0 &&
-    selectedFlaggedWorkspaces.size > 0 &&
-    selectedFlaggedWorkspaces.size < flaggedWorkspaceNames.length;
+  /** Client-side filters only — does not rebuild the D3 simulation (visibility toggled in-graph). */
+  const graphVisibleNodeIds = useMemo((): Set<string> | null => {
+    if (allNodes.length === 0) return null;
+    if (filteredNodes.length === 0) return new Set();
+
+    const filteredIds = new Set(filteredNodes.map((n) => n.id));
+    if (filteredIds.size !== allNodes.length) return filteredIds;
+
+    const allIds = new Set(allNodes.map((n) => n.id));
+    for (const id of allIds) {
+      if (!filteredIds.has(id)) return filteredIds;
+    }
+    return null;
+  }, [allNodes, filteredNodes]);
 
   const entityTypeLegendItems = useMemo(() => {
     const counts = new Map<string, number>();
@@ -809,9 +832,11 @@ const KnowledgeBase = () => {
               <>
                 <Globe className="mr-1 inline h-3 w-3" />
                 {workspaceFilterActive
-                  ? `${selectedFlaggedWorkspaces.size} of ${flaggedWorkspaceNames.length} workspaces`
-                  : flaggedWorkspaceNames.length > 0
-                    ? `All ${flaggedWorkspaceNames.length} starred`
+                  ? `${selectedFlaggedWorkspaces.size} of ${flaggedWorkspaceCount} starred`
+                  : flaggedWorkspaceCount > 0
+                    ? selectedFlaggedWorkspaces.size >= flaggedWorkspaceCount
+                      ? `All ${flaggedWorkspaceCount} starred`
+                      : `${selectedFlaggedWorkspaces.size} of ${flaggedWorkspaceCount} starred`
                     : "Starred workspaces"}
               </>
             ) : (
@@ -839,15 +864,16 @@ const KnowledgeBase = () => {
       {graphReady ? (
         <div ref={graphContainerRef} className="relative h-full w-full overflow-hidden rounded-lg border bg-card shadow-lg">
           <InteractiveGraphVisualization
-            nodes={filteredNodes}
-            edges={filteredEdges}
+            nodes={allNodes}
+            edges={allEdges}
+            visibleNodeIds={graphVisibleNodeIds}
             onSelect={(node) => {
               setSelectedItem(node);
               if (node) closeKbFloatingPanels();
             }}
             selectedItem={selectedItem}
             onGraphBackgroundClick={closeAllFilterPanels}
-            showControls={filteredNodes.length > 0}
+            showControls={allNodes.length > 0}
             graphControlsOpen={graphControlsOpen}
             onGraphControlsOpenChange={handleGraphControlsOpenChange}
             viewResetKey={graphViewResetKey}
@@ -864,13 +890,11 @@ const KnowledgeBase = () => {
                 open={graphLoadOpen}
                 onOpenChange={handleGraphLoadOpenChange}
                 limitMax={
-                  kbScope === "global"
-                    ? kbMaxLimitForFlagged(flaggedLimitWorkspaceCount)
-                    : KB_MAX_LIMIT
+                  kbScope === "global" ? kbMaxLimitForFlagged(limitDivisor) : KB_MAX_LIMIT
                 }
                 limitDefaultHint={
                   kbScope === "global"
-                    ? kbDefaultLimitForFlagged(flaggedLimitWorkspaceCount)
+                    ? kbDefaultLimitForFlagged(limitDivisor)
                     : KB_DEFAULT_LIMIT
                 }
                 limitPerWorkspace={kbScope === "global"}
@@ -1014,7 +1038,11 @@ const KnowledgeBase = () => {
             {activeFilterPanel === "workspaces" && kbScope === "global" && (
               <FlaggedWorkspacesPanel
                 nodes={allNodes}
-                workspaceNames={flaggedWorkspaceNames}
+                workspaceNames={
+                  flaggedWorkspaceNamesFromApi.length > 0
+                    ? flaggedWorkspaceNamesFromApi
+                    : flaggedWorkspaceNames
+                }
                 selectedWorkspaces={selectedFlaggedWorkspaces}
                 onSelectedWorkspacesChange={setSelectedFlaggedWorkspaces}
                 onClose={() => setActiveFilterPanel("none")}

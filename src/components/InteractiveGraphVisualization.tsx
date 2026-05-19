@@ -49,6 +49,8 @@ interface InteractiveGraphVisualizationProps {
   onGraphControlsOpenChange?: (open: boolean) => void;
   /** Changes on API reload / scope switch — triggers fit-to-view, not client-side filters */
   viewResetKey?: string;
+  /** Client-side filter: hide nodes not in this set. `null` = show all loaded nodes. */
+  visibleNodeIds?: Set<string> | null;
 }
 
 type D3Node = GraphNode & d3.SimulationNodeDatum & { degree?: number };
@@ -102,6 +104,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   graphControlsOpen,
   onGraphControlsOpenChange,
   viewResetKey,
+  visibleNodeIds = null,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
@@ -286,6 +289,26 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   }, [selectedItem, getNeighborIds, syncLabelBackground]);
 
   updateHighlightingRef.current = updateHighlighting;
+
+  const applyNodeVisibility = useCallback((visibleIds: Set<string> | null) => {
+    const { node, link, labelGroups } = d3Refs.current;
+    if (!node || !link) return;
+
+    const isVisible = (id: string) => !visibleIds || visibleIds.has(id);
+
+    node
+      .style("display", (d) => (isVisible(d.id) ? null : "none"))
+      .style("pointer-events", (d) => (isVisible(d.id) ? "all" : "none"));
+
+    link.style("display", (d) => {
+      const sid = (d.source as D3Node).id ?? String(d.source);
+      const tid = (d.target as D3Node).id ?? String(d.target);
+      return isVisible(sid) && isVisible(tid) ? null : "none";
+    });
+
+    labelGroups?.style("display", (d) => (isVisible(d.id) ? null : "none"));
+    updateHighlightingRef.current();
+  }, []);
 
   const fitView = useCallback(() => {
     const { zoom, svg, g } = d3Refs.current;
@@ -533,6 +556,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     });
 
     d3Refs.current = { simulation, link, node, labelGroups, g, zoom, zoomSurface, svg };
+    applyNodeVisibility(visibleNodeIds);
     updateHighlightingRef.current();
     simulation.alpha(1).restart();
 
@@ -543,7 +567,20 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       }
       simulation.stop();
     };
-  }, [graphData, onSelect, drag, onGraphBackgroundClick]);
+  }, [graphData, onSelect, drag, onGraphBackgroundClick, applyNodeVisibility]);
+
+  const visibleNodeIdsKey = useMemo(() => {
+    if (visibleNodeIds === null) return "__all__";
+    if (visibleNodeIds.size === 0) return "__none__";
+    return [...visibleNodeIds].sort().join("\0");
+  }, [visibleNodeIds]);
+
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  visibleNodeIdsRef.current = visibleNodeIds;
+
+  useEffect(() => {
+    applyNodeVisibility(visibleNodeIdsRef.current);
+  }, [visibleNodeIdsKey, applyNodeVisibility]);
 
   useEffect(() => {
     const { simulation } = d3Refs.current;

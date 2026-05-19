@@ -437,6 +437,18 @@ export function kbMaxLimitForFlagged(flaggedCount: number): number {
   return kbPerWorkspaceLimitFromBudget(KB_MAX_LIMIT, flaggedCount);
 }
 
+/** Divisor for per-workspace node limits: subset when workspace filter active, else all starred. */
+export function flaggedLimitDivisor(
+  apiStarredCount: number,
+  selectedWorkspaceCount: number,
+  workspaceFilterActive: boolean
+): number {
+  if (workspaceFilterActive && selectedWorkspaceCount > 0) {
+    return selectedWorkspaceCount;
+  }
+  return Math.max(1, apiStarredCount);
+}
+
 export interface FileReference {
   file_name: string;
   uuid: string;
