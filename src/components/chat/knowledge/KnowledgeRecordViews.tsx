@@ -112,12 +112,15 @@ function MetadataFooter({ metadata }: { metadata: Record<string, string> }) {
 function EntityRecordView({
   vm,
   jsonText,
+  compact = false,
 }: {
   vm: Extract<KnowledgeViewModel, { kind: "entity" }>;
   jsonText: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-5">
+    <div className={cn(compact ? "space-y-4" : "space-y-5")}>
+      {!compact && (
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-lg font-semibold leading-tight text-foreground">{vm.name}</h3>
@@ -133,6 +136,7 @@ function EntityRecordView({
           </p>
         )}
       </div>
+      )}
 
       {vm.description && (
         <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
@@ -193,12 +197,14 @@ function formatRelationCopy(
 function RelationRecordView({
   vm,
   jsonText,
+  compact = false,
 }: {
   vm: Extract<KnowledgeViewModel, { kind: "relation" }>;
   jsonText: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-5">
+    <div className={cn(compact ? "space-y-4" : "space-y-5")}>
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
         <CopyableSectionHeader title="Relationship" copyText={formatRelationCopy(vm)} />
         <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
@@ -284,23 +290,14 @@ function EndpointCard({
 function ChunkRecordView({
   vm,
   jsonText,
+  compact = false,
 }: {
   vm: Extract<KnowledgeViewModel, { kind: "chunk" }>;
   jsonText: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {vm.chunkIndex != null && (
-          <Badge variant="outline">Chunk #{vm.chunkIndex}</Badge>
-        )}
-        {vm.sectionTitle && (
-          <span className="font-medium text-foreground">{vm.sectionTitle}</span>
-        )}
-        {vm.fileName && <span>{vm.fileName}</span>}
-        {vm.workspace && <span>· {vm.workspace}</span>}
-      </div>
-
+    <div className={cn(compact ? "space-y-4" : "space-y-5")}>
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
         <CopyableSectionHeader title="Chunk text" copyText={vm.text} />
         {vm.text ? (
@@ -328,20 +325,24 @@ function ChunkRecordView({
 function DocumentRecordView({
   vm,
   jsonText,
+  compact = false,
 }: {
   vm: Extract<KnowledgeViewModel, { kind: "doc" }>;
   jsonText: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">{vm.title}</h3>
-        {(vm.fileName || vm.workspace) && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {[vm.fileName, vm.workspace].filter(Boolean).join(" · ")}
-          </p>
-        )}
-      </div>
+    <div className={cn(compact ? "space-y-4" : "space-y-5")}>
+      {!compact && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">{vm.title}</h3>
+          {(vm.fileName || vm.workspace) && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {[vm.fileName, vm.workspace].filter(Boolean).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
 
       <section className="rounded-lg border border-border/80 bg-muted/20 p-4">
         <CopyableSectionHeader title="Document" copyText={vm.body} />
@@ -374,9 +375,15 @@ function DocumentRecordView({
 export interface KnowledgeRecordPanelProps {
   record: unknown;
   citationKind: CitationKind;
+  /** Side panel: omit hero title blocks already shown in citation header */
+  compact?: boolean;
 }
 
-export function KnowledgeRecordPanel({ record, citationKind }: KnowledgeRecordPanelProps) {
+export function KnowledgeRecordPanel({
+  record,
+  citationKind,
+  compact = false,
+}: KnowledgeRecordPanelProps) {
   const vm = normalizeKnowledgeRecord(record, citationKind);
 
   if (!vm) {
@@ -389,13 +396,13 @@ export function KnowledgeRecordPanel({ record, citationKind }: KnowledgeRecordPa
 
   switch (vm.kind) {
     case "entity":
-      return <EntityRecordView vm={vm} jsonText={jsonText} />;
+      return <EntityRecordView vm={vm} jsonText={jsonText} compact={compact} />;
     case "relation":
-      return <RelationRecordView vm={vm} jsonText={jsonText} />;
+      return <RelationRecordView vm={vm} jsonText={jsonText} compact={compact} />;
     case "chunk":
-      return <ChunkRecordView vm={vm} jsonText={jsonText} />;
+      return <ChunkRecordView vm={vm} jsonText={jsonText} compact={compact} />;
     case "doc":
-      return <DocumentRecordView vm={vm} jsonText={jsonText} />;
+      return <DocumentRecordView vm={vm} jsonText={jsonText} compact={compact} />;
   }
 }
 

@@ -35,16 +35,17 @@ import { CopyButton } from "@/components/chat/CopyButton";
 import { getAssistantResponseText } from "@/lib/chatCopyText";
 import { createBlockId } from "@/lib/chatTypes";
 import { toast } from "sonner";
+import { CitationModalProvider } from "@/components/chat/CitationModalContext";
+import { CitationChatAlign } from "@/components/chat/CitationChatAlign";
+import { CitationSplitLayout } from "@/components/chat/CitationSplitLayout";
 
 const TEXTAREA_MAX_HEIGHT = 160;
 /** Message thread max width */
 const CHAT_THREAD_MAX_CLASS = "max-w-6xl";
 /** Composer bar max width (narrower than message thread) */
 const CHAT_COMPOSER_MAX_CLASS = "max-w-2xl";
-/** Reserve space above fixed composer (input + hint) */
-const CHAT_COMPOSER_RESERVE_CLASS = "pb-[7.5rem]";
 
-const Stream: React.FC = () => {
+const StreamPage: React.FC = () => {
   const { currentWorkspace } = useWorkspace();
   const [chatScope, setChatScope] = useState<ChatScope>(() => getStoredChatScope());
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -253,8 +254,10 @@ const Stream: React.FC = () => {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <CitationSplitLayout className="min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <header className="z-10 shrink-0 bg-background px-4 pb-2 pt-3">
-        <div className={cn("mx-auto w-full", CHAT_THREAD_MAX_CLASS)}>
+        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS}>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 shadow-sm sm:px-4 sm:py-2.5">
             <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
               <h1 className="shrink-0 text-base font-semibold tracking-tight">Chat</h1>
@@ -313,17 +316,17 @@ const Stream: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </CitationChatAlign>
       </header>
 
-      <div
-        ref={messagesRef}
-        className={cn(
-          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4",
-          CHAT_COMPOSER_RESERVE_CLASS
-        )}
-      >
-        <div className={cn("mx-auto w-full px-3 sm:px-6 py-4 space-y-3", CHAT_THREAD_MAX_CLASS)}>
+        <div
+          ref={messagesRef}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4"
+        >
+          <CitationChatAlign
+            maxWidthClass={CHAT_THREAD_MAX_CLASS}
+            className="space-y-3 px-3 py-4 sm:px-6"
+          >
           {emptyState === "no-workspace" && (
             <Alert>
               <AlertTitle>Select a workspace</AlertTitle>
@@ -440,14 +443,11 @@ const Stream: React.FC = () => {
           })}
 
           <div ref={scrollEndRef} className="h-px" />
+          </CitationChatAlign>
         </div>
-      </div>
 
-      <footer
-        className="fixed bottom-0 z-30 bg-background px-4 pb-3 pt-2"
-        style={{ left: "var(--sidebar-collapsed-width)", right: 0 }}
-      >
-        <div className={cn("mx-auto w-full", CHAT_COMPOSER_MAX_CLASS)}>
+      <footer className="z-10 shrink-0  border-border/40 bg-background px-4 pb-3 pt-2">
+        <CitationChatAlign maxWidthClass={CHAT_COMPOSER_MAX_CLASS}>
           <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
             <Textarea
               ref={textareaRef}
@@ -489,10 +489,18 @@ const Stream: React.FC = () => {
             <CitationTag kind="relation" label="" />
             <CitationTag kind="chunk" label="" />
           </p>
-        </div>
+        </CitationChatAlign>
       </footer>
+        </div>
+      </CitationSplitLayout>
     </div>
   );
 };
+
+const Stream: React.FC = () => (
+  <CitationModalProvider>
+    <StreamPage />
+  </CitationModalProvider>
+);
 
 export default Stream;

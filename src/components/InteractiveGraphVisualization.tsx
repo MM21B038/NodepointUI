@@ -248,17 +248,41 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     const hoveredId = hoveredNodeIdRef.current;
     const selectedId = selectedItem?.id ?? null;
 
-    const focusId = selectedId ?? (cfg.labelMode === "onHover" ? hoveredId : null);
+    const emphasisId =
+      selectedId ?? (cfg.labelMode === "onHover" ? hoveredId : null);
 
-    const emphasisIds = focusId
-      ? getNodeIdsWithinDepth(focusId, focusDepthRef.current, graphData.edges)
+    const emphasisIds = emphasisId
+      ? getNodeIdsWithinDepth(emphasisId, focusDepthRef.current, graphData.edges)
+      : null;
+
+    const selectionEmphasisIds = selectedId
+      ? getNodeIdsWithinDepth(selectedId, focusDepthRef.current, graphData.edges)
+      : null;
+
+    const hoverEmphasisIds = hoveredId
+      ? getNodeIdsWithinDepth(hoveredId, focusDepthRef.current, graphData.edges)
       : null;
 
     const getNodeTier = (d: D3Node): NodeFocusTier => {
-      if (!focusId || !emphasisIds) return "none";
-      if (d.id === focusId) return "focus";
+      if (!emphasisId || !emphasisIds) return "none";
+      if (d.id === emphasisId) return "focus";
       if (emphasisIds.has(d.id)) return "neighborhood";
       return "faded";
+    };
+
+    const isLabelVisible = (d: D3Node): boolean => {
+      switch (cfg.labelMode) {
+        case "always":
+          return true;
+        case "onSelect":
+          if (!selectedId || !selectionEmphasisIds) return true;
+          return selectionEmphasisIds.has(d.id);
+        case "onHover":
+          if (!hoveredId || !hoverEmphasisIds) return true;
+          return hoverEmphasisIds.has(d.id);
+        default:
+          return true;
+      }
     };
 
     const isEdgeEmphasized = (d: D3Edge) => {
@@ -275,7 +299,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     if (!cfg.showEdges) {
       link.style("display", "none");
-    } else if (!focusId) {
+    } else if (!emphasisId) {
       link
         .attr("stroke-width", 1)
         .attr("stroke", getEdgeD3Color(false))
@@ -319,24 +343,30 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       return;
     }
 
-    labelGroups.style("display", null);
     labelGroups.each(function (d: D3Node) {
       const group = d3.select(this);
+      if (!isLabelVisible(d)) {
+        group.attr("opacity", 0).style("display", "none");
+        return;
+      }
+
       const tier = getNodeTier(d);
       let labelOpacity = 1;
-      if (tier === "faded") {
-        labelOpacity = 0.35;
-      } else if (tier === "neighborhood") {
-        labelOpacity = 0.85;
-      } else if (cfg.labelMode === "onSelect" && focusId && tier === "none") {
-        labelOpacity = 1;
-      } else if (cfg.labelMode === "onHover" && hoveredId && tier === "none") {
-        labelOpacity = 1;
+      if (cfg.labelMode === "always" && selectedId) {
+        if (tier === "faded") labelOpacity = 0.35;
+        else if (tier === "neighborhood") labelOpacity = 0.85;
+      } else if (cfg.labelMode === "onSelect" && selectedId) {
+        labelOpacity = d.id === selectedId ? 1 : 0.9;
       }
+
       group.attr("opacity", labelOpacity).style("display", "block");
     });
 
-    syncLabelBackground(labelGroups);
+    syncLabelBackground(
+      labelGroups.filter(function (d: D3Node) {
+        return isLabelVisible(d);
+      })
+    );
   }, [selectedItem, graphData.edges, syncLabelBackground]);
 
   updateHighlightingRef.current = updateHighlighting;
