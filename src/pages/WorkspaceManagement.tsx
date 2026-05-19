@@ -1,138 +1,266 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { FolderCog, Info, Loader2, Plus, Search, ChevronLeft, ChevronRight, Flag } from "lucide-react"; // Added Flag icon
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { Separator } from "@/components/ui/separator";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, createWorkspace, deleteWorkspace, listFiles, getKnowledgeGraph, WorkspaceEntry, startPreprocess, WorkspaceCreateError } from "@/database/workspaceStorage";
+import {
+  getWorkspaces,
+  getWorkspaceStats,
+  getWorkspacePage,
+  createWorkspace,
+  deleteWorkspace,
+  startPreprocess,
+  WorkspaceCreateError,
+  type WorkspacePageItem,
+  type WorkspacePagePagination,
+  type WorkspacePageFlag,
+  type WorkspaceStats,
+} from "@/database/workspaceStorage";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
-import BatchFlaggingControls from "@/components/BatchFlaggingControls"; // New import
+import WorkspaceCardSkeleton from "@/components/workspace/WorkspaceCardSkeleton";
+import WorkspaceManagementToolbar, {
+  type FlagFilter,
+} from "@/components/workspace/WorkspaceManagementToolbar";
+import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
 
-const WorkspacesPerPage = 8; // Changed to 8 workspaces per page
+const EMPTY_PAGINATION: WorkspacePagePagination = {
+  page: 1,
+  page_size: 8,
+  total_items: 0,
+  total_pages: 0,
+  has_next: false,
+  has_previous: false,
+};
+
+function flagFilterToApi(flag: FlagFilter): WorkspacePageFlag {
+  if (flag === "flagged") return "flagged";
+  if (flag === "unflagged") return "non_flagged";
+  return "all";
+}
+
+function entryToPageItem(entry: {
+  name: string;
+  is_flag: boolean;
+  created_at: string;
+}): WorkspacePageItem {
+  return {
+    name: entry.name,
+    is_flag: entry.is_flag,
+    created_at: entry.created_at,
+    counts: { files: 0, chunks: 0, entities: 0, relations: 0 },
+  };
+}
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
-  const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceEntry[]>([]); // Store full WorkspaceEntry objects
+  const { gridRef, pageSize } = useWorkspaceGridPageSize();
+
+  const [workspaces, setWorkspaces] = useState<WorkspacePageItem[]>([]);
+  const [pagination, setPagination] =
+    useState<WorkspacePagePagination>(EMPTY_PAGINATION);
+  const [workspaceStats, setWorkspaceStats] = useState<WorkspaceStats | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [flagFilter, setFlagFilter] = useState<"both" | "flagged" | "unflagged">("both"); // New state for flag filter
-  // Removed workspaceFlagStatus state as it's now part of allWorkspaces
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [flagFilter, setFlagFilter] = useState<FlagFilter>("both");
+  const [page, setPage] = useState(1);
+
+  const [searchList, setSearchList] = useState<WorkspacePageItem[] | null>(
+    null
+  );
+  const [isSearchListLoading, setIsSearchListLoading] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(null);
+  const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(
+    null
+  );
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(new Map()); // New state for extraction loading
+  const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(
+    new Map()
+  );
 
-  const [currentPage, setCurrentPage] = useState(0);
+  const prevPageSizeRef = useRef(pageSize);
+  const isSearchActive = debouncedSearch.trim().length > 0;
 
-  // State for cached workspace statistics and their loading status
-  const [cachedWorkspaceStats, setCachedWorkspaceStats] = useState<Map<string, { files: number; nodes: number; edges: number }>>(new Map());
-  const [statsLoadingMap, setStatsLoadingMap] = useState<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-  // Function to fetch and cache stats for a single workspace
-  const fetchAndCacheStatsForWorkspace = useCallback(async (workspaceName: string) => {
-    // If already cached or currently loading, do nothing
-    if (cachedWorkspaceStats.has(workspaceName) || statsLoadingMap.get(workspaceName)) {
-      return;
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, flagFilter]);
+
+  useEffect(() => {
+    if (prevPageSizeRef.current !== pageSize) {
+      prevPageSizeRef.current = pageSize;
+      setPage(1);
     }
+  }, [pageSize]);
 
-    setStatsLoadingMap(prev => new Map(prev).set(workspaceName, true));
-
+  const fetchStats = useCallback(async () => {
     try {
-      const files = await listFiles(workspaceName);
-      const graph = await getKnowledgeGraph(workspaceName);
-      setCachedWorkspaceStats(prev => new Map(prev).set(workspaceName, {
-        files: files.length,
-        nodes: graph.nodes?.length || 0,
-        edges: graph.edges?.length || 0,
-      }));
+      const stats = await getWorkspaceStats();
+      setWorkspaceStats(stats);
     } catch (error) {
-      console.error(`Failed to fetch stats for workspace ${workspaceName}:`, error);
-      setCachedWorkspaceStats(prev => new Map(prev).set(workspaceName, { files: 0, nodes: 0, edges: 0 })); // Store default on error
-    } finally {
-      setStatsLoadingMap(prev => new Map(prev).set(workspaceName, false));
+      console.error("Failed to fetch workspace stats:", error);
     }
-  }, [cachedWorkspaceStats, statsLoadingMap]); // Dependencies for useCallback
+  }, []);
 
-  const fetchWorkspaces = useCallback(async () => {
+  const syncCurrentWorkspaceFromPage = useCallback(
+    (items: WorkspacePageItem[]) => {
+      if (!currentWorkspace && items.length > 0) {
+        setCurrentWorkspace(items[0].name);
+      }
+    },
+    [currentWorkspace, setCurrentWorkspace]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkspaces().then((list) => {
+      if (cancelled) return;
+      const names = list.map((w) => w.name);
+      if (currentWorkspace && !names.includes(currentWorkspace)) {
+        setCurrentWorkspace(names[0] ?? null);
+      } else if (!currentWorkspace && names.length > 0) {
+        setCurrentWorkspace(names[0]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- validate once on mount
+  }, []);
+
+  const fetchPage = useCallback(async () => {
     setIsLoading(true);
     try {
-      const list: WorkspaceEntry[] = await getWorkspaces();
-      
-      // Sort by timestamp in descending order (latest first)
-      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      setAllWorkspaces(list); // Store the full WorkspaceEntry objects
-
-      const workspaceNames = list.map(ws => ws.name);
-
-      // Update current workspace if it's no longer in the list or set a default
-      if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
-        setCurrentWorkspace(null);
-      }
-      if (!currentWorkspace && workspaceNames.length > 0) {
-        setCurrentWorkspace(workspaceNames[0]);
-      } else if (workspaceNames.length === 0) {
-        setCurrentWorkspace(null);
-      }
-      setCurrentPage(0); // Reset to first page on refresh
+      const response = await getWorkspacePage({
+        page,
+        page_size: pageSize,
+        flag: flagFilterToApi(flagFilter),
+      });
+      setWorkspaces(response.workspaces);
+      setPagination(response.pagination);
+      syncCurrentWorkspaceFromPage(response.workspaces);
     } catch (error) {
-      console.error("Failed to fetch workspaces:", error);
+      console.error("Failed to fetch workspace page:", error);
       toast.error("Failed to load workspaces.");
+      setWorkspaces([]);
+      setPagination(EMPTY_PAGINATION);
     } finally {
       setIsLoading(false);
     }
-  }, [currentWorkspace, setCurrentWorkspace]);
+  }, [page, pageSize, flagFilter, syncCurrentWorkspaceFromPage]);
+
+  const fetchSearchList = useCallback(async () => {
+    setIsSearchListLoading(true);
+    try {
+      const list = await getWorkspaces();
+      const apiFlag = flagFilterToApi(flagFilter);
+      let filtered = list.map(entryToPageItem);
+      if (apiFlag === "flagged") {
+        filtered = filtered.filter((w) => w.is_flag);
+      } else if (apiFlag === "non_flagged") {
+        filtered = filtered.filter((w) => !w.is_flag);
+      }
+      const q = debouncedSearch.trim().toLowerCase();
+      if (q) {
+        filtered = filtered.filter((w) =>
+          w.name.toLowerCase().includes(q)
+        );
+      }
+      filtered.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setSearchList(filtered);
+    } catch (error) {
+      console.error("Failed to load workspaces for search:", error);
+      toast.error("Failed to search workspaces.");
+      setSearchList([]);
+    } finally {
+      setIsSearchListLoading(false);
+    }
+  }, [debouncedSearch, flagFilter]);
 
   useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
+    fetchStats();
+  }, [fetchStats]);
 
-  // Effect to load stats for visible and next page workspaces
   useEffect(() => {
-    if (!currentWorkspace && allWorkspaces.length === 0) return;
+    if (isSearchActive) {
+      setSearchList(null);
+      fetchSearchList();
+    } else {
+      setSearchList(null);
+    }
+  }, [isSearchActive, fetchSearchList]);
 
-    // Recompute filteredWorkspaces here
-    const currentFilteredWorkspaces = searchTerm
-      ? allWorkspaces.filter(workspace =>
-          workspace.name.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : allWorkspaces;
+  useEffect(() => {
+    if (!isSearchActive) {
+      fetchPage();
+    }
+  }, [isSearchActive, fetchPage]);
 
-    const workspacesToLoad: string[] = [];
-    const currentWorkspaces = currentFilteredWorkspaces.slice(currentPage * WorkspacesPerPage, (currentPage + 1) * WorkspacesPerPage);
-    const nextWorkspaces = currentFilteredWorkspaces.slice((currentPage + 1) * WorkspacesPerPage, (currentPage + 2) * WorkspacesPerPage);
+  const searchPagination = useMemo(() => {
+    if (!isSearchActive || searchList === null) {
+      return EMPTY_PAGINATION;
+    }
+    const total_items = searchList.length;
+    const total_pages = Math.max(1, Math.ceil(total_items / pageSize));
+    const safePage = Math.min(page, total_pages);
+    return {
+      page: safePage,
+      page_size: pageSize,
+      total_items,
+      total_pages,
+      has_next: safePage < total_pages,
+      has_previous: safePage > 1,
+    };
+  }, [isSearchActive, searchList, pageSize, page]);
 
-    currentWorkspaces.forEach(ws => workspacesToLoad.push(ws.name));
-    nextWorkspaces.forEach(ws => workspacesToLoad.push(ws.name));
+  const displayedWorkspaces = useMemo(() => {
+    if (!isSearchActive) return workspaces;
+    if (searchList === null) return [];
+    const { page: p, page_size } = searchPagination;
+    const start = (p - 1) * page_size;
+    return searchList.slice(start, start + page_size);
+  }, [isSearchActive, workspaces, searchList, searchPagination]);
 
-    // Filter out duplicates and already cached/loading ones
-    const uniqueWorkspacesToLoad = Array.from(new Set(workspacesToLoad)).filter(ws =>
-        !cachedWorkspaceStats.has(ws) && !statsLoadingMap.get(ws)
-    );
+  const activePagination = isSearchActive ? searchPagination : pagination;
 
-    uniqueWorkspacesToLoad.forEach(ws => fetchAndCacheStatsForWorkspace(ws));
+  useEffect(() => {
+    if (
+      activePagination.total_pages > 0 &&
+      page > activePagination.total_pages
+    ) {
+      setPage(activePagination.total_pages);
+    }
+  }, [activePagination.total_pages, page]);
 
-  }, [currentPage, currentWorkspace, fetchAndCacheStatsForWorkspace, cachedWorkspaceStats, statsLoadingMap, allWorkspaces, searchTerm]);
+  const showLoading = isSearchActive ? isSearchListLoading : isLoading;
+  const isInitialGridLoad = showLoading && displayedWorkspaces.length === 0;
+  const hasNoWorkspacesEver =
+    workspaceStats !== null && workspaceStats.total === 0;
 
+  const refreshAfterMutation = useCallback(async () => {
+    await fetchStats();
+    if (isSearchActive) {
+      await fetchSearchList();
+    } else {
+      await fetchPage();
+    }
+  }, [fetchStats, fetchPage, fetchSearchList, isSearchActive]);
 
   const handleCreateWorkspace = async () => {
     const name = newWorkspaceName.trim();
@@ -146,11 +274,24 @@ const WorkspaceManagement = () => {
 
     try {
       await createWorkspace(name);
-      toast.success(`Workspace "${name}" created successfully!`, { id: loadingToastId });
-      setNewWorkspaceName("");
-      fetchWorkspaces().then(() => {
-        setCurrentWorkspace(name);
+      toast.success(`Workspace "${name}" created successfully!`, {
+        id: loadingToastId,
       });
+      setNewWorkspaceName("");
+      setPage(1);
+      await fetchStats();
+      if (isSearchActive) {
+        await fetchSearchList();
+      } else {
+        const response = await getWorkspacePage({
+          page: 1,
+          page_size: pageSize,
+          flag: flagFilterToApi(flagFilter),
+        });
+        setWorkspaces(response.workspaces);
+        setPagination(response.pagination);
+      }
+      setCurrentWorkspace(name);
     } catch (error) {
       const errorMessage =
         error instanceof WorkspaceCreateError
@@ -158,7 +299,9 @@ const WorkspaceManagement = () => {
           : error instanceof Error
             ? error.message
             : "An unexpected error occurred.";
-      toast.error(`Failed to create workspace: ${errorMessage}`, { id: loadingToastId });
+      toast.error(`Failed to create workspace: ${errorMessage}`, {
+        id: loadingToastId,
+      });
       console.error("Error creating workspace:", error);
     } finally {
       setIsCreating(false);
@@ -179,267 +322,164 @@ const WorkspaceManagement = () => {
     if (!workspaceToDelete) return;
 
     setIsDeleting(true);
-    const loadingToastId = toast.loading(`Deleting workspace ${workspaceToDelete}...`);
+    const loadingToastId = toast.loading(
+      `Deleting workspace ${workspaceToDelete}...`
+    );
 
     try {
       await deleteWorkspace(workspaceToDelete);
-      toast.success(`Workspace "${workspaceToDelete}" deleted successfully!`, { id: loadingToastId });
-      // Remove from cache and loading map
-      setCachedWorkspaceStats(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(workspaceToDelete);
-        return newMap;
+      toast.success(`Workspace "${workspaceToDelete}" deleted successfully!`, {
+        id: loadingToastId,
       });
-      setStatsLoadingMap(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(workspaceToDelete);
-        return newMap;
-      });
-      fetchWorkspaces(); // Re-fetch workspace names to update the list
+      if (currentWorkspace === workspaceToDelete) {
+        setCurrentWorkspace(null);
+      }
+      await refreshAfterMutation();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error during deletion.";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Unknown error during deletion.";
       toast.error(`Deletion failed: ${errorMessage}`, { id: loadingToastId });
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
       setWorkspaceToDelete(null);
     }
-  }, [workspaceToDelete, fetchWorkspaces]);
+  }, [workspaceToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
 
-  const handleExtract = useCallback(async (workspaceName: string) => {
-    setIsExtractingMap(prev => new Map(prev).set(workspaceName, true));
-    const loadingToastId = toast.loading(`Starting extraction for workspace "${workspaceName}"...`);
-
-    try {
-      await startPreprocess(workspaceName);
-      toast.success(`Extraction started for "${workspaceName}"!`, { id: loadingToastId });
-      // Invalidate cache for this workspace and refetch stats
-      setCachedWorkspaceStats(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(workspaceName);
-        return newMap;
-      });
-      // Trigger a re-fetch of stats for this specific workspace
-      fetchAndCacheStatsForWorkspace(workspaceName);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-      toast.error(`Failed to start extraction: ${errorMessage}`, { id: loadingToastId });
-      console.error("Extraction error:", error);
-    } finally {
-      setIsExtractingMap(prev => new Map(prev).set(workspaceName, false));
-    }
-  }, [fetchAndCacheStatsForWorkspace]);
-
-  const filteredWorkspaces = useMemo(() => {
-    let tempWorkspaces = allWorkspaces;
-
-    // Apply search term filter
-    if (searchTerm) {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      tempWorkspaces = tempWorkspaces.filter(workspace =>
-        workspace.name.toLowerCase().includes(lowerCaseSearchTerm)
+  const handleExtract = useCallback(
+    async (workspaceName: string) => {
+      setIsExtractingMap((prev) => new Map(prev).set(workspaceName, true));
+      const loadingToastId = toast.loading(
+        `Starting extraction for workspace "${workspaceName}"...`
       );
-    }
 
-    // Apply flag filter
-    if (flagFilter !== "both") {
-      tempWorkspaces = tempWorkspaces.filter(workspace => {
-        const isFlagged = workspace.is_flag;
-        return flagFilter === "flagged" ? isFlagged : !isFlagged;
-      });
-    }
-    return tempWorkspaces;
-  }, [allWorkspaces, searchTerm, flagFilter]);
-
-  const totalPages = Math.ceil(filteredWorkspaces.length / WorkspacesPerPage);
-  const startIndex = currentPage * WorkspacesPerPage;
-  const endIndex = startIndex + WorkspacesPerPage;
-  const currentWorkspacesToDisplay = filteredWorkspaces.slice(startIndex, endIndex);
-
-  const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, totalPages - 1));
-  };
+      try {
+        await startPreprocess(workspaceName);
+        toast.success(`Extraction started for "${workspaceName}"!`, {
+          id: loadingToastId,
+        });
+        await refreshAfterMutation();
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.";
+        toast.error(`Failed to start extraction: ${errorMessage}`, {
+          id: loadingToastId,
+        });
+        console.error("Extraction error:", error);
+      } finally {
+        setIsExtractingMap((prev) => new Map(prev).set(workspaceName, false));
+      }
+    },
+    [refreshAfterMutation]
+  );
 
   const handlePreviousPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 0));
+    setPage((p) => Math.max(1, p - 1));
   };
 
+  const handleNextPage = () => {
+    setPage((p) => Math.min(activePagination.total_pages, p + 1));
+  };
+
+  const skeletonCount = Math.max(4, pageSize);
+
   return (
-    <div className="flex-grow h-full bg-gradient-to-br from-background to-muted/20">
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="min-h-[calc(100vh - var(--navbar-height) - var(--footer-height))] rounded-xl border shadow-lg bg-card"
-      >
-        {/* Left Panel: Create, Search, Filter, and Batch Flagging */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="p-4 flex flex-col space-y-4">
-          {/* Create Workspace Section */}
-          <div className="space-y-3">
-            <h2 className="text-xl font-bold flex items-center text-primary">
-              <Plus className="h-5 w-5 mr-2" /> Create New Workspace
-            </h2>
-            <div className="space-y-2">
-              <Label htmlFor="new-workspace-name" className="sr-only">Workspace Name</Label>
-              <Input
-                id="new-workspace-name"
-                placeholder="Enter new workspace name"
-                value={newWorkspaceName}
-                onChange={(e) => setNewWorkspaceName(e.target.value)}
-                disabled={isCreating}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleCreateWorkspace();
+    <div className="flex h-full min-h-0 flex-1 flex-col w-full">
+      <div className="flex flex-1 min-h-0 flex-col rounded-xl border shadow-lg bg-card overflow-hidden">
+        <WorkspaceManagementToolbar
+          newWorkspaceName={newWorkspaceName}
+          onNewWorkspaceNameChange={setNewWorkspaceName}
+          onCreateWorkspace={handleCreateWorkspace}
+          isCreating={isCreating}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          flagFilter={flagFilter}
+          onFlagFilterChange={setFlagFilter}
+          workspaceStats={workspaceStats}
+          totalItems={activePagination.total_items}
+          page={activePagination.page}
+          totalPages={Math.max(1, activePagination.total_pages)}
+          hasPrevious={activePagination.has_previous}
+          hasNext={activePagination.has_next}
+          onPreviousPage={handlePreviousPage}
+          onNextPage={handleNextPage}
+          isSearchActive={isSearchActive}
+        />
+
+        <div
+          ref={gridRef}
+          className="flex-1 min-h-0 overflow-y-auto p-4"
+        >
+          {isInitialGridLoad ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {Array.from({ length: skeletonCount }).map((_, i) => (
+                <WorkspaceCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : showLoading && displayedWorkspaces.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr opacity-50 pointer-events-none">
+              {displayedWorkspaces.map((workspace) => (
+                <WorkspaceCard
+                  key={workspace.name}
+                  workspaceName={workspace.name}
+                  isCurrent={currentWorkspace === workspace.name}
+                  onSelect={handleSelectWorkspace}
+                  onDelete={handleDeleteClick}
+                  isDeleting={isDeleting}
+                  deletingWorkspaceName={workspaceToDelete}
+                  counts={workspace.counts}
+                  onExtract={handleExtract}
+                  isExtracting={
+                    isExtractingMap.get(workspace.name) || false
                   }
-                }}
-              />
-              <Button
-                onClick={handleCreateWorkspace}
-                disabled={isCreating || !newWorkspaceName.trim()}
-                className="w-full"
-              >
-                {isCreating ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Create
-              </Button>
+                  isFlagged={workspace.is_flag}
+                  onFlagToggled={refreshAfterMutation}
+                />
+              ))}
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Search Workspaces Section */}
-          <div className="space-y-3">
-            <h2 className="text-xl font-bold flex items-center text-primary">
-              <Search className="h-5 w-5 mr-2" /> Search Workspaces
-            </h2>
-            <div className="space-y-2">
-              <Label htmlFor="search-workspace" className="sr-only">Search</Label>
-              <Input
-                id="search-workspace"
-                placeholder="Search by name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Filter by Flag Status Section */}
-          <div className="space-y-3">
-            <Label htmlFor="flag-filter" className="text-sm font-medium flex items-center">
-                <Flag className="h-4 w-4 mr-2 text-muted-foreground" /> Filter by Flag Status
-            </Label>
-            <Select value={flagFilter} onValueChange={(value: "both" | "flagged" | "unflagged") => setFlagFilter(value)}>
-                <SelectTrigger id="flag-filter" className="w-full">
-                    <SelectValue placeholder="Filter by flag status" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="both">All Workspaces</SelectItem>
-                    <SelectItem value="flagged">Flagged Workspaces</SelectItem>
-                    <SelectItem value="unflagged">Unflagged Workspaces</SelectItem>
-                </SelectContent>
-            </Select>
-          </div>
-
-          <Separator />
-
-          {/* New: Batch Flagging/Unflagging Section */}
-          <BatchFlaggingControls /> {/* No activeMethod prop needed anymore */}
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        {/* Right Panel: Workspace List with Hover Navigation */}
-        <ResizablePanel defaultSize={75} className="p-4 flex flex-col group">
-          {isLoading ? (
-            <div className="flex-grow flex flex-col items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="mt-4 text-lg text-muted-foreground">Loading workspaces...</span>
-            </div>
-          ) : allWorkspaces.length === 0 ? (
-            <div className="flex-grow flex flex-col items-center justify-center h-full text-center">
+          ) : hasNoWorkspacesEver ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[12rem] text-center">
               <Alert className="max-w-lg">
                 <Info className="h-4 w-4" />
                 <AlertTitle>No Workspaces Found</AlertTitle>
                 <AlertDescription>
-                  It looks like you don't have any workspaces yet. Use the "Create New Workspace" panel to get started!
+                  You do not have any workspaces yet. Enter a name above and
+                  click Create to get started.
                 </AlertDescription>
               </Alert>
             </div>
+          ) : activePagination.total_items === 0 ? (
+            <div className="flex items-center justify-center h-full min-h-[12rem] text-muted-foreground text-lg">
+              <p>No workspaces match your current filters.</p>
+            </div>
           ) : (
-            <>
-              {filteredWorkspaces.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-lg">
-                  <p>No workspaces match your current filters.</p>
-                </div>
-              ) : (
-                <div className="relative flex-grow">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full items-stretch">
-                    {currentWorkspacesToDisplay.map((workspace) => {
-                      const stats = cachedWorkspaceStats.get(workspace.name) || { files: 0, nodes: 0, edges: 0 };
-                      const isLoadingStats = statsLoadingMap.get(workspace.name) || false;
-                      return (
-                        <WorkspaceCard
-                          key={workspace.name}
-                          workspaceName={workspace.name}
-                          isCurrent={currentWorkspace === workspace.name}
-                          onSelect={handleSelectWorkspace}
-                          onDelete={handleDeleteClick}
-                          isDeleting={isDeleting}
-                          deletingWorkspaceName={workspaceToDelete}
-                          totalFiles={stats.files}
-                          totalNodes={stats.nodes}
-                          totalEdges={stats.edges}
-                          isLoadingStats={isLoadingStats}
-                          onExtract={handleExtract} // Pass the new handler
-                          isExtracting={isExtractingMap.get(workspace.name) || false}
-                          isFlagged={workspace.is_flag}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  {/* Left Navigation Overlay */}
-                  {totalPages > 1 && currentPage > 0 && (
-                    <button
-                      onClick={handlePreviousPage}
-                      className={cn(
-                        "absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center",
-                        "bg-gradient-to-r from-background/70 to-transparent",
-                        "transition-all duration-300",
-                        "z-10 text-foreground hover:text-primary",
-                        "opacity-0 pointer-events-none", // Default: hidden and no pointer events
-                        "group-hover:opacity-100 group-hover:pointer-events-auto" // On group hover: visible and active pointer events
-                      )}
-                      aria-label="Previous page"
-                    >
-                      <ChevronLeft className="h-8 w-8" />
-                    </button>
-                  )}
-
-                  {/* Right Navigation Overlay */}
-                  {totalPages > 1 && currentPage < totalPages - 1 && (
-                    <button
-                      onClick={handleNextPage}
-                      className={cn(
-                        "absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center",
-                        "bg-gradient-to-l from-background/70 to-transparent",
-                        "transition-all duration-300",
-                        "z-10 text-foreground hover:text-primary",
-                        "opacity-0 pointer-events-none", // Default: hidden and no pointer events
-                        "group-hover:opacity-100 group-hover:pointer-events-auto" // On group hover: visible and active pointer events
-                      )}
-                      aria-label="Next page"
-                    >
-                      <ChevronRight className="h-8 w-8" />
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
+              {displayedWorkspaces.map((workspace) => (
+                <WorkspaceCard
+                  key={workspace.name}
+                  workspaceName={workspace.name}
+                  isCurrent={currentWorkspace === workspace.name}
+                  onSelect={handleSelectWorkspace}
+                  onDelete={handleDeleteClick}
+                  isDeleting={isDeleting}
+                  deletingWorkspaceName={workspaceToDelete}
+                  counts={workspace.counts}
+                  onExtract={handleExtract}
+                  isExtracting={
+                    isExtractingMap.get(workspace.name) || false
+                  }
+                  isFlagged={workspace.is_flag}
+                  onFlagToggled={refreshAfterMutation}
+                />
+              ))}
+            </div>
           )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
+      </div>
 
       {workspaceToDelete && (
         <DeleteConfirmationDialog

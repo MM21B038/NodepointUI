@@ -25,26 +25,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       ? location.pathname.replace(/\/+$/, "")
       : location.pathname;
   const isFullBleed = path === "/knowledge-base" || path === "/chat";
+  const isWorkspacePage =
+    path === "/workspace-management" || path === "/";
 
   return (
     <div className="flex flex-col h-screen">
       <Navbar />
-      
+
       <div
         className={cn(
           "flex min-h-0 flex-1 overflow-hidden",
           isFullBleed && "pt-[var(--navbar-height)]"
         )}
       >
-        <SidebarNav
-          pages={pages}
-          currentPath={location.pathname}
-        />
-        
+        <SidebarNav pages={pages} currentPath={location.pathname} />
+
         <main
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col hide-scrollbar",
-            isFullBleed ? "h-full overflow-hidden" : "overflow-y-auto"
+            isFullBleed || isWorkspacePage
+              ? "h-full overflow-hidden"
+              : "overflow-y-auto"
           )}
           style={{
             marginLeft: "var(--sidebar-collapsed-width)",
@@ -53,6 +54,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         >
           {isFullBleed ? (
             <div className="flex h-full min-h-0 flex-1 flex-col w-full overflow-hidden bg-background">
+              {children}
+            </div>
+          ) : isWorkspacePage ? (
+            <div className="flex h-full min-h-0 flex-1 flex-col w-full overflow-hidden px-4 py-3">
               {children}
             </div>
           ) : (

@@ -36,6 +36,103 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
   }
 }
 
+export interface WorkspaceStats {
+  total: number;
+  flagged: number;
+  non_flagged: number;
+}
+
+export interface WorkspaceCounts {
+  files: number;
+  chunks: number;
+  entities: number;
+  relations: number;
+}
+
+export interface WorkspacePageItem {
+  name: string;
+  is_flag: boolean;
+  created_at: string;
+  counts: WorkspaceCounts;
+}
+
+export interface WorkspacePagePagination {
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface WorkspacePageResponse {
+  filter: string;
+  pagination: WorkspacePagePagination;
+  workspaces: WorkspacePageItem[];
+}
+
+export type WorkspacePageFlag = "all" | "flagged" | "non_flagged";
+
+function normalizeWorkspaceCounts(raw: Partial<WorkspaceCounts> | undefined): WorkspaceCounts {
+  return {
+    files: raw?.files ?? 0,
+    chunks: raw?.chunks ?? 0,
+    entities: raw?.entities ?? 0,
+    relations: raw?.relations ?? 0,
+  };
+}
+
+function normalizeWorkspacePageItem(raw: WorkspacePageItem): WorkspacePageItem {
+  return {
+    name: raw.name,
+    is_flag: Boolean(raw.is_flag),
+    created_at: raw.created_at,
+    counts: normalizeWorkspaceCounts(raw.counts),
+  };
+}
+
+export async function getWorkspaceStats(): Promise<WorkspaceStats> {
+  const response = await fetch(buildApiUrl("/workspace/stats/"));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = await response.json();
+  return {
+    total: data.total ?? 0,
+    flagged: data.flagged ?? 0,
+    non_flagged: data.non_flagged ?? 0,
+  };
+}
+
+export async function getWorkspacePage(params: {
+  page?: number;
+  page_size?: number;
+  flag?: WorkspacePageFlag;
+}): Promise<WorkspacePageResponse> {
+  const query: Record<string, string> = {};
+  if (params.page !== undefined) query.page = String(params.page);
+  if (params.page_size !== undefined) query.page_size = String(params.page_size);
+  if (params.flag !== undefined) query.flag = params.flag;
+
+  const response = await fetch(buildApiUrl("/workspace/page/", query));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data: WorkspacePageResponse = await response.json();
+  return {
+    filter: data.filter ?? params.flag ?? "all",
+    pagination: {
+      page: data.pagination?.page ?? 1,
+      page_size: data.pagination?.page_size ?? params.page_size ?? 20,
+      total_items: data.pagination?.total_items ?? 0,
+      total_pages: data.pagination?.total_pages ?? 0,
+      has_next: Boolean(data.pagination?.has_next),
+      has_previous: Boolean(data.pagination?.has_previous),
+    },
+    workspaces: (data.workspaces ?? []).map(normalizeWorkspacePageItem),
+  };
+}
+
 export class WorkspaceCreateError extends Error {
   constructor(
     message: string,

@@ -23,6 +23,8 @@ import {
 } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 import { showError } from "@/utils/toast";
+import DocumentsPageSkeleton from "@/components/documents/DocumentsPageSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const POLL_MS = 2500;
 
@@ -217,7 +219,11 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <GitGraph className="h-4 w-4" />
             {isGraphLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="flex items-center gap-1.5">
+                <Skeleton className="h-3 w-10" />
+                <span>·</span>
+                <Skeleton className="h-3 w-16" />
+              </span>
             ) : (
               <>
                 <span className="tabular-nums">{totalNodes} entities</span>
@@ -268,10 +274,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       </div>
 
       {isLoading && !status ? (
-        <div className="flex h-48 flex-col items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="mt-2 text-muted-foreground">Loading status…</span>
-        </div>
+        <DocumentsPageSkeleton />
       ) : !status ? (
         <div className="flex h-32 items-center justify-center">
           <p className="text-muted-foreground">Could not load preprocessing status.</p>

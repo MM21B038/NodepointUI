@@ -156,6 +156,10 @@ const KnowledgeBase = () => {
     setStoredChatScope(scope);
     setSelectedFlaggedWorkspaces(new Set());
     setActiveFilterPanel("none");
+    setSelectedItem(null);
+    setSearchExpanded(false);
+    setGraphLoadOpen(false);
+    setGraphControlsOpen(false);
   }, []);
 
   const applyGraphResponse = useCallback(
@@ -182,6 +186,11 @@ const KnowledgeBase = () => {
         setSelectedNodeTypes(new Set());
         setSelectedSourceFiles(new Set());
       }
+
+      setSelectedItem((prev) => {
+        if (!prev) return null;
+        return nodeIds.has(prev.id) ? prev : null;
+      });
     },
     []
   );
@@ -517,6 +526,10 @@ const KnowledgeBase = () => {
     selectedFlaggedWorkspacesKey,
     selectedFlaggedWorkspaces.size,
   ]);
+
+  useEffect(() => {
+    setSelectedItem(null);
+  }, [kbScope, currentWorkspace]);
 
   useEffect(() => {
     if (kbScope === "workspace") {
@@ -877,6 +890,7 @@ const KnowledgeBase = () => {
             graphControlsOpen={graphControlsOpen}
             onGraphControlsOpenChange={handleGraphControlsOpenChange}
             viewResetKey={graphViewResetKey}
+            focusDepth={Math.min(3, Math.max(1, graphLoadParams.depth))}
             bottomLeftOverlay={
               <GraphLoadControls
                 params={graphLoadParams}

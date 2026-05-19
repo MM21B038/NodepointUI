@@ -19,18 +19,25 @@ const LABEL_TRUNCATE_LEN = 28;
 const LABEL_MIN_FONT_PX = 9;
 const LABEL_BASE_FONT_PX = 11;
 
-const getNodeD3Colors = (type: string, isDesaturated: boolean) => {
-  if (isDesaturated) {
-    return { fill: "transparent", stroke: "transparent" };
-  }
+const getNodeD3Colors = (type: string, muted: boolean) => {
   const fill = colorScale(type);
-  const stroke = d3.color(fill)?.darker(1.8).toString() || "#000000";
-  return { fill, stroke };
+  const baseStroke = d3.color(fill)?.darker(1.8).toString() || "#000000";
+  if (!muted) {
+    return { fill, stroke: baseStroke };
+  }
+  const fillColor = d3.color(fill);
+  const strokeColor = d3.color(baseStroke);
+  return {
+    fill: fillColor?.copy({ opacity: 0.55 }).toString() ?? fill,
+    stroke: strokeColor?.copy({ opacity: 0.45 }).toString() ?? baseStroke,
+  };
 };
 
-const getEdgeD3Color = (isDesaturated: boolean) => {
-  return isDesaturated ? "transparent" : "hsl(var(--muted-foreground))";
+const getEdgeD3Color = (muted: boolean) => {
+  return muted ? "hsl(var(--muted-foreground) / 0.35)" : "hsl(var(--muted-foreground))";
 };
+
+type NodeFocusTier = "none" | "focus" | "neighborhood" | "faded";
 
 function truncateLabel(label: string, max = LABEL_TRUNCATE_LEN): string {
   if (label.length <= max) return label;
@@ -51,10 +58,43 @@ interface InteractiveGraphVisualizationProps {
   viewResetKey?: string;
   /** Client-side filter: hide nodes not in this set. `null` = show all loaded nodes. */
   visibleNodeIds?: Set<string> | null;
+  /** BFS hop radius for selection/hover emphasis (default 1). */
+  focusDepth?: number;
 }
 
 type D3Node = GraphNode & d3.SimulationNodeDatum & { degree?: number };
 type D3Edge = GraphEdge & { source: D3Node | string; target: D3Node | string };
+
+function getNodeIdsWithinDepth(
+  nodeId: string,
+  maxDepth: number,
+  edges: D3Edge[]
+): Set<string> {
+  const depth = Math.max(0, maxDepth);
+  const result = new Set<string>([nodeId]);
+  let frontier = new Set<string>([nodeId]);
+
+  for (let hop = 0; hop < depth; hop++) {
+    const next = new Set<string>();
+    for (const id of frontier) {
+      for (const edge of edges) {
+        const sid = (edge.source as D3Node).id ?? String(edge.source);
+        const tid = (edge.target as D3Node).id ?? String(edge.target);
+        if (sid === id && !result.has(tid)) {
+          result.add(tid);
+          next.add(tid);
+        } else if (tid === id && !result.has(sid)) {
+          result.add(sid);
+          next.add(sid);
+        }
+      }
+    }
+    frontier = next;
+    if (frontier.size === 0) break;
+  }
+
+  return result;
+}
 
 const cleanNodeData = (d: D3Node): GraphNode => ({
   id: d.id,
@@ -105,6 +145,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   onGraphControlsOpenChange,
   viewResetKey,
   visibleNodeIds = null,
+  focusDepth = 1,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
@@ -169,19 +210,8 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     return { nodes, edges };
   }, [initialNodes, initialEdges]);
 
-  const getNeighborIds = useCallback(
-    (nodeId: string) => {
-      const neighbors = new Set<string>();
-      graphData.edges.forEach((edge) => {
-        const sid = (edge.source as D3Node).id ?? (edge.source as string);
-        const tid = (edge.target as D3Node).id ?? (edge.target as string);
-        if (sid === nodeId) neighbors.add(tid);
-        else if (tid === nodeId) neighbors.add(sid);
-      });
-      return neighbors;
-    },
-    [graphData.edges]
-  );
+  const focusDepthRef = useRef(focusDepth);
+  focusDepthRef.current = Math.max(1, focusDepth);
 
   const syncLabelBackground = useCallback(
     (labelGroup: d3.Selection<SVGGElement, D3Node, SVGGElement, unknown>) => {
@@ -220,23 +250,27 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
 
     const focusId = selectedId ?? (cfg.labelMode === "onHover" ? hoveredId : null);
 
-    const neighborIds = focusId ? getNeighborIds(focusId) : new Set<string>();
+    const emphasisIds = focusId
+      ? getNodeIdsWithinDepth(focusId, focusDepthRef.current, graphData.edges)
+      : null;
 
-    const isNodeHighlighted = (d: D3Node) => {
-      if (!focusId) return true;
-      if (d.id === focusId) return true;
-      return neighborIds.has(d.id);
+    const getNodeTier = (d: D3Node): NodeFocusTier => {
+      if (!focusId || !emphasisIds) return "none";
+      if (d.id === focusId) return "focus";
+      if (emphasisIds.has(d.id)) return "neighborhood";
+      return "faded";
     };
 
-    const isEdgeHighlighted = (d: D3Edge) => {
-      if (!focusId) return true;
-      const sid = (d.source as D3Node).id;
-      const tid = (d.target as D3Node).id;
-      return sid === focusId || tid === focusId;
+    const isEdgeEmphasized = (d: D3Edge) => {
+      if (!emphasisIds) return true;
+      const sid = (d.source as D3Node).id ?? String(d.source);
+      const tid = (d.target as D3Node).id ?? String(d.target);
+      return emphasisIds.has(sid) && emphasisIds.has(tid);
     };
 
     const nodeR = cfg.nodeRadius;
-    const dimmedEdgeOpacity = 0.12;
+    const fadedNodeOpacity = 0.4;
+    const fadedEdgeOpacity = 0.2;
     const normalEdgeOpacity = 0.45;
 
     if (!cfg.showEdges) {
@@ -249,17 +283,29 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
         .style("display", null);
     } else {
       link
-        .attr("stroke-width", (d) => (isEdgeHighlighted(d) ? 2 : 1))
-        .attr("stroke", (d) => getEdgeD3Color(!isEdgeHighlighted(d)))
-        .attr("stroke-opacity", (d) => (isEdgeHighlighted(d) ? 0.85 : dimmedEdgeOpacity))
+        .attr("stroke-width", (d) => (isEdgeEmphasized(d) ? 2 : 1))
+        .attr("stroke", (d) => getEdgeD3Color(!isEdgeEmphasized(d)))
+        .attr("stroke-opacity", (d) =>
+          isEdgeEmphasized(d) ? 0.85 : fadedEdgeOpacity
+        )
         .style("display", null);
     }
 
     node
-      .attr("r", (d) => (focusId && d.id === focusId ? nodeR + 2 : nodeR))
-      .attr("fill", (d) => getNodeD3Colors(d.type, focusId ? !isNodeHighlighted(d) : false).fill)
-      .attr("stroke", (d) => getNodeD3Colors(d.type, focusId ? !isNodeHighlighted(d) : false).stroke)
-      .attr("opacity", (d) => (focusId && !isNodeHighlighted(d) ? 0.15 : 1))
+      .attr("r", (d) => (getNodeTier(d) === "focus" ? nodeR + 2 : nodeR))
+      .attr("fill", (d) => {
+        const tier = getNodeTier(d);
+        return getNodeD3Colors(d.type, tier === "faded").fill;
+      })
+      .attr("stroke", (d) => {
+        const tier = getNodeTier(d);
+        return getNodeD3Colors(d.type, tier === "faded").stroke;
+      })
+      .attr("opacity", (d) => {
+        const tier = getNodeTier(d);
+        if (tier === "none" || tier === "focus" || tier === "neighborhood") return 1;
+        return fadedNodeOpacity;
+      })
       .style("display", null)
       .attr("class", (d) =>
         cn(
@@ -276,17 +322,22 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     labelGroups.style("display", null);
     labelGroups.each(function (d: D3Node) {
       const group = d3.select(this);
-      let visible = true;
-      if (cfg.labelMode === "onSelect") {
-        visible = !focusId || isNodeHighlighted(d);
-      } else if (cfg.labelMode === "onHover") {
-        visible = !hoveredId || isNodeHighlighted(d);
+      const tier = getNodeTier(d);
+      let labelOpacity = 1;
+      if (tier === "faded") {
+        labelOpacity = 0.35;
+      } else if (tier === "neighborhood") {
+        labelOpacity = 0.85;
+      } else if (cfg.labelMode === "onSelect" && focusId && tier === "none") {
+        labelOpacity = 1;
+      } else if (cfg.labelMode === "onHover" && hoveredId && tier === "none") {
+        labelOpacity = 1;
       }
-      group.attr("opacity", visible ? 1 : 0).style("display", visible ? "block" : "none");
+      group.attr("opacity", labelOpacity).style("display", "block");
     });
 
     syncLabelBackground(labelGroups);
-  }, [selectedItem, getNeighborIds, syncLabelBackground]);
+  }, [selectedItem, graphData.edges, syncLabelBackground]);
 
   updateHighlightingRef.current = updateHighlighting;
 
