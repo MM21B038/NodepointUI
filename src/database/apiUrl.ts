@@ -1,6 +1,9 @@
 /** Relative `/api` in dev uses the Vite proxy (see vite.config.ts). Override with VITE_API_BASE_URL. */
 export const API_ROOT =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "/api";
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    "",
+  ) || "/api";
 
 /** WebSocket origin: VITE_WS_BASE_URL, else API host, else current page (Vite /ws proxy). */
 export function wsBaseUrl(): string {
@@ -20,7 +23,7 @@ export function wsBaseUrl(): string {
     return `${protocol}//${window.location.host}`;
   }
 
-  return "ws://10.10.112.72:8000";
+  return "ws://localhost:8000";
 }
 
 /**
@@ -29,7 +32,7 @@ export function wsBaseUrl(): string {
  */
 export function buildApiUrl(
   path: string,
-  params?: Record<string, string | undefined>
+  params?: Record<string, string | undefined>,
 ): string {
   const base = API_ROOT.replace(/\/$/, "");
   const segment = path.startsWith("/") ? path : `/${path}`;
