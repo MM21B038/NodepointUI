@@ -38,7 +38,7 @@ interface GraphLoadControlsProps {
   limitMax?: number;
   /** Shown as default in the limit label. Defaults to KB_DEFAULT_LIMIT. */
   limitDefaultHint?: number;
-  /** When true, limit applies per starred workspace (flagged scope). */
+  /** When true, limit applies per workspace in the active group. */
   limitPerWorkspace?: boolean;
 }
 

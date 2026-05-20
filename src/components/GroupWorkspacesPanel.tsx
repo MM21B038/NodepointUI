@@ -9,7 +9,7 @@ import type { GraphNode } from "@/database/workspaceStorage";
 import { getGraphNodeWorkspace } from "@/lib/graphWorkspace";
 import { KbGraphSidePanel } from "@/components/knowledge-base/KbGraphSidePanel";
 
-interface FlaggedWorkspacesPanelProps {
+interface GroupWorkspacesPanelProps {
   nodes: GraphNode[];
   workspaceNames: string[];
   selectedWorkspaces: Set<string>;
@@ -18,7 +18,7 @@ interface FlaggedWorkspacesPanelProps {
   onFilterInteraction: () => void;
 }
 
-const FlaggedWorkspacesPanel: React.FC<FlaggedWorkspacesPanelProps> = ({
+const GroupWorkspacesPanel: React.FC<GroupWorkspacesPanelProps> = ({
   nodes,
   workspaceNames,
   selectedWorkspaces,
@@ -80,16 +80,16 @@ const FlaggedWorkspacesPanel: React.FC<FlaggedWorkspacesPanelProps> = ({
 
   return (
     <KbGraphSidePanel
-      title="Workspaces"
+      title="Workspaces in group"
       icon={<FolderOpen className="h-4 w-4" />}
       onClose={onClose}
       toolbar={toolbar}
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Filter the merged graph to starred workspaces. Select which corpora to show.
+        Filter the merged graph to workspaces in this group. Select which corpora to show.
       </p>
       {workspaceNames.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No workspaces in graph data.</p>
+        <p className="text-sm text-muted-foreground">No workspaces in this group.</p>
       ) : (
         <ul className="space-y-1">
           {workspaceNames.map((name) => (
@@ -120,4 +120,4 @@ const FlaggedWorkspacesPanel: React.FC<FlaggedWorkspacesPanelProps> = ({
   );
 };
 
-export default FlaggedWorkspacesPanel;
+export default GroupWorkspacesPanel;

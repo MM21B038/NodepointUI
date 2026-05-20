@@ -6,9 +6,11 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   deleteFile,
   getKnowledgeGraph,
+  getPerFileGraphCounts,
+  listFiles,
   startPreprocess,
-  GraphNode,
-  GraphEdge,
+  type GraphEdge,
+  type GraphNode,
 } from "@/database/workspaceStorage";
 import { Info } from "lucide-react";
 import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast";
@@ -34,42 +36,16 @@ const Documents = () => {
   const fetchKnowledgeGraphData = useCallback(async (workspaceName: string, silent = false) => {
     if (!silent) setIsGraphLoading(true);
     try {
-      const graphData = await getKnowledgeGraph(workspaceName);
-      const nodes = graphData.nodes || [];
-      const edges = graphData.edges || [];
+      const [graphData, fileNames] = await Promise.all([
+        getKnowledgeGraph(workspaceName),
+        listFiles(workspaceName),
+      ]);
 
-      setGraphNodes(nodes);
-      setGraphEdges(edges);
+      setGraphNodes(graphData.nodes ?? []);
+      setGraphEdges(graphData.edges ?? []);
 
-      const newFileGraphData: Record<string, { nodes: number; edges: number }> = {};
-      const nodeIdToFiles = new Map<string, string[]>();
-
-      const ensureFileEntry = (fileName: string) => {
-        if (!newFileGraphData[fileName]) {
-          newFileGraphData[fileName] = { nodes: 0, edges: 0 };
-        }
-      };
-
-      nodes.forEach((node) => {
-        nodeIdToFiles.set(node.id, node.source);
-        node.source.forEach((fileName) => {
-          ensureFileEntry(fileName);
-          newFileGraphData[fileName].nodes++;
-        });
-      });
-
-      edges.forEach((edge) => {
-        const endpointFiles = new Set([
-          ...(nodeIdToFiles.get(String(edge.source)) ?? []),
-          ...(nodeIdToFiles.get(String(edge.target)) ?? []),
-        ]);
-        endpointFiles.forEach((fileName) => {
-          ensureFileEntry(fileName);
-          newFileGraphData[fileName].edges++;
-        });
-      });
-
-      setFileGraphData(newFileGraphData);
+      const counts = await getPerFileGraphCounts(workspaceName, fileNames);
+      setFileGraphData(counts);
     } catch (error) {
       console.error("Failed to fetch knowledge graph:", error);
       setGraphNodes([]);

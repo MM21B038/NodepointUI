@@ -3,29 +3,26 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Bot,
-  Globe,
   Loader2,
   Send,
   User,
   Trash2,
   RefreshCw,
   FolderOpen,
+  Users,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import GroupScopeSelector from "@/components/scope/GroupScopeSelector";
 import {
   loadChatTurns,
   sendChatTurn,
   clearChat,
-  getStoredChatScope,
-  setStoredChatScope,
-  type ChatScope,
 } from "@/database/chatStorage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { ChatTurn } from "@/lib/chatTypes";
 import { createEmptyAssistantTurn } from "@/lib/chatStreamReducer";
@@ -46,8 +43,7 @@ const CHAT_THREAD_MAX_CLASS = "max-w-6xl";
 const CHAT_COMPOSER_MAX_CLASS = "max-w-2xl";
 
 const StreamPage: React.FC = () => {
-  const { currentWorkspace } = useWorkspace();
-  const [chatScope, setChatScope] = useState<ChatScope>(() => getStoredChatScope());
+  const { currentWorkspace, scopeMode, activeGroup } = useWorkspace();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [resolvedWorkspace, setResolvedWorkspace] = useState<string | null>(null);
   const [workspaceKey, setWorkspaceKey] = useState<string | null>(null);
@@ -63,7 +59,9 @@ const StreamPage: React.FC = () => {
   const isInputEnabled =
     !isStreaming &&
     !isLoadingHistory &&
-    (chatScope === "global" || !!currentWorkspace?.trim());
+    (scopeMode === "group"
+      ? !!activeGroup?.trim()
+      : !!currentWorkspace?.trim());
   const canSend = isInputEnabled && currentInput.trim().length > 0 && !!workspaceKey;
 
   const scrollToBottom = useCallback(() => {
@@ -90,8 +88,9 @@ const StreamPage: React.FC = () => {
     setLoadError(null);
     try {
       const { chatKey, workspace, turns: history } = await loadChatTurns(
-        chatScope,
-        currentWorkspace
+        scopeMode,
+        currentWorkspace,
+        activeGroup
       );
       setWorkspaceKey(chatKey);
       setResolvedWorkspace(workspace);
@@ -105,10 +104,10 @@ const StreamPage: React.FC = () => {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [chatScope, currentWorkspace]);
+  }, [scopeMode, currentWorkspace, activeGroup]);
 
   useEffect(() => {
-    if (chatScope === "workspace" && !currentWorkspace?.trim()) {
+    if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
       setIsLoadingHistory(false);
       setLoadError(null);
       setTurns([]);
@@ -118,7 +117,7 @@ const StreamPage: React.FC = () => {
     cancelRef.current?.();
     cancelRef.current = null;
     loadChat();
-  }, [chatScope, currentWorkspace, loadChat]);
+  }, [scopeMode, currentWorkspace, activeGroup, loadChat]);
 
   useEffect(() => {
     return () => {
@@ -127,17 +126,11 @@ const StreamPage: React.FC = () => {
     };
   }, []);
 
-  const handleScopeChange = (scope: ChatScope) => {
-    if (isStreaming) return;
-    setChatScope(scope);
-    setStoredChatScope(scope);
-  };
-
   const handleClearChat = async () => {
     if (isStreaming || !workspaceKey) return;
     if (!window.confirm("Clear all messages in this chat? This cannot be undone.")) return;
     try {
-      await clearChat(chatScope, currentWorkspace);
+      await clearChat(scopeMode, currentWorkspace, activeGroup);
       toast.success("Chat cleared");
       await loadChat();
     } catch (error) {
@@ -204,7 +197,11 @@ const StreamPage: React.FC = () => {
       cancelRef.current = cancel;
       await done;
 
-      const { turns: history, workspace } = await loadChatTurns(chatScope, currentWorkspace);
+      const { turns: history, workspace } = await loadChatTurns(
+        scopeMode,
+        currentWorkspace,
+        activeGroup
+      );
       setResolvedWorkspace(workspace);
       setTurns(history);
     } catch (error) {
@@ -230,7 +227,7 @@ const StreamPage: React.FC = () => {
       setIsStreaming(false);
       cancelRef.current = null;
     }
-  }, [currentInput, canSend, workspaceKey, chatScope, currentWorkspace]);
+  }, [currentInput, canSend, workspaceKey, scopeMode, currentWorkspace, activeGroup]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -240,16 +237,19 @@ const StreamPage: React.FC = () => {
   };
 
   const emptyState = useMemo(() => {
-    if (chatScope === "workspace" && !currentWorkspace?.trim()) return "no-workspace";
+    if (scopeMode === "workspace" && !currentWorkspace?.trim()) return "no-workspace";
+    if (scopeMode === "group" && !activeGroup?.trim()) return "no-group";
     if (isLoadingHistory) return "loading";
     if (loadError) return "error";
     if (turns.length === 0) return "empty";
     return "ready";
-  }, [chatScope, currentWorkspace, isLoadingHistory, loadError, turns.length]);
+  }, [scopeMode, currentWorkspace, activeGroup, isLoadingHistory, loadError, turns.length]);
 
-  const displayWorkspace =
+  const displayTarget =
     resolvedWorkspace ??
-    (chatScope === "global" ? "flagged" : currentWorkspace) ??
+    (scopeMode === "group" && activeGroup
+      ? `group: ${activeGroup}`
+      : currentWorkspace) ??
     "—";
 
   return (
@@ -266,31 +266,25 @@ const StreamPage: React.FC = () => {
                 variant="secondary"
                 className="max-w-[min(100%,12rem)] truncate border border-border/60 font-normal"
               >
-                {chatScope === "global" ? (
+                {scopeMode === "group" ? (
                   <>
-                    <Globe className="mr-1 inline h-3 w-3 shrink-0" />
-                    Flagged-scope
+                    <Users className="mr-1 inline h-3 w-3 shrink-0" />
+                    {activeGroup ?? "No group"}
                   </>
                 ) : (
                   <>
                     <FolderOpen className="mr-1 inline h-3 w-3 shrink-0" />
-                    {displayWorkspace}
+                    {displayTarget}
                   </>
                 )}
               </Badge>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Tabs value={chatScope} onValueChange={(v) => handleScopeChange(v as ChatScope)}>
-                <TabsList className="h-8 border border-border/60 bg-muted/40 p-0.5">
-                  <TabsTrigger value="workspace" disabled={isStreaming} className="text-xs px-3">
-                    Workspace
-                  </TabsTrigger>
-                  <TabsTrigger value="global" disabled={isStreaming} className="text-xs px-3">
-                    Flagged
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <GroupScopeSelector
+                disabled={isStreaming}
+                onScopeChange={() => void loadChat()}
+              />
 
               <span className="hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden />
 
@@ -331,9 +325,18 @@ const StreamPage: React.FC = () => {
             <Alert>
               <AlertTitle>Select a workspace</AlertTitle>
               <AlertDescription>
-                Use the workspace selector in the navbar for per-workspace chat. Or switch to{" "}
-                <strong>Flagged</strong> for a separate thread that searches all starred
-                workspaces.
+                Use the workspace selector in the navbar for per-workspace chat, or switch to{" "}
+                <strong>Group</strong> and pick a workspace group.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {emptyState === "no-group" && (
+            <Alert>
+              <AlertTitle>Select a group</AlertTitle>
+              <AlertDescription>
+                Create a workspace group on the Workspaces page, then choose it here for
+                group-scoped chat.
               </AlertDescription>
             </Alert>
           )}
@@ -358,8 +361,8 @@ const StreamPage: React.FC = () => {
               <p className="text-lg font-medium text-foreground">How can I help?</p>
               <p className="text-sm mt-2 max-w-sm mx-auto">
                 Ask about your knowledge graph in{" "}
-                <span className="font-medium text-foreground">{displayWorkspace}</span>.
-                Star at least one workspace to enable knowledge search.
+                <span className="font-medium text-foreground">{displayTarget}</span>.
+                Add workspaces to your group to enable knowledge search.
               </p>
             </div>
           )}
@@ -452,9 +455,9 @@ const StreamPage: React.FC = () => {
             <Textarea
               ref={textareaRef}
               placeholder={
-                chatScope === "global"
-                  ? "Message flagged-scope chat…"
-                  : `Message ${displayWorkspace}…`
+                scopeMode === "group"
+                  ? `Message group ${activeGroup ?? ""}…`
+                  : `Message ${displayTarget}…`
               }
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
@@ -479,9 +482,9 @@ const StreamPage: React.FC = () => {
           </div>
           <p className="text-[10px] text-center text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
             <span>
-              {chatScope === "global"
-                ? "Separate from per-workspace chat · searches all starred workspaces"
-                : `Workspace ${displayWorkspace} chat + starred corpora in search`}
+              {scopeMode === "group"
+                ? `Group chat · searches workspaces in ${activeGroup ?? "group"}`
+                : `Workspace ${displayTarget} chat`}
             </span>
             <span className="text-muted-foreground/80">· Citations</span>
             <CitationTag kind="doc" label="" />

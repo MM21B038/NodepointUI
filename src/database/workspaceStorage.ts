@@ -13,9 +13,46 @@ async function parseErrorResponse(response: Response): Promise<string> {
 
 // --- Workspace ---
 
+/** System group synced with `is_flag` on workspaces (alias: legacy `flagged=true` scope). */
+export const FLAGGED_GROUP_NAME = "flagged";
+
+/** Exactly one of workspace or group scope for KG, entity search, entity-types, chat summary. */
+export type KgApiScope = { workspaceName: string } | { group: string };
+
+export function isGroupScope(scope: KgApiScope): scope is { group: string } {
+  return "group" in scope;
+}
+
+export function groupScope(groupName: string): KgApiScope {
+  return { group: groupName };
+}
+
+/** @deprecated Use groupScope(activeGroup) */
+export function flaggedGroupScope(): KgApiScope {
+  return { group: FLAGGED_GROUP_NAME };
+}
+
+export async function listSelectableGroups(): Promise<WorkspaceGroupSummary[]> {
+  const all = await listWorkspaceGroups();
+  return all.filter(
+    (g) => g.name !== FLAGGED_GROUP_NAME && !g.is_system
+  );
+}
+
+export async function getGroupMemberNames(groupName: string): Promise<string[]> {
+  const detail = await getGroup(groupName);
+  return detail.workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b));
+}
+
+export function scopeToQueryParams(scope: KgApiScope): Record<string, string> {
+  if (isGroupScope(scope)) return { group: scope.group };
+  return { workspace_name: scope.workspaceName };
+}
+
 export interface WorkspaceEntry {
   name: string;
   is_flag: boolean;
+  groups?: string[];
   created_at: string;
 }
 
@@ -29,6 +66,7 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
     return (data || []).map((ws) => ({
       ...ws,
       is_flag: Boolean(ws.is_flag),
+      groups: Array.isArray(ws.groups) ? ws.groups : [],
     }));
   } catch (error) {
     console.error("Error fetching workspaces:", error);
@@ -54,6 +92,7 @@ export interface WorkspacePageItem {
   is_flag: boolean;
   created_at: string;
   counts: WorkspaceCounts;
+  groups?: string[];
 }
 
 export interface WorkspacePagePagination {
@@ -88,6 +127,7 @@ function normalizeWorkspacePageItem(raw: WorkspacePageItem): WorkspacePageItem {
     is_flag: Boolean(raw.is_flag),
     created_at: raw.created_at,
     counts: normalizeWorkspaceCounts(raw.counts),
+    groups: Array.isArray(raw.groups) ? raw.groups : undefined,
   };
 }
 
@@ -260,6 +300,14 @@ export interface FlaggedWorkspaceCountResponse {
 
 export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountResponse> {
   try {
+    const detail = await getGroup(FLAGGED_GROUP_NAME);
+    const workspaces = detail.workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b));
+    return { count: workspaces.length, workspaces };
+  } catch (err) {
+    console.warn("getFlaggedWorkspaceCount: group endpoint unavailable, trying legacy count", err);
+  }
+
+  try {
     const response = await fetch(buildApiUrl("/workspace/flagged/count/"));
     if (response.ok) {
       const data = await response.json();
@@ -269,7 +317,7 @@ export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountR
       };
     }
   } catch (err) {
-    console.warn("getFlaggedWorkspaceCount: dedicated endpoint unavailable, using list fallback", err);
+    console.warn("getFlaggedWorkspaceCount: legacy endpoint unavailable, using list fallback", err);
   }
 
   const workspaces = (await getWorkspaces())
@@ -277,6 +325,118 @@ export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountR
     .map((ws) => ws.name)
     .sort((a, b) => a.localeCompare(b));
   return { count: workspaces.length, workspaces };
+}
+
+// --- Workspace groups ---
+
+export interface WorkspaceGroupSummary {
+  name: string;
+  workspace_count: number;
+  created_at: string;
+  is_system?: boolean;
+}
+
+export interface WorkspaceGroupMember {
+  name: string;
+  is_flag: boolean;
+  created_at: string;
+}
+
+export interface WorkspaceGroupDetail {
+  name: string;
+  workspace_count: number;
+  is_system?: boolean;
+  workspaces: WorkspaceGroupMember[];
+}
+
+export async function createWorkspaceGroup(name: string): Promise<WorkspaceGroupSummary> {
+  const normalized = name.trim();
+  const response = await fetch(buildApiUrl("/group/create/"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: normalized }),
+  });
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = await response.json();
+  return data.group as WorkspaceGroupSummary;
+}
+
+export async function listWorkspaceGroups(): Promise<WorkspaceGroupSummary[]> {
+  const response = await fetch(buildApiUrl("/group/list/"));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = await response.json();
+  return (data.groups ?? []) as WorkspaceGroupSummary[];
+}
+
+export async function getGroup(groupName: string): Promise<WorkspaceGroupDetail> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = await response.json();
+  return {
+    name: data.name,
+    workspace_count: data.workspace_count ?? data.workspaces?.length ?? 0,
+    is_system: Boolean(data.is_system),
+    workspaces: (data.workspaces ?? []).map((w: WorkspaceGroupMember) => ({
+      name: w.name,
+      is_flag: Boolean(w.is_flag),
+      created_at: w.created_at,
+    })),
+  };
+}
+
+export async function deleteWorkspaceGroup(groupName: string): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function addWorkspaceToGroup(
+  groupName: string,
+  workspaceName: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/workspaces/`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace_name: workspaceName }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function removeWorkspaceFromGroup(
+  groupName: string,
+  workspaceName: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(
+      `/group/${encodeURIComponent(groupName)}/workspaces/${encodeURIComponent(workspaceName)}/`
+    ),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function getGroupWorkspaceNames(groupName: string): Promise<string[]> {
+  const detail = await getGroup(groupName);
+  return detail.workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b));
 }
 
 // --- Documents ---
@@ -458,15 +618,11 @@ export async function getWorkspacePreprocessStatus(
 
 // --- Knowledge graph ---
 
+/** Slim node shape from GET /api/knowledge-graph/ and search graph payloads. */
 export interface ApiGraphNode {
   id: string;
   name: string;
   entity_type: string;
-  attributes: Record<string, unknown>;
-  document_id: string;
-  file_name: string;
-  vector: string;
-  created_at: string;
 }
 
 export interface ApiGraphEdge {
@@ -485,6 +641,7 @@ export interface EntityTypeEntry {
 
 export interface GraphFetchParams {
   entityTypes?: string[];
+  fileNames?: string[];
   depth?: number;
   limit?: number;
 }
@@ -495,10 +652,6 @@ export interface EntitySearchMatch {
   entity_type: string;
   score: number;
   workspace?: string;
-  document_id?: string;
-  file_name?: string;
-  vector?: string;
-  created_at?: string;
 }
 
 export const KB_DEFAULT_DEPTH = 1;
@@ -526,25 +679,34 @@ export function kbPerWorkspaceLimitFromBudget(
   return Math.max(1, Math.floor(budget / n));
 }
 
-export function kbDefaultLimitForFlagged(flaggedCount: number): number {
-  return kbPerWorkspaceLimitFromBudget(KB_DEFAULT_LIMIT, flaggedCount);
+export function kbDefaultLimitForGroup(memberCount: number): number {
+  return kbPerWorkspaceLimitFromBudget(KB_DEFAULT_LIMIT, memberCount);
 }
 
-export function kbMaxLimitForFlagged(flaggedCount: number): number {
-  return kbPerWorkspaceLimitFromBudget(KB_MAX_LIMIT, flaggedCount);
+export function kbMaxLimitForGroup(memberCount: number): number {
+  return kbPerWorkspaceLimitFromBudget(KB_MAX_LIMIT, memberCount);
 }
 
-/** Divisor for per-workspace node limits: subset when workspace filter active, else all starred. */
-export function flaggedLimitDivisor(
-  apiStarredCount: number,
+/** @deprecated Use kbDefaultLimitForGroup */
+export const kbDefaultLimitForFlagged = kbDefaultLimitForGroup;
+
+/** @deprecated Use kbMaxLimitForGroup */
+export const kbMaxLimitForFlagged = kbMaxLimitForGroup;
+
+/** Divisor for per-workspace node limits in group scope. */
+export function groupLimitDivisor(
+  apiMemberCount: number,
   selectedWorkspaceCount: number,
   workspaceFilterActive: boolean
 ): number {
   if (workspaceFilterActive && selectedWorkspaceCount > 0) {
     return selectedWorkspaceCount;
   }
-  return Math.max(1, apiStarredCount);
+  return Math.max(1, apiMemberCount);
 }
+
+/** @deprecated Use groupLimitDivisor */
+export const flaggedLimitDivisor = groupLimitDivisor;
 
 export interface FileReference {
   file_name: string;
@@ -576,8 +738,11 @@ export interface KnowledgeGraphResponse {
 
 export interface KnowledgeGraphPayload extends KnowledgeGraphResponse {
   truncated?: boolean;
+  /** Present when the request used `?group=<name>`. */
+  group?: string;
   filters?: {
     entity_types?: string[] | null;
+    file_names?: string[] | null;
     depth?: number;
     limit?: number;
   };
@@ -614,6 +779,9 @@ function graphFetchQueryParams(params?: GraphFetchParams): Record<string, string
   if (params?.entityTypes && params.entityTypes.length > 0) {
     q.entity_type = params.entityTypes.join(",");
   }
+  if (params?.fileNames && params.fileNames.length > 0) {
+    q.file_name = params.fileNames.join(",");
+  }
   if (params?.depth != null) q.depth = String(params.depth);
   const limit = clampGraphLimit(params?.limit);
   if (limit != null) q.limit = String(limit);
@@ -632,8 +800,8 @@ function mapKnowledgeGraph(
     id: n.id,
     label: n.name,
     type: n.entity_type,
-    source: n.file_name ? [n.file_name] : [],
-    attributes: n.attributes ?? {},
+    source: [],
+    attributes: {},
   }));
 
   const edges: GraphEdge[] = apiEdges.map((e) => ({
@@ -672,21 +840,18 @@ function mapGraphApiPayload(
 }
 
 export async function getKnowledgeGraphEntityTypes(
-  scope: { workspaceName: string } | { flagged: true }
-): Promise<{ workspace?: string; entityTypes: EntityTypeEntry[] }> {
-  const params =
-    "flagged" in scope
-      ? { flagged: "true" }
-      : { workspace_name: scope.workspaceName };
-
-  const response = await fetch(buildApiUrl("/knowledge-graph/entity-types/", params));
+  scope: KgApiScope
+): Promise<{ workspace?: string; group?: string; entityTypes: EntityTypeEntry[] }> {
+  const response = await fetch(
+    buildApiUrl("/knowledge-graph/entity-types/", scopeToQueryParams(scope))
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
 
   const data = await response.json();
 
-  if ("flagged" in scope) {
+  if (isGroupScope(scope)) {
     const merged = new Map<string, number>();
     for (const ws of data.workspaces ?? []) {
       for (const et of ws.entity_types ?? []) {
@@ -696,7 +861,7 @@ export async function getKnowledgeGraphEntityTypes(
     const entityTypes: EntityTypeEntry[] = Array.from(merged.entries())
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count);
-    return { entityTypes };
+    return { group: data.group ?? scope.group, entityTypes };
   }
 
   const entityTypes: EntityTypeEntry[] = (data.entity_types ?? []).sort(
@@ -716,16 +881,14 @@ export function topEntityTypesByCount(
 }
 
 export async function getFilteredKnowledgeGraph(
-  scope: { workspaceName: string } | { flagged: true },
+  scope: KgApiScope,
   params?: GraphFetchParams
 ): Promise<KnowledgeGraphPayload> {
-  const baseParams =
-    "flagged" in scope
-      ? { flagged: "true" }
-      : { workspace_name: scope.workspaceName };
-
   const response = await fetch(
-    buildApiUrl("/knowledge-graph/", { ...baseParams, ...graphFetchQueryParams(params) })
+    buildApiUrl("/knowledge-graph/", {
+      ...scopeToQueryParams(scope),
+      ...graphFetchQueryParams(params),
+    })
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -736,8 +899,8 @@ export async function getFilteredKnowledgeGraph(
     throw new Error(data.error);
   }
 
-  if ("flagged" in scope) {
-    return mergeFlaggedGraphPayloads(data.graphs ?? []);
+  if (isGroupScope(scope)) {
+    return mergeGroupGraphPayloads(data.graphs ?? [], data.group ?? scope.group);
   }
 
   return mapGraphApiPayload(data, scope.workspaceName);
@@ -760,7 +923,10 @@ export async function getFlaggedKnowledgeGraphs(
   params?: GraphFetchParams
 ): Promise<KnowledgeGraphResponse[]> {
   const response = await fetch(
-    buildApiUrl("/knowledge-graph/", { flagged: "true", ...graphFetchQueryParams(params) })
+    buildApiUrl("/knowledge-graph/", {
+      group: FLAGGED_GROUP_NAME,
+      ...graphFetchQueryParams(params),
+    })
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -778,17 +944,24 @@ export async function getFlaggedKnowledgeGraphs(
   return graphs.map((g) => mapGraphApiPayload(g, g.workspace));
 }
 
-function mergeFlaggedGraphPayloads(
+function mergeGroupGraphPayloads(
   graphs: Array<{
     workspace: string;
     nodes?: ApiGraphNode[];
     edges?: ApiGraphEdge[];
     truncated?: boolean;
     filters?: KnowledgeGraphPayload["filters"];
-  }>
+  }>,
+  groupName: string
 ): KnowledgeGraphPayload {
   if (graphs.length === 0) {
-    return { workspace: "flagged", nodes: [], edges: [], truncated: false };
+    return {
+      workspace: groupName,
+      group: groupName,
+      nodes: [],
+      edges: [],
+      truncated: false,
+    };
   }
 
   const nodes: GraphNode[] = [];
@@ -819,17 +992,18 @@ function mergeFlaggedGraphPayloads(
     }
   }
 
-  return { workspace: "flagged", nodes, edges, truncated };
+  return { workspace: groupName, group: groupName, nodes, edges, truncated };
 }
 
 export async function searchKnowledgeEntities(
-  scope: { workspaceName: string } | { flagged: true },
+  scope: KgApiScope,
   options: {
     q: string;
     threshold?: number;
     depth?: number;
     limit?: number;
     entityTypes?: string[];
+    fileNames?: string[];
     matchLimit?: number;
   }
 ): Promise<EntitySearchResponse & { graphPayload: KnowledgeGraphPayload }> {
@@ -840,18 +1014,16 @@ export async function searchKnowledgeEntities(
       depth: options.depth,
       limit: options.limit,
       entityTypes: options.entityTypes,
+      fileNames: options.fileNames,
     }),
   };
   if (options.matchLimit != null) {
     baseParams.match_limit = String(options.matchLimit);
   }
 
-  const params =
-    "flagged" in scope
-      ? { flagged: "true", ...baseParams }
-      : { workspace_name: scope.workspaceName, ...baseParams };
-
-  const response = await fetch(buildApiUrl("/knowledge/entities/search/", params));
+  const response = await fetch(
+    buildApiUrl("/knowledge/entities/search/", { ...scopeToQueryParams(scope), ...baseParams })
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -859,15 +1031,16 @@ export async function searchKnowledgeEntities(
   const data: EntitySearchResponse = await response.json();
 
   let graphPayload: KnowledgeGraphPayload;
-  if ("flagged" in scope && data.workspaces) {
-    graphPayload = mergeFlaggedGraphPayloads(
+  if (isGroupScope(scope) && data.workspaces) {
+    graphPayload = mergeGroupGraphPayloads(
       data.workspaces.map((w) => ({
         workspace: w.workspace,
         nodes: w.graph?.nodes,
         edges: w.graph?.edges,
         truncated: w.graph?.truncated,
         filters: w.graph?.filters,
-      }))
+      })),
+      scope.group
     );
     const matches = data.workspaces.flatMap((w) =>
       (w.matches ?? []).map((m) => ({ ...m, workspace: w.workspace }))
@@ -876,7 +1049,7 @@ export async function searchKnowledgeEntities(
   }
 
   const graph = data.graph;
-  const fallbackWorkspace = "workspaceName" in scope ? scope.workspaceName : "flagged";
+  const fallbackWorkspace = isGroupScope(scope) ? scope.group : scope.workspaceName;
   graphPayload = graph
     ? mapGraphApiPayload(graph, graph.workspace ?? fallbackWorkspace)
     : { workspace: fallbackWorkspace, nodes: [], edges: [] };
@@ -890,13 +1063,122 @@ function scopedKnowledgeNodeId(workspace: string, nodeId: string): string {
 }
 
 /**
- * Fetches all flagged (starred) workspace graphs and merges them into one view.
+ * Fetches all workspaces in the flagged group and merges graphs into one view.
  * Node ids are namespaced per workspace; each node gets `attributes.__kb_workspace`.
  */
 export async function getMergedFlaggedKnowledgeGraph(
   params?: GraphFetchParams
 ): Promise<KnowledgeGraphPayload> {
-  return getFilteredKnowledgeGraph({ flagged: true }, params);
+  return getFilteredKnowledgeGraph(flaggedGroupScope(), params);
+}
+
+/** Parse raw entity UUID from a graph node id (handles flagged scoped ids). */
+export function parseGraphNodeEntityId(nodeId: string): {
+  scopedWorkspace: string | null;
+  entityId: string;
+} {
+  const sep = nodeId.indexOf(":");
+  if (sep > 0) {
+    try {
+      return {
+        scopedWorkspace: decodeURIComponent(nodeId.slice(0, sep)),
+        entityId: nodeId.slice(sep + 1),
+      };
+    } catch {
+      return { scopedWorkspace: null, entityId: nodeId };
+    }
+  }
+  return { scopedWorkspace: null, entityId: nodeId };
+}
+
+export interface GraphEntityRecord {
+  kind: string;
+  id: string;
+  name: string;
+  entity_type: string;
+  file_name?: string;
+  workspace?: string;
+  attributes?: Record<string, unknown>;
+  document_id?: string;
+  chunk_id?: string | null;
+  content?: string;
+}
+
+/** Full entity row for graph detail panel (GET /api/knowledge/entity/). */
+export async function fetchGraphEntityRecord(
+  nodeId: string,
+  workspaceName: string | null
+): Promise<GraphEntityRecord> {
+  const { entityId } = parseGraphNodeEntityId(nodeId);
+  const params: Record<string, string | undefined> = {};
+  if (workspaceName) params.workspace_name = workspaceName;
+
+  const response = await fetch(
+    buildApiUrl(`/knowledge/entity/${encodeURIComponent(entityId)}/`, params)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
+}
+
+/** Entity/edge counts per document via depth=0 subgraph seeds. */
+export async function getPerFileGraphCounts(
+  workspaceName: string,
+  fileNames: string[],
+  options?: { concurrency?: number }
+): Promise<Record<string, { nodes: number; edges: number }>> {
+  const result: Record<string, { nodes: number; edges: number }> = {};
+  const concurrency = Math.max(1, options?.concurrency ?? 4);
+
+  for (let i = 0; i < fileNames.length; i += concurrency) {
+    const batch = fileNames.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async (fileName) => {
+        try {
+          const graph = await getFilteredKnowledgeGraph(
+            { workspaceName },
+            { fileNames: [fileName], depth: 0, limit: KB_MAX_LIMIT }
+          );
+          result[fileName] = {
+            nodes: graph.nodes.length,
+            edges: graph.edges.length,
+          };
+        } catch {
+          result[fileName] = { nodes: 0, edges: 0 };
+        }
+      })
+    );
+  }
+
+  return result;
+}
+
+/** Omit `file_name` query param when all catalog files are selected. */
+export function resolveGraphFileNamesParam(
+  availableFiles: string[],
+  selectedFiles: Set<string>
+): string[] | undefined {
+  if (availableFiles.length === 0 || selectedFiles.size === 0) return undefined;
+  const allSelected =
+    selectedFiles.size >= availableFiles.length &&
+    availableFiles.every((f) => selectedFiles.has(f));
+  if (allSelected) return undefined;
+  return Array.from(selectedFiles).sort((a, b) => a.localeCompare(b));
+}
+
+export async function listFilesForWorkspaces(workspaceNames: string[]): Promise<string[]> {
+  const names = new Set<string>();
+  await Promise.all(
+    workspaceNames.map(async (ws) => {
+      try {
+        for (const f of await listFiles(ws)) names.add(f);
+      } catch {
+        /* skip workspace */
+      }
+    })
+  );
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
 }
 
 // --- Legacy search types (provenance display in chat UI) ---

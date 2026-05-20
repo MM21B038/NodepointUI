@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,11 +13,11 @@ import {
   GitGraph,
   Link,
   Play,
-  Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { toggleWorkspaceFlag, type WorkspaceCounts } from "@/database/workspaceStorage";
+import { FLAGGED_GROUP_NAME, type WorkspaceCounts } from "@/database/workspaceStorage";
+import { Badge } from "@/components/ui/badge";
+import WorkspaceGroupMembership from "@/components/workspace/WorkspaceGroupMembership";
 
 interface WorkspaceCardProps {
   workspaceName: string;
@@ -29,8 +29,8 @@ interface WorkspaceCardProps {
   counts: WorkspaceCounts;
   onExtract: (workspaceName: string) => void;
   isExtracting: boolean;
-  isFlagged: boolean;
-  onFlagToggled?: () => void;
+  groups?: string[];
+  onGroupsChanged?: () => void;
 }
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
@@ -43,47 +43,15 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   counts,
   onExtract,
   isExtracting,
-  isFlagged: initialIsFlagged,
-  onFlagToggled,
+  groups = [],
+  onGroupsChanged,
 }) => {
+  const customGroups = groups.filter((g) => g !== FLAGGED_GROUP_NAME);
   const [isHovered, setIsHovered] = useState(false);
-  const [isFlagged, setIsFlagged] = useState(initialIsFlagged);
-  const [isFlagging, setIsFlagging] = useState(false);
-
-  useEffect(() => {
-    setIsFlagged(initialIsFlagged);
-  }, [initialIsFlagged]);
 
   const isThisWorkspaceDeleting =
     isDeleting && deletingWorkspaceName === workspaceName;
-  const isDisabled = isDeleting || isExtracting || isFlagging;
-
-  const handleFlagToggle = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setIsFlagging(true);
-      const loadingToastId = toast.loading(
-        `Updating flag for workspace ${workspaceName}...`
-      );
-
-      try {
-        const response = await toggleWorkspaceFlag(workspaceName);
-        setIsFlagged(response.is_flag);
-        toast.success(response.message, { id: loadingToastId });
-        onFlagToggled?.();
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to update workspace flag.";
-        toast.error(errorMessage, { id: loadingToastId });
-        console.error(`Error toggling flag for workspace ${workspaceName}:`, error);
-      } finally {
-        setIsFlagging(false);
-      }
-    },
-    [workspaceName, onFlagToggled]
-  );
+  const isDisabled = isDeleting || isExtracting;
 
   return (
     <Card
@@ -142,38 +110,22 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex flex-col gap-2 mt-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleFlagToggle}
+        {customGroups.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {customGroups.map((g) => (
+              <Badge key={g} variant="outline" className="text-xs font-normal">
+                {g}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <WorkspaceGroupMembership
+          workspaceName={workspaceName}
+          memberGroups={customGroups}
+          onMembershipChanged={onGroupsChanged}
           disabled={isDisabled}
-          className={cn(
-            "w-full flex items-center justify-center gap-2",
-            isFlagged
-              ? "text-green-600 hover:bg-green-100"
-              : "text-red-600 hover:bg-red-100"
-          )}
-        >
-          {isFlagging ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Flag
-              className={cn(
-                "h-4 w-4",
-                isFlagged ? "fill-green-600" : "fill-red-600"
-              )}
-            />
-          )}
-          <span>
-            {isFlagging
-              ? isFlagged
-                ? "Unflagging..."
-                : "Flagging..."
-              : isFlagged
-                ? "Flagged"
-                : "Unflagged"}
-          </span>
-        </Button>
+        />
 
         <Button
           variant="outline"

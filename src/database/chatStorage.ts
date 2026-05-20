@@ -7,21 +7,29 @@ import {
   messagesToTurns,
 } from "@/lib/chatStreamReducer";
 import { readMigratedLocalStorage } from "@/lib/migrateStorageKey";
+import {
+  getStoredViewScope,
+  isSelectableGroup,
+  setStoredViewScope,
+  type ViewScopeMode,
+} from "@/lib/viewScope";
 
-/**
- * WebSocket path segment and logical key for flagged-scope chat.
- * Separate thread from any per-workspace chat (even if that workspace is starred).
- */
-export const FLAGGED_CHAT_KEY = "flagged";
+export type { ViewScopeMode };
 
-/** @deprecated Use FLAGGED_CHAT_KEY */
-export const GLOBAL_CHAT_WORKSPACE = FLAGGED_CHAT_KEY;
+/** Internal chat routing key: workspace name or `group:<name>`. */
+export function groupChatKey(groupName: string): string {
+  return `group:${groupName.trim()}`;
+}
 
-export type ChatScope = "workspace" | "global";
+export function isGroupChatKey(chatKey: string): boolean {
+  return chatKey.startsWith("group:");
+}
 
-const CHAT_SCOPE_KEY = "nodepoint_chat_scope";
+export function groupNameFromChatKey(chatKey: string): string {
+  return chatKey.slice("group:".length);
+}
+
 const CHAT_WORKSPACE_KEY = "nodepoint_chat_workspace";
-const LEGACY_CHAT_SCOPE_KEY = "prajna_chat_scope";
 const LEGACY_CHAT_WORKSPACE_KEY = "prajna_chat_workspace";
 
 async function parseErrorResponse(response: Response): Promise<string> {
@@ -53,6 +61,7 @@ export interface ChatMessageRecord {
 
 export interface WorkspaceChatResponse {
   workspace?: string;
+  group?: string;
   flagged?: boolean;
   is_flag?: boolean;
   messages: ChatMessageRecord[];
@@ -70,7 +79,7 @@ export interface ChatSummaryEntry {
   message_count: number;
 }
 
-export interface ChatSummaryFlaggedResponse {
+export interface ChatSummaryGroupResponse {
   workspaces: ChatSummaryEntry[];
 }
 
@@ -121,23 +130,21 @@ export interface ChatStreamCallbacks {
 export type { ChatBlock, ChatTurn };
 export { messagesToTurns, finalizeAssistantBlocks };
 
-export function getStoredChatScope(): ChatScope {
-  try {
-    const v = readMigratedLocalStorage(CHAT_SCOPE_KEY, LEGACY_CHAT_SCOPE_KEY);
-    if (v === "global" || v === "flagged") return "global";
-    return "workspace";
-  } catch {
-    return "workspace";
+/** @deprecated Use getStoredViewScope from @/lib/viewScope */
+export { getStoredViewScope as getStoredChatScope } from "@/lib/viewScope";
+
+/** @deprecated Use setStoredViewScope from @/lib/viewScope */
+export function setStoredChatScope(scope: "workspace" | "global"): void {
+  if (scope === "global") {
+    const { groupName } = getStoredViewScope();
+    setStoredViewScope("group", groupName);
+  } else {
+    setStoredViewScope("workspace", null);
   }
 }
 
-export function setStoredChatScope(scope: ChatScope): void {
-  try {
-    localStorage.setItem(CHAT_SCOPE_KEY, scope);
-  } catch {
-    /* ignore */
-  }
-}
+/** @deprecated Use ViewScopeMode */
+export type ChatScope = "workspace" | "global";
 
 export function getStoredChatWorkspace(): string | null {
   try {
@@ -156,77 +163,75 @@ export function setStoredChatWorkspace(workspaceName: string): void {
 }
 
 /** WebSocket / internal key for the active chat target. */
-export function resolveChatKey(scope: ChatScope, workspaceName: string | null): string {
-  if (scope === "global") return FLAGGED_CHAT_KEY;
+export function resolveChatKey(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
+): string {
+  if (mode === "group") {
+    if (!groupName?.trim() || !isSelectableGroup(groupName)) {
+      throw new Error("Select a group for group-scoped chat.");
+    }
+    return groupChatKey(groupName);
+  }
   if (!workspaceName?.trim()) {
     throw new Error("Select a workspace for workspace-scoped chat.");
   }
   return workspaceName.trim();
 }
 
-/** @deprecated Use resolveChatKey */
-export function resolveChatWorkspaceKey(
-  scope: ChatScope,
-  workspaceName: string | null
+function groupChatRestUrl(groupName: string): string {
+  return buildApiUrl(`/chat/group/${encodeWorkspaceKey(groupName)}/`);
+}
+
+function chatRestUrl(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
 ): string {
-  return resolveChatKey(scope, workspaceName);
-}
-
-function flaggedChatRestUrl(): string {
-  return buildApiUrl("/chat/", { flagged: "true" });
-}
-
-export async function getChat(
-  scope: ChatScope,
-  workspaceName: string | null
-): Promise<WorkspaceChatResponse> {
-  const response = await fetch(chatRestUrl(scope, workspaceName));
-  if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+  if (mode === "group") {
+    if (!groupName?.trim() || !isSelectableGroup(groupName)) {
+      throw new Error("Select a group for group-scoped chat.");
+    }
+    return groupChatRestUrl(groupName.trim());
   }
-  return response.json();
-}
-
-/** @deprecated Use getChat */
-export async function getWorkspaceChat(workspaceKey: string): Promise<WorkspaceChatResponse> {
-  if (workspaceKey === FLAGGED_CHAT_KEY) {
-    return getChat("global", null);
-  }
-  return getChat("workspace", workspaceKey);
-}
-
-function chatRestUrl(scope: ChatScope, workspaceName: string | null): string {
-  if (scope === "global") return flaggedChatRestUrl();
   const name = workspaceName?.trim();
   if (!name) throw new Error("Select a workspace for workspace-scoped chat.");
   return buildApiUrl(`/chat/${encodeWorkspaceKey(name)}/`);
 }
 
-export async function clearChat(
-  scope: ChatScope,
-  workspaceName: string | null
-): Promise<ClearChatResponse> {
-  const response = await fetch(chatRestUrl(scope, workspaceName), { method: "DELETE" });
+export async function getChat(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
+): Promise<WorkspaceChatResponse> {
+  const response = await fetch(chatRestUrl(mode, workspaceName, groupName));
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
   return response.json();
 }
 
-/** @deprecated Use clearChat */
-export async function clearWorkspaceChat(workspaceKey: string): Promise<ClearChatResponse> {
-  if (workspaceKey === FLAGGED_CHAT_KEY) {
-    return clearChat("global", null);
+export async function clearChat(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
+): Promise<ClearChatResponse> {
+  const response = await fetch(chatRestUrl(mode, workspaceName, groupName), {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
   }
-  return clearChat("workspace", workspaceKey);
+  return response.json();
 }
 
 export async function getChatSummary(
-  params: { workspaceName: string } | { flagged: true }
-): Promise<ChatSummaryEntry | ChatSummaryFlaggedResponse> {
+  params: { workspaceName: string } | { group: string }
+): Promise<ChatSummaryEntry | ChatSummaryGroupResponse> {
   const searchParams = new URLSearchParams();
-  if ("flagged" in params) {
-    searchParams.set("flagged", "true");
+  if ("group" in params) {
+    searchParams.set("group", params.group);
   } else {
     searchParams.set("workspace_name", params.workspaceName);
   }
@@ -238,46 +243,28 @@ export async function getChatSummary(
 }
 
 export async function loadChatTurns(
-  scope: ChatScope,
-  workspaceName: string | null
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
 ): Promise<{
   chatKey: string;
-  scope: ChatScope;
+  mode: ViewScopeMode;
   workspace: string;
-  isFlag: boolean;
   turns: ChatTurn[];
 }> {
-  const chatKey = resolveChatKey(scope, workspaceName);
-  const detail = await getChat(scope, workspaceName);
+  const chatKey = resolveChatKey(mode, workspaceName, groupName);
+  const detail = await getChat(mode, workspaceName, groupName);
   const workspace =
     detail.workspace ??
-    (scope === "global" ? "flagged (all starred)" : workspaceName ?? chatKey);
+    detail.group ??
+    (mode === "group" && groupName
+      ? `group: ${groupName}`
+      : workspaceName ?? chatKey);
   return {
     chatKey,
-    scope,
+    mode,
     workspace,
-    isFlag: Boolean(detail.is_flag ?? detail.flagged),
     turns: messagesToTurns(detail.messages),
-  };
-}
-
-/** @deprecated Use loadChatTurns(scope, workspaceName) */
-export async function loadChatTurnsByKey(workspaceKey: string): Promise<{
-  workspaceKey: string;
-  workspace: string;
-  isFlag: boolean;
-  turns: ChatTurn[];
-}> {
-  const scope: ChatScope = workspaceKey === FLAGGED_CHAT_KEY ? "global" : "workspace";
-  const result = await loadChatTurns(
-    scope,
-    scope === "workspace" ? workspaceKey : null
-  );
-  return {
-    workspaceKey: result.chatKey,
-    workspace: result.workspace,
-    isFlag: result.isFlag,
-    turns: result.turns,
   };
 }
 
@@ -293,24 +280,33 @@ export function chatMessagesToLegacy(messages: ChatMessageRecord[]): ChatMessage
 }
 
 export async function loadChatHistory(
-  scope: ChatScope,
-  workspaceName: string | null
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null
 ): Promise<ChatMessage[]> {
-  const detail = await getChat(scope, workspaceName);
+  const detail = await getChat(mode, workspaceName, groupName);
   return chatMessagesToLegacy(detail.messages);
 }
 
+function chatWebSocketPath(chatKey: string): string {
+  if (isGroupChatKey(chatKey)) {
+    const name = groupNameFromChatKey(chatKey);
+    return `group/${encodeWorkspaceKey(name)}/`;
+  }
+  return `${encodeWorkspaceKey(chatKey)}/`;
+}
+
 function chatWebSocketUrl(chatKey: string): string {
-  return `${wsBaseUrl()}/ws/chat/${encodeWorkspaceKey(chatKey)}/`;
+  return `${wsBaseUrl()}/ws/chat/${chatWebSocketPath(chatKey)}`;
 }
 
 export function sendChatTurn(
-  workspaceKey: string,
+  chatKey: string,
   content: string,
   callbacks: ChatStreamCallbacks = {},
   options?: { excludeServers?: string[] }
 ): { cancel: () => void; done: Promise<{ answer: string; thinking: string; blocks: ChatBlock[] }> } {
-  const ws = new WebSocket(chatWebSocketUrl(workspaceKey));
+  const ws = new WebSocket(chatWebSocketUrl(chatKey));
   let thinking = "";
   let answer = "";
   let blocks: ChatBlock[] = [];
@@ -489,10 +485,10 @@ export async function sendChatMessage(
   if (!workspaceName?.trim()) {
     throw new Error("Workspace is required for chat.");
   }
-  const chatKey = resolveChatKey("workspace", workspaceName);
+  const chatKey = resolveChatKey("workspace", workspaceName, null);
   const { done } = sendChatTurn(chatKey, content, callbacks);
   const { answer } = await done;
-  const detail = await getChat("workspace", workspaceName);
+  const detail = await getChat("workspace", workspaceName, null);
   return {
     answer,
     provenance: [],

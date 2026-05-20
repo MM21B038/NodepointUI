@@ -3,58 +3,30 @@
 import {
   ChevronLeft,
   ChevronRight,
-  Flag,
-  FlagOff,
-  Loader2,
-  Plus,
+  FolderKanban,
+  FolderPlus,
   Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { WorkspaceStats } from "@/database/workspaceStorage";
 
-export type FlagFilter = "both" | "flagged" | "unflagged";
-
-const FLAG_FILTER_OPTIONS: {
-  value: FlagFilter;
-  label: string;
-  icon?: "flag" | "flagOff";
-  ariaLabel: string;
-  statKey?: keyof WorkspaceStats;
-}[] = [
-  {
-    value: "both",
-    label: "All",
-    ariaLabel: "Show all workspaces",
-    statKey: "total",
-  },
-  {
-    value: "flagged",
-    label: "Flagged",
-    icon: "flag",
-    ariaLabel: "Show flagged workspaces only",
-    statKey: "flagged",
-  },
-  {
-    value: "unflagged",
-    label: "Unflagged",
-    icon: "flagOff",
-    ariaLabel: "Show unflagged workspaces only",
-    statKey: "non_flagged",
-  },
-];
-
 interface WorkspaceManagementToolbarProps {
-  newWorkspaceName: string;
-  onNewWorkspaceNameChange: (value: string) => void;
-  onCreateWorkspace: () => void;
-  isCreating: boolean;
+  onOpenCreateWorkspace: () => void;
+  onOpenManageGroups: () => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
-  flagFilter: FlagFilter;
-  onFlagFilterChange: (value: FlagFilter) => void;
+  groupFilter: string;
+  onGroupFilterChange: (value: string) => void;
+  groupNames: string[];
   workspaceStats: WorkspaceStats | null;
   totalItems: number;
   page: number;
@@ -67,14 +39,13 @@ interface WorkspaceManagementToolbarProps {
 }
 
 const WorkspaceManagementToolbar = ({
-  newWorkspaceName,
-  onNewWorkspaceNameChange,
-  onCreateWorkspace,
-  isCreating,
+  onOpenCreateWorkspace,
+  onOpenManageGroups,
   searchTerm,
   onSearchTermChange,
-  flagFilter,
-  onFlagFilterChange,
+  groupFilter,
+  onGroupFilterChange,
+  groupNames,
   workspaceStats,
   totalItems,
   page,
@@ -92,34 +63,29 @@ const WorkspaceManagementToolbar = ({
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold shrink-0 mr-1">Workspaces</h1>
 
-        <div className="flex items-center gap-2 min-w-0">
-          <Label htmlFor="new-workspace-name" className="sr-only">
-            Workspace name
-          </Label>
-          <Input
-            id="new-workspace-name"
-            placeholder="New workspace name"
-            value={newWorkspaceName}
-            onChange={(e) => onNewWorkspaceNameChange(e.target.value)}
-            disabled={isCreating}
-            className="h-9 w-[11rem] sm:w-[13rem]"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onCreateWorkspace();
-            }}
-          />
+        <div className="flex items-center gap-1.5 shrink-0">
           <Button
+            type="button"
             size="sm"
-            className="h-9 shrink-0"
-            onClick={onCreateWorkspace}
-            disabled={isCreating || !newWorkspaceName.trim()}
+            className="h-9 gap-1.5"
+            onClick={onOpenCreateWorkspace}
           >
-            {isCreating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-1.5" />
-                Create
-              </>
+            <FolderPlus className="h-4 w-4" />
+            New workspace
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5"
+            onClick={onOpenManageGroups}
+          >
+            <FolderKanban className="h-4 w-4" />
+            Groups
+            {groupNames.length > 0 && (
+              <span className="tabular-nums text-muted-foreground">
+                ({groupNames.length})
+              </span>
             )}
           </Button>
         </div>
@@ -138,76 +104,26 @@ const WorkspaceManagementToolbar = ({
           />
         </div>
 
-        <div
-          role="group"
-          aria-label="Filter by flag status"
-          className="flex items-center gap-1.5 shrink-0"
-        >
-          <span className="text-xs text-muted-foreground hidden sm:inline whitespace-nowrap">
-            Show
-          </span>
-          <div
-            id="flag-filter"
-            className="inline-flex h-9 items-center gap-0.5 rounded-md border border-input bg-muted/40 p-0.5"
-          >
-            {FLAG_FILTER_OPTIONS.map((option) => {
-              const isActive = flagFilter === option.value;
-              const count =
-                workspaceStats && option.statKey
-                  ? workspaceStats[option.statKey]
-                  : null;
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={option.ariaLabel}
-                  aria-pressed={isActive}
-                  onClick={() => onFlagFilterChange(option.value)}
-                  className={cn(
-                    "h-8 gap-1 px-2.5 text-xs font-medium shadow-none",
-                    isActive
-                      ? "bg-background text-foreground shadow-sm hover:bg-background"
-                      : "text-muted-foreground hover:text-foreground hover:bg-transparent"
-                  )}
-                >
-                  {option.icon === "flag" && (
-                    <Flag
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0",
-                        isActive
-                          ? "fill-amber-500 text-amber-600"
-                          : "text-muted-foreground"
-                      )}
-                    />
-                  )}
-                  {option.icon === "flagOff" && (
-                    <FlagOff
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0",
-                        isActive ? "text-foreground" : "text-muted-foreground"
-                      )}
-                    />
-                  )}
-                  <span className={cn(option.icon && "hidden sm:inline")}>
-                    {option.label}
-                  </span>
-                  {count !== null && (
-                    <span
-                      className={cn(
-                        "tabular-nums",
-                        option.icon && "sm:ml-0.5",
-                        !option.icon && "ml-0.5"
-                      )}
-                    >
-                      ({count})
-                    </span>
-                  )}
-                </Button>
-              );
-            })}
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Label htmlFor="group-filter" className="sr-only">
+            Filter by group
+          </Label>
+          <Select value={groupFilter} onValueChange={onGroupFilterChange}>
+            <SelectTrigger id="group-filter" className="h-9 w-[11rem]">
+              <SelectValue placeholder="All workspaces" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                All workspaces
+                {workspaceStats != null ? ` (${workspaceStats.total})` : ""}
+              </SelectItem>
+              {groupNames.map((name) => (
+                <SelectItem key={name} value={name}>
+                  In group: {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -248,6 +164,11 @@ const WorkspaceManagementToolbar = ({
       {isSearchActive && (
         <p className="text-xs text-muted-foreground pl-0.5">
           Search filters all loaded workspace names.
+        </p>
+      )}
+      {groupFilter !== "all" && !isSearchActive && (
+        <p className="text-xs text-muted-foreground pl-0.5">
+          Showing workspaces in group &quot;{groupFilter}&quot;.
         </p>
       )}
     </div>

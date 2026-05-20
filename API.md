@@ -28,7 +28,7 @@ Complete reference for REST and WebSocket APIs. Base URL example: `http://localh
 | Surface | Prefix | Purpose |
 |---------|--------|---------|
 | REST | `/api/` | CRUD for workspaces, documents, graphs, chat |
-| WebSocket | `/ws/chat/flagged/`, `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
+| WebSocket | `/ws/chat/group/<name>/`, `/ws/chat/flagged/`, `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
 | Admin | `/admin/` | Django admin |
 | Media (DEBUG) | `/media/` | Uploaded files |
 
@@ -40,15 +40,34 @@ Flagged-scope (cross-workspace)                    Per-workspace
   GET  /api/knowledge-graph/entity-types/?flagged=true
   GET  /api/knowledge-graph/?flagged=true            GET  /api/knowledge-graph/?workspace_name=<name>
   GET  /api/knowledge/entities/search/?flagged=true  GET  /api/knowledge/entities/search/?workspace_name=<name>
+  GET  /api/group/list/
   GET  /api/chat/?flagged=true                       GET  /api/chat/<name>/
-  WS   /ws/chat/flagged/                             WS   /ws/chat/<name>/
+  GET  /api/chat/group/<name>/                       WS   /ws/chat/<name>/
+  WS   /ws/chat/flagged/                             WS   /ws/chat/group/<name>/
 ```
 
-### Starred workspaces (`is_flag=true`)
+### Workspace groups
 
-Star a workspace: `PATCH /api/workspace/<name>/toggle-flag/`.
+Create named groups and assign workspaces (many-to-many). Use **`group=<name>`** on KG, entity search, chat summary, and group chat — same role as the legacy **`flagged=true`** scope.
 
-Check how many are starred before heavy flagged calls: `GET /api/workspace/flagged/count/`.
+| Use | API |
+|-----|-----|
+| Create group | `POST /api/group/create/` body `{ "name": "research" }` |
+| List groups + workspace counts | `GET /api/group/list/` |
+| Group detail + members | `GET /api/group/<name>/` |
+| Add workspace to group | `POST /api/group/<name>/workspaces/` body `{ "workspace_name": "..." }` |
+| Remove from group | `DELETE /api/group/<name>/workspaces/<workspace_name>/` |
+| Delete group | `DELETE /api/group/<name>/` (not allowed for system group `flagged`) |
+| KG / search across group | `?group=<name>` (alias: `?flagged=true` → group `flagged`) |
+| Group chat | `GET/DELETE /api/chat/group/<name>/`, `ws://.../ws/chat/group/<name>/` |
+
+System group **`flagged`** is created on migrate. `PATCH .../toggle-flag/` flips `is_flag` and adds/removes the workspace from group `flagged`.
+
+### Starred workspaces (`is_flag=true` / group `flagged`)
+
+Star a workspace: `PATCH /api/workspace/<name>/toggle-flag/` (syncs group `flagged`).
+
+Check members: `GET /api/workspace/flagged/count/` or `GET /api/group/flagged/`.
 
 | Use | API |
 |-----|-----|
@@ -60,7 +79,7 @@ Check how many are starred before heavy flagged calls: `GET /api/workspace/flagg
 | Fuzzy entity name search + subgraph | `GET /api/knowledge/entities/search/?flagged=true` (+ `q`, `threshold`, `depth`, `limit`) |
 | Chat metadata for starred workspaces | `GET /api/chat/summary/?flagged=true` |
 | Semantic search during **flagged-scope** chat | `Knowledge.search_graph` (starred workspaces only) |
-| Semantic search during **per-workspace** chat | `Knowledge.search_graph` (that workspace + all starred) |
+| Semantic search during **per-workspace** chat | `Knowledge.search_graph` (that workspace only) |
 
 **Flagged `limit` / `depth` / `match_limit`:** applied **per workspace**, not as one global cap. Three starred workspaces with `limit=100` can return up to 300 graph nodes total (100 each in `graphs[]` or `workspaces[]`).
 
@@ -70,7 +89,7 @@ Documents and KG rows always live under **real** workspace names. There is no se
 
 | Mode | REST | WebSocket | Message storage |
 |------|------|-----------|-----------------|
-| **Flagged-scope** | `GET/DELETE /api/chat/?flagged=true` | `/ws/chat/flagged/` | Internal `__flagged_chat__` (not listed in workspace list) |
+| **Group-scope** | `GET/DELETE /api/chat/group/<name>/` or `?flagged=true` | `/ws/chat/group/<name>/` or `/ws/chat/flagged/` | Internal `__group_chat__<name>` (not listed) |
 | **Per-workspace** | `GET/DELETE /api/chat/<workspace_name>/` | `/ws/chat/<workspace_name>/` | That workspace’s conversation |
 
 - No conversation UUID, no `POST` to create chat — lazy-create on first GET or WebSocket connect.
@@ -140,7 +159,15 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | GET | `workspace/flagged/count/` | Count and names of starred workspaces |
 | DELETE | `workspace/delete/<name>/` | Delete workspace and files |
 | GET | `workspace/<name>/flag-status/` | Read `is_flag` for one workspace |
-| PATCH | `workspace/<name>/toggle-flag/` | Flip `is_flag` |
+| PATCH | `workspace/<name>/toggle-flag/` | Flip `is_flag` (syncs group `flagged`) |
+| POST | `group/create/` | Create workspace group |
+| GET | `group/list/` | List groups with `workspace_count` |
+| GET | `group/<name>/` | Group detail + member workspaces |
+| DELETE | `group/<name>/` | Delete group (not `flagged`) |
+| POST | `group/<name>/workspaces/` | Add workspace to group |
+| DELETE | `group/<name>/workspaces/<workspace_name>/` | Remove workspace from group |
+| GET | `chat/group/<name>/` | Group-scoped chat history |
+| DELETE | `chat/group/<name>/` | Clear group-scoped chat |
 | POST | `document/upload/` | Upload `.txt`/`.md`; queue preprocess pipeline |
 | GET | `document/<workspace_name>/` | List documents in workspace |
 | DELETE | `document/delete/<workspace_name>/<file_name>/` | Delete one document |
@@ -159,18 +186,19 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | DELETE | `chat/<workspace_name>/` | Clear per-workspace chat |
 | GET | `chat/summary/` | Message counts / `updated_at` |
 
-WebSocket (not under `/api/`): `ws://<host>/ws/chat/flagged/`, `ws://<host>/ws/chat/<workspace_name>/`.
+WebSocket (not under `/api/`): `ws://<host>/ws/chat/group/<name>/`, `ws://<host>/ws/chat/flagged/`, `ws://<host>/ws/chat/<workspace_name>/`.
 
 ---
 
-## Shared scope: `workspace_name` vs `flagged=true`
+## Shared scope: `workspace_name` vs `group`
 
 Several endpoints require **exactly one** scope (not both, not neither):
 
 | Scope | Query | Meaning |
 |-------|-------|---------|
 | Single workspace | `workspace_name=PRAJNA` | Data from that workspace only |
-| Starred set | `flagged=true` | One result object **per** starred workspace (`is_flag=true`), excluding internal `__flagged_chat__` |
+| Group | `group=research` | One result object **per** workspace in that group |
+| Legacy | `flagged=true` | Alias for `group=flagged` (system group; synced with `is_flag`) |
 
 Applies to:
 
@@ -195,7 +223,7 @@ curl "http://localhost:8000/api/workspace/flagged/count/"
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Both `workspace_name` and `flagged=true`, or neither |
+| `400` | Both `workspace_name` and `group` / `flagged=true`, or neither |
 | `404` | Unknown `workspace_name` (single-workspace mode only) |
 
 ---
@@ -239,10 +267,39 @@ Create a workspace and its media directory.
   {
     "name": "PRAJNA",
     "is_flag": true,
+    "groups": ["flagged", "research"],
     "created_at": "2026-05-15T12:00:00.123456Z"
   }
 ]
 ```
+
+---
+
+## Workspace groups
+
+### `POST /api/group/create/`
+
+**Body:** `{ "name": "research" }` — letters, digits, `_`, `-`; cannot be reserved name `flagged`.
+
+**Response `201`:** `{ "message", "group": { "name", "workspace_count", "created_at" } }`
+
+### `GET /api/group/list/`
+
+**Response `200`:** `{ "groups": [{ "name", "workspace_count", "created_at", "is_system" }, ...] }` — always includes system group `flagged`.
+
+### `GET /api/group/<name>/`
+
+**Response `200`:** `{ "name", "workspace_count", "is_system", "workspaces": [{ "name", "is_flag", "created_at" }] }`
+
+### `POST /api/group/<name>/workspaces/`
+
+**Body:** `{ "workspace_name": "PRAJNA" }`
+
+### `DELETE /api/group/<name>/workspaces/<workspace_name>/`
+
+### `DELETE /api/group/<name>/`
+
+Returns `400` if `name` is `flagged`.
 
 ---
 
@@ -721,12 +778,13 @@ Optional filters (same for both modes; applied **per workspace** in flagged resp
 | Query | Default | Max | Description |
 |-------|---------|-----|-------------|
 | `entity_type` | — | — | Comma-separated, e.g. `PER,ORG` (case-sensitive) |
+| `file_name` | — | — | Comma-separated document file names (exact match), e.g. `notes.md,report.pdf` |
 | `depth` | `1` | `5` | BFS hops from seed entities |
 | `limit` | `500` | `5000` | Max nodes per workspace |
 
 **Traversal**
 
-1. **Seeds:** entities matching `entity_type` when set; otherwise all entities in the workspace.
+1. **Seeds:** entities matching `entity_type` and/or `file_name` when set; otherwise all entities in the workspace.
 2. **BFS:** expand via relations up to `depth` hops; stop at `limit` nodes.
 3. **Edges:** relations whose `source_id` and `target_id` are both in the node set (edges between seeds appear even when `depth=0`).
 
@@ -739,18 +797,18 @@ curl "http://localhost:8000/api/knowledge-graph/?workspace_name=PRAJNA&entity_ty
 ```json
 {
   "workspace": "PRAJNA",
-  "filters": { "entity_types": ["PER", "ORG"], "depth": 1, "limit": 500 },
+  "filters": {
+    "entity_types": ["PER", "ORG"],
+    "file_names": null,
+    "depth": 1,
+    "limit": 500
+  },
   "truncated": false,
   "nodes": [
     {
       "id": "…",
       "name": "Alice",
-      "entity_type": "PER",
-      "attributes": { "role": "engineer" },
-      "document_id": "…",
-      "file_name": "notes.md",
-      "vector": "COMPLETED",
-      "created_at": "2026-05-15T12:00:00Z"
+      "entity_type": "PER"
     }
   ],
   "edges": [
@@ -789,6 +847,8 @@ curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&li
 | Field | Notes |
 |-------|-------|
 | `filters.entity_types` | `null` when no `entity_type` query param |
+| `filters.file_names` | `null` when no `file_name` query param |
+| `nodes[]` | `id`, `name`, `entity_type` only |
 | `truncated` | `true` if seeds or BFS hit `limit` |
 | `edges[]` | Includes `id`, `source_id`, `target_id`, `type_description` |
 
@@ -807,7 +867,7 @@ curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&li
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Both or neither scope; invalid `depth`/`limit`; empty `entity_type` after parse |
+| `400` | Both or neither scope; invalid `depth`/`limit`; empty `entity_type` or `file_name` after parse |
 | `404` | Unknown `workspace_name` |
 
 ---
@@ -826,6 +886,7 @@ Fuzzy **entity name** search (rapidfuzz: WRatio, partial_ratio, token_set_ratio,
 | `depth` | no | `1` | `5` | BFS hops from seeds into `graph` **per workspace** |
 | `limit` | no | `500` | `5000` | Max nodes in each `graph` **per workspace** |
 | `entity_type` | no | — | — | Comma-separated filter on candidates, e.g. `PER,ORG` |
+| `file_name` | no | — | — | Comma-separated document file names (exact match) |
 
 **Scoring:** candidates are gathered via `icontains`, token prefixes, and a name-ordered workspace sample; each name is scored 0–1. Empty `matches` means nothing met `threshold` (try lowering it or shortening `q`).
 
@@ -843,6 +904,7 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
   "workspace": "PRAJNA",
   "filters": {
     "entity_types": null,
+    "file_names": null,
     "depth": 1,
     "limit": 100,
     "threshold": 0.6,
@@ -853,11 +915,6 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
       "id": "660e8400-e29b-41d4-a716-446655440001",
       "name": "Alice",
       "entity_type": "PER",
-      "attributes": { "role": "engineer" },
-      "document_id": "550e8400-e29b-41d4-a716-446655440000",
-      "file_name": "notes.md",
-      "vector": "COMPLETED",
-      "created_at": "2026-05-15T12:00:00Z",
       "score": 0.8,
       "workspace": "PRAJNA"
     }
@@ -869,22 +926,12 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
       {
         "id": "660e8400-e29b-41d4-a716-446655440001",
         "name": "Alice",
-        "entity_type": "PER",
-        "attributes": { "role": "engineer" },
-        "document_id": "550e8400-e29b-41d4-a716-446655440000",
-        "file_name": "notes.md",
-        "vector": "COMPLETED",
-        "created_at": "2026-05-15T12:00:00Z"
+        "entity_type": "PER"
       },
       {
         "id": "660e8400-e29b-41d4-a716-446655440002",
         "name": "Acme Corp",
-        "entity_type": "ORG",
-        "attributes": {},
-        "document_id": "550e8400-e29b-41d4-a716-446655440000",
-        "file_name": "notes.md",
-        "vector": "COMPLETED",
-        "created_at": "2026-05-15T12:00:01Z"
+        "entity_type": "ORG"
       }
     ],
     "edges": [
@@ -1591,7 +1638,7 @@ Workspace scope is **automatic** (model must not pass `workspace`):
 | Chat connection | Workspaces searched in Qdrant |
 |-----------------|-------------------------------|
 | `/ws/chat/flagged/` | All starred (`is_flag=true`) only |
-| `/ws/chat/<name>/` | That workspace **plus** all starred |
+| `/ws/chat/<name>/` | That workspace only |
 
 If flagged-scope chat runs and **no** workspace is starred, the tool returns plain text:
 

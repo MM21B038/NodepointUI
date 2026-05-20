@@ -9,21 +9,21 @@ import {
   getWorkspaceStats,
   getWorkspacePage,
   createWorkspace,
+  addWorkspaceToGroup,
   deleteWorkspace,
   startPreprocess,
   WorkspaceCreateError,
   type WorkspacePageItem,
   type WorkspacePagePagination,
-  type WorkspacePageFlag,
   type WorkspaceStats,
 } from "@/database/workspaceStorage";
 import { toast } from "sonner";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 import WorkspaceCardSkeleton from "@/components/workspace/WorkspaceCardSkeleton";
-import WorkspaceManagementToolbar, {
-  type FlagFilter,
-} from "@/components/workspace/WorkspaceManagementToolbar";
+import WorkspaceManagementToolbar from "@/components/workspace/WorkspaceManagementToolbar";
+import CreateWorkspaceDialog from "@/components/workspace/CreateWorkspaceDialog";
+import ManageGroupsDialog from "@/components/workspace/ManageGroupsDialog";
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
 
 const EMPTY_PAGINATION: WorkspacePagePagination = {
@@ -35,27 +35,24 @@ const EMPTY_PAGINATION: WorkspacePagePagination = {
   has_previous: false,
 };
 
-function flagFilterToApi(flag: FlagFilter): WorkspacePageFlag {
-  if (flag === "flagged") return "flagged";
-  if (flag === "unflagged") return "non_flagged";
-  return "all";
-}
-
 function entryToPageItem(entry: {
   name: string;
   is_flag: boolean;
   created_at: string;
+  groups?: string[];
 }): WorkspacePageItem {
   return {
     name: entry.name,
     is_flag: entry.is_flag,
     created_at: entry.created_at,
     counts: { files: 0, chunks: 0, entities: 0, relations: 0 },
+    groups: entry.groups,
   };
 }
 
 const WorkspaceManagement = () => {
-  const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
+  const { currentWorkspace, setCurrentWorkspace, groups, refreshGroups } =
+    useWorkspace();
   const { gridRef, pageSize } = useWorkspaceGridPageSize();
 
   const [workspaces, setWorkspaces] = useState<WorkspacePageItem[]>([]);
@@ -66,11 +63,12 @@ const WorkspaceManagement = () => {
   );
   const [isLoading, setIsLoading] = useState(false);
 
-  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [flagFilter, setFlagFilter] = useState<FlagFilter>("both");
+  const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
 
   const [searchList, setSearchList] = useState<WorkspacePageItem[] | null>(
@@ -86,6 +84,9 @@ const WorkspaceManagement = () => {
   const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(
     new Map()
   );
+  const [groupsByWorkspace, setGroupsByWorkspace] = useState<
+    Record<string, string[]>
+  >({});
 
   const prevPageSizeRef = useRef(pageSize);
   const isSearchActive = debouncedSearch.trim().length > 0;
@@ -97,7 +98,7 @@ const WorkspaceManagement = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, flagFilter]);
+  }, [debouncedSearch, groupFilter]);
 
   useEffect(() => {
     if (prevPageSizeRef.current !== pageSize) {
@@ -124,9 +125,23 @@ const WorkspaceManagement = () => {
     [currentWorkspace, setCurrentWorkspace]
   );
 
+  const syncGroupsFromList = useCallback(async () => {
+    try {
+      const list = await getWorkspaces();
+      const map: Record<string, string[]> = {};
+      for (const w of list) {
+        map[w.name] = w.groups ?? [];
+      }
+      setGroupsByWorkspace(map);
+      return list;
+    } catch {
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    getWorkspaces().then((list) => {
+    syncGroupsFromList().then((list) => {
       if (cancelled) return;
       const names = list.map((w) => w.name);
       if (currentWorkspace && !names.includes(currentWorkspace)) {
@@ -147,7 +162,7 @@ const WorkspaceManagement = () => {
       const response = await getWorkspacePage({
         page,
         page_size: pageSize,
-        flag: flagFilterToApi(flagFilter),
+        flag: "all",
       });
       setWorkspaces(response.workspaces);
       setPagination(response.pagination);
@@ -160,18 +175,17 @@ const WorkspaceManagement = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, flagFilter, syncCurrentWorkspaceFromPage]);
+  }, [page, pageSize, syncCurrentWorkspaceFromPage]);
 
   const fetchSearchList = useCallback(async () => {
     setIsSearchListLoading(true);
     try {
       const list = await getWorkspaces();
-      const apiFlag = flagFilterToApi(flagFilter);
       let filtered = list.map(entryToPageItem);
-      if (apiFlag === "flagged") {
-        filtered = filtered.filter((w) => w.is_flag);
-      } else if (apiFlag === "non_flagged") {
-        filtered = filtered.filter((w) => !w.is_flag);
+      if (groupFilter !== "all") {
+        filtered = filtered.filter((w) =>
+          (w.groups ?? []).includes(groupFilter)
+        );
       }
       const q = debouncedSearch.trim().toLowerCase();
       if (q) {
@@ -191,7 +205,7 @@ const WorkspaceManagement = () => {
     } finally {
       setIsSearchListLoading(false);
     }
-  }, [debouncedSearch, flagFilter]);
+  }, [debouncedSearch, groupFilter]);
 
   useEffect(() => {
     fetchStats();
@@ -229,13 +243,40 @@ const WorkspaceManagement = () => {
     };
   }, [isSearchActive, searchList, pageSize, page]);
 
+  const filterByGroup = useCallback(
+    (items: WorkspacePageItem[]) => {
+      if (groupFilter === "all") return items;
+      return items.filter((w) => groupsForCard(w).includes(groupFilter));
+    },
+    // groupsForCard depends on groupsByWorkspace — defined below; use inline:
+    [groupFilter, groupsByWorkspace]
+  );
+
+  const groupsForCard = (workspace: WorkspacePageItem): string[] =>
+    (workspace.groups ?? groupsByWorkspace[workspace.name] ?? []).filter(
+      (g) => g !== "flagged"
+    );
+
   const displayedWorkspaces = useMemo(() => {
-    if (!isSearchActive) return workspaces;
-    if (searchList === null) return [];
-    const { page: p, page_size } = searchPagination;
-    const start = (p - 1) * page_size;
-    return searchList.slice(start, start + page_size);
-  }, [isSearchActive, workspaces, searchList, searchPagination]);
+    const base = !isSearchActive
+      ? workspaces
+      : searchList === null
+        ? []
+        : (() => {
+            const { page: p, page_size } = searchPagination;
+            const start = (p - 1) * page_size;
+            return searchList.slice(start, start + page_size);
+          })();
+    return filterByGroup(base);
+  }, [
+    isSearchActive,
+    workspaces,
+    searchList,
+    searchPagination,
+    groupFilter,
+    groupsByWorkspace,
+    filterByGroup,
+  ]);
 
   const activePagination = isSearchActive ? searchPagination : pagination;
 
@@ -255,38 +296,53 @@ const WorkspaceManagement = () => {
 
   const refreshAfterMutation = useCallback(async () => {
     await fetchStats();
+    await syncGroupsFromList();
+    await refreshGroups();
     if (isSearchActive) {
       await fetchSearchList();
     } else {
       await fetchPage();
     }
-  }, [fetchStats, fetchPage, fetchSearchList, isSearchActive]);
+  }, [
+    fetchStats,
+    fetchPage,
+    fetchSearchList,
+    isSearchActive,
+    syncGroupsFromList,
+    refreshGroups,
+  ]);
 
-  const handleCreateWorkspace = async () => {
-    const name = newWorkspaceName.trim();
-    if (!name) {
-      toast.error("Workspace name cannot be empty.");
-      return;
-    }
-
+  const handleCreateWorkspace = async (name: string, groupNames: string[]) => {
     setIsCreating(true);
     const loadingToastId = toast.loading(`Creating workspace "${name}"...`);
 
     try {
       await createWorkspace(name);
+      for (const groupName of groupNames) {
+        try {
+          await addWorkspaceToGroup(groupName, name);
+        } catch (err) {
+          console.warn(`Failed to add ${name} to group ${groupName}:`, err);
+          toast.error(
+            `Workspace created but could not add to group "${groupName}".`
+          );
+        }
+      }
       toast.success(`Workspace "${name}" created successfully!`, {
         id: loadingToastId,
       });
-      setNewWorkspaceName("");
+      setCreateDialogOpen(false);
       setPage(1);
       await fetchStats();
+      await syncGroupsFromList();
+      await refreshGroups();
       if (isSearchActive) {
         await fetchSearchList();
       } else {
         const response = await getWorkspacePage({
           page: 1,
           page_size: pageSize,
-          flag: flagFilterToApi(flagFilter),
+          flag: "all",
         });
         setWorkspaces(response.workspaces);
         setPagination(response.pagination);
@@ -387,18 +443,28 @@ const WorkspaceManagement = () => {
 
   const skeletonCount = Math.max(4, pageSize);
 
+  const allWorkspaceNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const w of workspaces) names.add(w.name);
+    if (searchList) {
+      for (const w of searchList) names.add(w.name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [workspaces, searchList]);
+
+  const groupNames = useMemo(() => groups.map((g) => g.name), [groups]);
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col w-full">
       <div className="flex flex-1 min-h-0 flex-col rounded-xl border shadow-lg bg-card overflow-hidden">
         <WorkspaceManagementToolbar
-          newWorkspaceName={newWorkspaceName}
-          onNewWorkspaceNameChange={setNewWorkspaceName}
-          onCreateWorkspace={handleCreateWorkspace}
-          isCreating={isCreating}
+          onOpenCreateWorkspace={() => setCreateDialogOpen(true)}
+          onOpenManageGroups={() => setGroupsDialogOpen(true)}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
-          flagFilter={flagFilter}
-          onFlagFilterChange={setFlagFilter}
+          groupFilter={groupFilter}
+          onGroupFilterChange={setGroupFilter}
+          groupNames={groupNames}
           workspaceStats={workspaceStats}
           totalItems={activePagination.total_items}
           page={activePagination.page}
@@ -408,6 +474,20 @@ const WorkspaceManagement = () => {
           onPreviousPage={handlePreviousPage}
           onNextPage={handleNextPage}
           isSearchActive={isSearchActive}
+        />
+
+        <CreateWorkspaceDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          onCreate={handleCreateWorkspace}
+          isCreating={isCreating}
+        />
+
+        <ManageGroupsDialog
+          open={groupsDialogOpen}
+          onOpenChange={setGroupsDialogOpen}
+          workspaceNames={allWorkspaceNames}
+          onChanged={() => void refreshAfterMutation()}
         />
 
         <div
@@ -436,8 +516,8 @@ const WorkspaceManagement = () => {
                   isExtracting={
                     isExtractingMap.get(workspace.name) || false
                   }
-                  isFlagged={workspace.is_flag}
-                  onFlagToggled={refreshAfterMutation}
+                  groups={groupsForCard(workspace)}
+                  onGroupsChanged={refreshAfterMutation}
                 />
               ))}
             </div>
@@ -472,8 +552,8 @@ const WorkspaceManagement = () => {
                   isExtracting={
                     isExtractingMap.get(workspace.name) || false
                   }
-                  isFlagged={workspace.is_flag}
-                  onFlagToggled={refreshAfterMutation}
+                  groups={groupsForCard(workspace)}
+                  onGroupsChanged={refreshAfterMutation}
                 />
               ))}
             </div>

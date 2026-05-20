@@ -1,45 +1,32 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { GraphNode, GraphEdge } from "@/database/workspaceStorage";
 import { KbGraphSidePanel } from "@/components/knowledge-base/KbGraphSidePanel";
 
 interface SourceFilesPanelProps {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  availableFiles: string[];
   selectedSourceFiles: Set<string>;
   onSelectedSourceFilesChange: (files: Set<string>) => void;
   onClose: () => void;
-  onFilterInteraction: () => void;
+  loading?: boolean;
 }
 
 const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
-  nodes,
-  edges,
+  availableFiles,
   selectedSourceFiles,
   onSelectedSourceFilesChange,
   onClose,
-  onFilterInteraction,
+  loading,
 }) => {
-  const uniqueSourceFiles = useMemo(() => {
-    const files = new Set<string>();
-    nodes.forEach((node) => node.source.forEach((s) => files.add(s)));
-    edges.forEach((edge) => edge.source_file.forEach((s) => files.add(s)));
-    return Array.from(files).sort();
-  }, [nodes, edges]);
-
   const handleSourceFileChange = (file: string, checked: boolean) => {
-    onSelectedSourceFilesChange((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(file);
-      else next.delete(file);
-      return next;
-    });
-    onFilterInteraction();
+    const next = new Set(selectedSourceFiles);
+    if (checked) next.add(file);
+    else next.delete(file);
+    onSelectedSourceFilesChange(next);
   };
 
   const toolbar = (
@@ -48,13 +35,11 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
         variant="outline"
         size="sm"
         className="h-8 flex-1 text-xs"
-        onClick={() => {
-          onSelectedSourceFilesChange(new Set(uniqueSourceFiles));
-          onFilterInteraction();
-        }}
+        onClick={() => onSelectedSourceFilesChange(new Set(availableFiles))}
         disabled={
-          uniqueSourceFiles.length === 0 ||
-          selectedSourceFiles.size === uniqueSourceFiles.length
+          loading ||
+          availableFiles.length === 0 ||
+          selectedSourceFiles.size === availableFiles.length
         }
       >
         Select all
@@ -63,11 +48,8 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
         variant="outline"
         size="sm"
         className="h-8 flex-1 text-xs"
-        onClick={() => {
-          onSelectedSourceFilesChange(new Set());
-          onFilterInteraction();
-        }}
-        disabled={selectedSourceFiles.size === 0}
+        onClick={() => onSelectedSourceFilesChange(new Set())}
+        disabled={loading || selectedSourceFiles.size === 0}
       >
         Clear all
       </Button>
@@ -82,13 +64,15 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
       toolbar={toolbar}
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Show nodes and edges tied to selected documents only.
+        Reloads the graph with a <span className="font-medium">file_name</span> filter on the
+        API. Use depth 0 for seeds from these files only; depth &gt; 0 may include neighbors
+        from other documents.
       </p>
-      {uniqueSourceFiles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No source files in this graph.</p>
+      {availableFiles.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No documents in this scope.</p>
       ) : (
         <ul className="space-y-1">
-          {uniqueSourceFiles.map((file) => (
+          {availableFiles.map((file) => (
             <li
               key={file}
               className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
@@ -96,6 +80,7 @@ const SourceFilesPanel: React.FC<SourceFilesPanelProps> = ({
               <Checkbox
                 id={`source-file-${file}`}
                 checked={selectedSourceFiles.has(file)}
+                disabled={loading}
                 onCheckedChange={(checked) =>
                   handleSourceFileChange(file, checked === true)
                 }
