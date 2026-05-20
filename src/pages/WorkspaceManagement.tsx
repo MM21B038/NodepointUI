@@ -7,14 +7,12 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   getWorkspaces,
   getWorkspaceStats,
-  getWorkspacePage,
   createWorkspace,
   addWorkspaceToGroup,
   deleteWorkspace,
   startPreprocess,
   WorkspaceCreateError,
   type WorkspacePageItem,
-  type WorkspacePagePagination,
   type WorkspaceStats,
 } from "@/database/workspaceStorage";
 import { toast } from "sonner";
@@ -25,43 +23,16 @@ import WorkspaceManagementToolbar from "@/components/workspace/WorkspaceManageme
 import CreateWorkspaceDialog from "@/components/workspace/CreateWorkspaceDialog";
 import ManageGroupsDialog from "@/components/workspace/ManageGroupsDialog";
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
-
-const EMPTY_PAGINATION: WorkspacePagePagination = {
-  page: 1,
-  page_size: 8,
-  total_items: 0,
-  total_pages: 0,
-  has_next: false,
-  has_previous: false,
-};
-
-function entryToPageItem(entry: {
-  name: string;
-  is_flag: boolean;
-  created_at: string;
-  groups?: string[];
-}): WorkspacePageItem {
-  return {
-    name: entry.name,
-    is_flag: entry.is_flag,
-    created_at: entry.created_at,
-    counts: { files: 0, chunks: 0, entities: 0, relations: 0 },
-    groups: entry.groups,
-  };
-}
+import { useWorkspaceDirectory } from "@/hooks/useWorkspaceDirectory";
 
 const WorkspaceManagement = () => {
   const { currentWorkspace, setCurrentWorkspace, groups, refreshGroups } =
     useWorkspace();
   const { gridRef, pageSize } = useWorkspaceGridPageSize();
 
-  const [workspaces, setWorkspaces] = useState<WorkspacePageItem[]>([]);
-  const [pagination, setPagination] =
-    useState<WorkspacePagePagination>(EMPTY_PAGINATION);
   const [workspaceStats, setWorkspaceStats] = useState<WorkspaceStats | null>(
     null
   );
-  const [isLoading, setIsLoading] = useState(false);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
@@ -70,11 +41,6 @@ const WorkspaceManagement = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-
-  const [searchList, setSearchList] = useState<WorkspacePageItem[] | null>(
-    null
-  );
-  const [isSearchListLoading, setIsSearchListLoading] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(
@@ -89,7 +55,21 @@ const WorkspaceManagement = () => {
   >({});
 
   const prevPageSizeRef = useRef(pageSize);
-  const isSearchActive = debouncedSearch.trim().length > 0;
+
+  const {
+    workspaces: displayedWorkspaces,
+    pagination: activePagination,
+    isInitialLoading,
+    isPaging,
+    isSearchActive,
+    invalidateCache,
+    reload,
+  } = useWorkspaceDirectory({
+    page,
+    pageSize,
+    groupFilter,
+    searchQuery: debouncedSearch,
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -115,15 +95,6 @@ const WorkspaceManagement = () => {
       console.error("Failed to fetch workspace stats:", error);
     }
   }, []);
-
-  const syncCurrentWorkspaceFromPage = useCallback(
-    (items: WorkspacePageItem[]) => {
-      if (!currentWorkspace && items.length > 0) {
-        setCurrentWorkspace(items[0].name);
-      }
-    },
-    [currentWorkspace, setCurrentWorkspace]
-  );
 
   const syncGroupsFromList = useCallback(async () => {
     try {
@@ -156,129 +127,14 @@ const WorkspaceManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- validate once on mount
   }, []);
 
-  const fetchPage = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await getWorkspacePage({
-        page,
-        page_size: pageSize,
-        flag: "all",
-      });
-      setWorkspaces(response.workspaces);
-      setPagination(response.pagination);
-      syncCurrentWorkspaceFromPage(response.workspaces);
-    } catch (error) {
-      console.error("Failed to fetch workspace page:", error);
-      toast.error("Failed to load workspaces.");
-      setWorkspaces([]);
-      setPagination(EMPTY_PAGINATION);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page, pageSize, syncCurrentWorkspaceFromPage]);
-
-  const fetchSearchList = useCallback(async () => {
-    setIsSearchListLoading(true);
-    try {
-      const list = await getWorkspaces();
-      let filtered = list.map(entryToPageItem);
-      if (groupFilter !== "all") {
-        filtered = filtered.filter((w) =>
-          (w.groups ?? []).includes(groupFilter)
-        );
-      }
-      const q = debouncedSearch.trim().toLowerCase();
-      if (q) {
-        filtered = filtered.filter((w) =>
-          w.name.toLowerCase().includes(q)
-        );
-      }
-      filtered.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      setSearchList(filtered);
-    } catch (error) {
-      console.error("Failed to load workspaces for search:", error);
-      toast.error("Failed to search workspaces.");
-      setSearchList([]);
-    } finally {
-      setIsSearchListLoading(false);
-    }
-  }, [debouncedSearch, groupFilter]);
+  useEffect(() => {
+    if (displayedWorkspaces.length === 0) return;
+    setCurrentWorkspace((prev) => prev ?? displayedWorkspaces[0].name);
+  }, [displayedWorkspaces, setCurrentWorkspace]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
-
-  useEffect(() => {
-    if (isSearchActive) {
-      setSearchList(null);
-      fetchSearchList();
-    } else {
-      setSearchList(null);
-    }
-  }, [isSearchActive, fetchSearchList]);
-
-  useEffect(() => {
-    if (!isSearchActive) {
-      fetchPage();
-    }
-  }, [isSearchActive, fetchPage]);
-
-  const searchPagination = useMemo(() => {
-    if (!isSearchActive || searchList === null) {
-      return EMPTY_PAGINATION;
-    }
-    const total_items = searchList.length;
-    const total_pages = Math.max(1, Math.ceil(total_items / pageSize));
-    const safePage = Math.min(page, total_pages);
-    return {
-      page: safePage,
-      page_size: pageSize,
-      total_items,
-      total_pages,
-      has_next: safePage < total_pages,
-      has_previous: safePage > 1,
-    };
-  }, [isSearchActive, searchList, pageSize, page]);
-
-  const filterByGroup = useCallback(
-    (items: WorkspacePageItem[]) => {
-      if (groupFilter === "all") return items;
-      return items.filter((w) => groupsForCard(w).includes(groupFilter));
-    },
-    // groupsForCard depends on groupsByWorkspace — defined below; use inline:
-    [groupFilter, groupsByWorkspace]
-  );
-
-  const groupsForCard = (workspace: WorkspacePageItem): string[] =>
-    (workspace.groups ?? groupsByWorkspace[workspace.name] ?? []).filter(
-      (g) => g !== "flagged"
-    );
-
-  const displayedWorkspaces = useMemo(() => {
-    const base = !isSearchActive
-      ? workspaces
-      : searchList === null
-        ? []
-        : (() => {
-            const { page: p, page_size } = searchPagination;
-            const start = (p - 1) * page_size;
-            return searchList.slice(start, start + page_size);
-          })();
-    return filterByGroup(base);
-  }, [
-    isSearchActive,
-    workspaces,
-    searchList,
-    searchPagination,
-    groupFilter,
-    groupsByWorkspace,
-    filterByGroup,
-  ]);
-
-  const activePagination = isSearchActive ? searchPagination : pagination;
 
   useEffect(() => {
     if (
@@ -289,8 +145,8 @@ const WorkspaceManagement = () => {
     }
   }, [activePagination.total_pages, page]);
 
-  const showLoading = isSearchActive ? isSearchListLoading : isLoading;
-  const isInitialGridLoad = showLoading && displayedWorkspaces.length === 0;
+  const isInitialGridLoad =
+    isInitialLoading && displayedWorkspaces.length === 0;
   const hasNoWorkspacesEver =
     workspaceStats !== null && workspaceStats.total === 0;
 
@@ -298,19 +154,20 @@ const WorkspaceManagement = () => {
     await fetchStats();
     await syncGroupsFromList();
     await refreshGroups();
-    if (isSearchActive) {
-      await fetchSearchList();
-    } else {
-      await fetchPage();
-    }
+    invalidateCache();
+    reload();
   }, [
     fetchStats,
-    fetchPage,
-    fetchSearchList,
-    isSearchActive,
     syncGroupsFromList,
     refreshGroups,
+    invalidateCache,
+    reload,
   ]);
+
+  const groupsForCard = (workspace: WorkspacePageItem): string[] =>
+    (workspace.groups ?? groupsByWorkspace[workspace.name] ?? []).filter(
+      (g) => g !== "flagged"
+    );
 
   const handleCreateWorkspace = async (name: string, groupNames: string[]) => {
     setIsCreating(true);
@@ -336,17 +193,8 @@ const WorkspaceManagement = () => {
       await fetchStats();
       await syncGroupsFromList();
       await refreshGroups();
-      if (isSearchActive) {
-        await fetchSearchList();
-      } else {
-        const response = await getWorkspacePage({
-          page: 1,
-          page_size: pageSize,
-          flag: "all",
-        });
-        setWorkspaces(response.workspaces);
-        setPagination(response.pagination);
-      }
+      invalidateCache();
+      reload();
       setCurrentWorkspace(name);
     } catch (error) {
       const errorMessage =
@@ -443,14 +291,10 @@ const WorkspaceManagement = () => {
 
   const skeletonCount = Math.max(4, pageSize);
 
-  const allWorkspaceNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const w of workspaces) names.add(w.name);
-    if (searchList) {
-      for (const w of searchList) names.add(w.name);
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [workspaces, searchList]);
+  const allWorkspaceNames = useMemo(
+    () => Object.keys(groupsByWorkspace).sort((a, b) => a.localeCompare(b)),
+    [groupsByWorkspace]
+  );
 
   const groupNames = useMemo(() => groups.map((g) => g.name), [groups]);
 
@@ -492,33 +336,21 @@ const WorkspaceManagement = () => {
 
         <div
           ref={gridRef}
-          className="flex-1 min-h-0 overflow-y-auto p-4"
+          className="relative flex-1 min-h-0 overflow-y-auto p-4"
         >
+          {isPaging && !isInitialGridLoad ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-muted"
+              aria-hidden
+            >
+              <div className="h-full w-1/3 animate-pulse bg-primary/60" />
+            </div>
+          ) : null}
+
           {isInitialGridLoad ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {Array.from({ length: skeletonCount }).map((_, i) => (
                 <WorkspaceCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : showLoading && displayedWorkspaces.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr opacity-50 pointer-events-none">
-              {displayedWorkspaces.map((workspace) => (
-                <WorkspaceCard
-                  key={workspace.name}
-                  workspaceName={workspace.name}
-                  isCurrent={currentWorkspace === workspace.name}
-                  onSelect={handleSelectWorkspace}
-                  onDelete={handleDeleteClick}
-                  isDeleting={isDeleting}
-                  deletingWorkspaceName={workspaceToDelete}
-                  counts={workspace.counts}
-                  onExtract={handleExtract}
-                  isExtracting={
-                    isExtractingMap.get(workspace.name) || false
-                  }
-                  groups={groupsForCard(workspace)}
-                  onGroupsChanged={refreshAfterMutation}
-                />
               ))}
             </div>
           ) : hasNoWorkspacesEver ? (
@@ -537,7 +369,11 @@ const WorkspaceManagement = () => {
               <p>No workspaces match your current filters.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr transition-opacity duration-150 ${
+                isPaging ? "opacity-90" : ""
+              }`}
+            >
               {displayedWorkspaces.map((workspace) => (
                 <WorkspaceCard
                   key={workspace.name}

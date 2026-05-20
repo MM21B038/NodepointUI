@@ -103,7 +103,7 @@ export default function CreateWorkspaceDialog({
                 disabled={isCreating}
                 searchPlaceholder="Search groups…"
                 emptyMessage="No groups yet."
-                maxHeightClass="max-h-40"
+                heightClass="h-40"
               />
             </div>
           )}

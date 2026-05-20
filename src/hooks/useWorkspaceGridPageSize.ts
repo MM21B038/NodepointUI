@@ -6,7 +6,8 @@ const GRID_GAP_PX = 12;
 const GRID_PADDING_PX = 16;
 const CARD_EST_HEIGHT_PX = 310;
 const MIN_PAGE_SIZE = 4;
-const MAX_PAGE_SIZE = 100;
+/** Cap page size — `/workspace/page/` computes KG counts per row (expensive). */
+const MAX_PAGE_SIZE = 12;
 const RESIZE_DEBOUNCE_MS = 150;
 
 function getColumnsForWidth(width: number): number {

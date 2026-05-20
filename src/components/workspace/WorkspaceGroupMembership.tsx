@@ -132,7 +132,7 @@ export default function WorkspaceGroupMembership({
               disabled={!!pending}
               searchPlaceholder="Search groups…"
               emptyMessage="No groups."
-              maxHeightClass="max-h-56"
+              heightClass="h-56"
             />
           )}
 

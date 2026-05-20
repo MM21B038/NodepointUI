@@ -356,8 +356,8 @@ export default function ManageGroupsDialog({
                       pendingId={pendingWorkspace}
                       searchPlaceholder="Search workspaces…"
                       emptyMessage="No workspaces available."
-                      maxHeightClass="max-h-[min(40vh,320px)]"
-                      showSearchThreshold={5}
+                      heightClass="h-[min(40vh,320px)]"
+                      showSearchThreshold={1}
                     />
                   )}
                 </div>

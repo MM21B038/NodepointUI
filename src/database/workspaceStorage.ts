@@ -63,11 +63,14 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
       throw new Error(await parseErrorResponse(response));
     }
     const data: WorkspaceEntry[] = await response.json();
-    return (data || []).map((ws) => ({
-      ...ws,
-      is_flag: Boolean(ws.is_flag),
-      groups: Array.isArray(ws.groups) ? ws.groups : [],
-    }));
+    return (data || []).map((ws) => {
+      const groups = Array.isArray(ws.groups) ? ws.groups : [];
+      return {
+        ...ws,
+        is_flag: Boolean(ws.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
+        groups,
+      };
+    });
   } catch (error) {
     console.error("Error fetching workspaces:", error);
     return [];
@@ -76,8 +79,12 @@ export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
 
 export interface WorkspaceStats {
   total: number;
-  flagged: number;
-  non_flagged: number;
+  /** @deprecated Prefer in_group / ungrouped when present */
+  flagged?: number;
+  /** @deprecated Prefer in_group / ungrouped when present */
+  non_flagged?: number;
+  in_group?: number;
+  ungrouped?: number;
 }
 
 export interface WorkspaceCounts {
@@ -139,8 +146,10 @@ export async function getWorkspaceStats(): Promise<WorkspaceStats> {
   const data = await response.json();
   return {
     total: data.total ?? 0,
-    flagged: data.flagged ?? 0,
-    non_flagged: data.non_flagged ?? 0,
+    flagged: data.flagged,
+    non_flagged: data.non_flagged,
+    in_group: data.in_group,
+    ungrouped: data.ungrouped,
   };
 }
 
@@ -148,13 +157,16 @@ export async function getWorkspacePage(params: {
   page?: number;
   page_size?: number;
   flag?: WorkspacePageFlag;
+  signal?: AbortSignal;
 }): Promise<WorkspacePageResponse> {
   const query: Record<string, string> = {};
   if (params.page !== undefined) query.page = String(params.page);
   if (params.page_size !== undefined) query.page_size = String(params.page_size);
   if (params.flag !== undefined) query.flag = params.flag;
 
-  const response = await fetch(buildApiUrl("/workspace/page/", query));
+  const response = await fetch(buildApiUrl("/workspace/page/", query), {
+    signal: params.signal,
+  });
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
