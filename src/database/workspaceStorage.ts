@@ -302,6 +302,32 @@ export async function getWorkspacePage(params: {
   };
 }
 
+/** Build a name → counts map by paging GET /workspace/page/?include_counts=true. */
+export async function getWorkspaceCountsByName(
+  options?: { group?: string; signal?: AbortSignal }
+): Promise<Map<string, WorkspaceCounts>> {
+  const map = new Map<string, WorkspaceCounts>();
+  let page = 1;
+  const page_size = 100;
+
+  while (true) {
+    const res = await getWorkspacePage({
+      page,
+      page_size,
+      group: options?.group,
+      include_counts: true,
+      signal: options?.signal,
+    });
+    for (const w of res.workspaces) {
+      map.set(w.name, w.counts);
+    }
+    if (!res.pagination.has_next) break;
+    page += 1;
+  }
+
+  return map;
+}
+
 export class WorkspaceCreateError extends Error {
   constructor(
     message: string,

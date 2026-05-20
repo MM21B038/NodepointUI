@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getAllWorkspaces,
-  getWorkspaceList,
+  getWorkspaceCountsByName,
+  getWorkspacePage,
+  type WorkspaceCounts,
   type WorkspacePageItem,
   type WorkspacePagePagination,
 } from "@/database/workspaceStorage";
@@ -17,6 +19,13 @@ const EMPTY_PAGINATION: WorkspacePagePagination = {
   has_previous: false,
 };
 
+const ZERO_COUNTS: WorkspaceCounts = {
+  files: 0,
+  chunks: 0,
+  entities: 0,
+  relations: 0,
+};
+
 function entryToItem(entry: {
   name: string;
   is_flag: boolean;
@@ -27,9 +36,19 @@ function entryToItem(entry: {
     name: entry.name,
     is_flag: entry.is_flag,
     created_at: entry.created_at,
-    counts: { files: 0, chunks: 0, entities: 0, relations: 0 },
+    counts: ZERO_COUNTS,
     groups: entry.groups,
   };
+}
+
+function mergeCounts(
+  items: WorkspacePageItem[],
+  countsByName: Map<string, WorkspaceCounts>
+): WorkspacePageItem[] {
+  return items.map((w) => ({
+    ...w,
+    counts: countsByName.get(w.name) ?? w.counts,
+  }));
 }
 
 export interface UseWorkspaceDirectoryOptions {
@@ -41,8 +60,8 @@ export interface UseWorkspaceDirectoryOptions {
 }
 
 /**
- * Workspace grid: server pagination via GET /workspace/list/ (and ?group=).
- * Name search loads all pages once, then filters client-side.
+ * Workspace grid via GET /workspace/page/?include_counts=true (counts per current page).
+ * Name search uses /workspace/list/ (all pages) then hydrates counts in the background.
  */
 export function useWorkspaceDirectory({
   page,
@@ -56,8 +75,10 @@ export function useWorkspaceDirectory({
     useState<WorkspacePagePagination>(EMPTY_PAGINATION);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isPaging, setIsPaging] = useState(false);
+  const [isCountsLoading, setIsCountsLoading] = useState(false);
 
   const fullListCacheRef = useRef<WorkspacePageItem[] | null>(null);
+  const countsCacheRef = useRef<Map<string, WorkspaceCounts> | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const requestIdRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
@@ -68,6 +89,7 @@ export function useWorkspaceDirectory({
 
   const invalidateCache = useCallback(() => {
     fullListCacheRef.current = null;
+    countsCacheRef.current = null;
   }, []);
 
   const reload = useCallback(() => {
@@ -99,18 +121,40 @@ export function useWorkspaceDirectory({
         total_items === 0 ? 1 : Math.min(Math.max(1, targetPage), total_pages);
       const start = (safePage - 1) * size;
 
-      setWorkspaces(filtered.slice(start, start + size));
-      setPagination({
-        page: safePage,
-        page_size: size,
-        total_items,
-        total_pages,
-        has_next: safePage < total_pages,
-        has_previous: safePage > 1,
-      });
-      hasLoadedOnceRef.current = true;
+      return {
+        slice: filtered.slice(start, start + size),
+        pagination: {
+          page: safePage,
+          page_size: size,
+          total_items,
+          total_pages,
+          has_next: safePage < total_pages,
+          has_previous: safePage > 1,
+        },
+      };
     },
     [groupFilter, searchQuery]
+  );
+
+  const hydrateSearchCounts = useCallback(
+    async (slice: WorkspacePageItem[], requestId: number) => {
+      if (slice.length === 0) return;
+      setIsCountsLoading(true);
+      try {
+        if (!countsCacheRef.current) {
+          countsCacheRef.current = await getWorkspaceCountsByName();
+        }
+        if (requestId !== requestIdRef.current) return;
+        setWorkspaces((prev) => mergeCounts(prev, countsCacheRef.current!));
+      } catch (error) {
+        console.error("Failed to load workspace counts:", error);
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setIsCountsLoading(false);
+        }
+      }
+    },
+    []
   );
 
   useEffect(() => {
@@ -134,18 +178,28 @@ export function useWorkspaceDirectory({
             fullListCacheRef.current = list.map(entryToItem);
           }
           if (requestId !== requestIdRef.current) return;
-          applySearchPage(fullListCacheRef.current, page, pageSize);
+
+          const { slice, pagination: pag } = applySearchPage(
+            fullListCacheRef.current,
+            page,
+            pageSize
+          );
+          setWorkspaces(slice);
+          setPagination(pag);
+          hasLoadedOnceRef.current = true;
+          void hydrateSearchCounts(slice, requestId);
           return;
         }
 
-        const response = await getWorkspaceList({
+        const response = await getWorkspacePage({
           page,
           page_size: pageSize,
           group: serverGroup,
+          include_counts: true,
         });
         if (requestId !== requestIdRef.current) return;
 
-        setWorkspaces(response.workspaces.map(entryToItem));
+        setWorkspaces(response.workspaces);
         setPagination(response.pagination);
         hasLoadedOnceRef.current = true;
       } catch (error) {
@@ -177,11 +231,13 @@ export function useWorkspaceDirectory({
     serverGroup,
     reloadKey,
     applySearchPage,
+    hydrateSearchCounts,
   ]);
 
   useEffect(() => {
     if (!enabled) return;
     fullListCacheRef.current = null;
+    countsCacheRef.current = null;
   }, [enabled, reloadKey]);
 
   return {
@@ -189,6 +245,7 @@ export function useWorkspaceDirectory({
     pagination,
     isInitialLoading,
     isPaging,
+    isCountsLoading,
     isSearchActive,
     invalidateCache,
     reload,
