@@ -9,7 +9,7 @@ Complete reference for REST and WebSocket APIs. Base URL example: `http://localh
 1. [Overview](#overview)
 2. [Conventions](#conventions)
 3. [Quick reference — all REST endpoints](#quick-reference--all-rest-endpoints)
-4. [Shared scope: `workspace_name` vs `flagged=true`](#shared-scope-workspace_name-vs-flaggedtrue)
+4. [Shared scope: `workspace_name` vs `group`](#shared-scope-workspace_name-vs-group)
 5. [Workspace](#workspace)
 6. [Documents](#documents)
 7. [Preprocess](#preprocess)
@@ -27,84 +27,63 @@ Complete reference for REST and WebSocket APIs. Base URL example: `http://localh
 
 | Surface | Prefix | Purpose |
 |---------|--------|---------|
-| REST | `/api/` | CRUD for workspaces, documents, graphs, chat |
-| WebSocket | `/ws/chat/group/<name>/`, `/ws/chat/flagged/`, `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
+| REST | `/api/` | CRUD for workspaces, documents, graphs, chat, groups |
+| WebSocket | `/ws/chat/group/<name>/`, `/ws/chat/<workspace_name>/` | Live agent streaming (token-by-token) |
 | Admin | `/admin/` | Django admin |
 | Media (DEBUG) | `/media/` | Uploaded files |
 
 ```text
-Flagged-scope (cross-workspace)                    Per-workspace
-  GET  /api/workspace/stats/                       GET  /api/workspace/<name>/flag-status/
-  GET  /api/workspace/page/?flag=all
-  GET  /api/workspace/flagged/count/
-  GET  /api/knowledge-graph/entity-types/?flagged=true
-  GET  /api/knowledge-graph/?flagged=true            GET  /api/knowledge-graph/?workspace_name=<name>
-  GET  /api/knowledge/entities/search/?flagged=true  GET  /api/knowledge/entities/search/?workspace_name=<name>
+Group-scope (cross-workspace)                      Per-workspace
+  GET  /api/workspace/stats/
+  GET  /api/workspace/page/?group=<name>
+  GET  /api/knowledge-graph/entity-types/?group=<name>
+  GET  /api/knowledge-graph/?group=<name>
+  GET  /api/knowledge/entities/search/?group=<name>
   GET  /api/group/list/
-  GET  /api/chat/?flagged=true                       GET  /api/chat/<name>/
-  GET  /api/chat/group/<name>/                       WS   /ws/chat/<name>/
-  WS   /ws/chat/flagged/                             WS   /ws/chat/group/<name>/
+  GET  /api/chat/group/<name>/                       GET  /api/chat/<name>/
+  WS   /ws/chat/group/<name>/                        WS   /ws/chat/<name>/
 ```
 
 ### Workspace groups
 
-Create named groups and assign workspaces (many-to-many). Use **`group=<name>`** on KG, entity search, chat summary, and group chat — same role as the legacy **`flagged=true`** scope.
+Create named groups and assign workspaces (many-to-many). Use **`group=<name>`** on KG, entity search, chat summary, and group chat.
 
 | Use | API |
 |-----|-----|
 | Create group | `POST /api/group/create/` body `{ "name": "research" }` |
-| List groups + workspace counts | `GET /api/group/list/` |
-| Group detail + members | `GET /api/group/<name>/` |
-| Add workspace to group | `POST /api/group/<name>/workspaces/` body `{ "workspace_name": "..." }` |
-| Remove from group | `DELETE /api/group/<name>/workspaces/<workspace_name>/` |
-| Delete group | `DELETE /api/group/<name>/` (not allowed for system group `flagged`) |
-| KG / search across group | `?group=<name>` (alias: `?flagged=true` → group `flagged`) |
+| List groups | `GET /api/group/list/` |
+| Group detail | `GET /api/group/<name>/` |
+| Add / remove workspace | `POST` / `DELETE` `/api/group/<name>/workspaces/` |
+| Delete group | `DELETE /api/group/<name>/` |
+| KG / search across group | `?group=<name>` |
 | Group chat | `GET/DELETE /api/chat/group/<name>/`, `ws://.../ws/chat/group/<name>/` |
-
-System group **`flagged`** is created on migrate. `PATCH .../toggle-flag/` flips `is_flag` and adds/removes the workspace from group `flagged`.
-
-### Starred workspaces (`is_flag=true` / group `flagged`)
-
-Star a workspace: `PATCH /api/workspace/<name>/toggle-flag/` (syncs group `flagged`).
-
-Check members: `GET /api/workspace/flagged/count/` or `GET /api/group/flagged/`.
 
 | Use | API |
 |-----|-----|
-| Workspace totals (all / flagged / non-flagged) | `GET /api/workspace/stats/` |
-| Paginated workspace directory + KG counts | `GET /api/workspace/page/?flag=all` |
-| Count + list starred workspace names | `GET /api/workspace/flagged/count/` |
-| Entity type counts per starred workspace | `GET /api/knowledge-graph/entity-types/?flagged=true` |
-| Filtered subgraph per starred workspace | `GET /api/knowledge-graph/?flagged=true` (+ `entity_type`, `depth`, `limit`) |
-| Fuzzy entity name search + subgraph | `GET /api/knowledge/entities/search/?flagged=true` (+ `q`, `threshold`, `depth`, `limit`) |
-| Chat metadata for starred workspaces | `GET /api/chat/summary/?flagged=true` |
-| Semantic search during **flagged-scope** chat | `Knowledge.search_graph` (starred workspaces only) |
-| Semantic search during **per-workspace** chat | `Knowledge.search_graph` (that workspace only) |
+| Workspace totals | `GET /api/workspace/stats/` (`total`, `in_group`, `ungrouped`) |
+| Paginated directory | `GET /api/workspace/page/` (optional `?group=<name>`) |
+| Chat metadata for members | `GET /api/chat/summary/?group=<name>` |
 
-**Flagged `limit` / `depth` / `match_limit`:** applied **per workspace**, not as one global cap. Three starred workspaces with `limit=100` can return up to 300 graph nodes total (100 each in `graphs[]` or `workspaces[]`).
-
-Documents and KG rows always live under **real** workspace names. There is no separate global KG database.
+**Group `limit` / `depth`:** applied **per workspace** in group responses.
 
 ### Two chat modes (separate threads)
 
 | Mode | REST | WebSocket | Message storage |
 |------|------|-----------|-----------------|
-| **Group-scope** | `GET/DELETE /api/chat/group/<name>/` or `?flagged=true` | `/ws/chat/group/<name>/` or `/ws/chat/flagged/` | Internal `__group_chat__<name>` (not listed) |
+| **Group-scope** | `GET/DELETE /api/chat/group/<name>/` | `/ws/chat/group/<name>/` | Internal `__group_chat__<name>` |
 | **Per-workspace** | `GET/DELETE /api/chat/<workspace_name>/` | `/ws/chat/<workspace_name>/` | That workspace’s conversation |
 
-- No conversation UUID, no `POST` to create chat — lazy-create on first GET or WebSocket connect.
-- Flagged-scope chat does **not** require any starred workspace to open; search needs at least one starred workspace for useful KG results.
-- `GET /api/chat/123/` and flagged-scope chat are **different histories**, even if `123` is starred.
+Per-workspace chat searches **only** that workspace (not other group members).
 
 ### Upload default
 
-If `workspace_name` is omitted on upload, the file goes to the **first starred** workspace (`created_at` ascending). Returns `400` if no workspace is starred.
+If `workspace_name` is omitted on upload, the file goes to the **oldest** user workspace (`created_at` ascending). Returns `400` if no workspace exists.
 
 ### Reserved names
 
-Cannot create a workspace named `flagged`. Internal name `__flagged_chat__` is used only for flagged-scope message storage.
+Names starting with `__group_chat__` and legacy `__flagged_chat__` are reserved.
 
-**Authentication** — None on these endpoints (add at the gateway if needed).
+**Authentication — None on these endpoints (add at the gateway if needed).
 
 ---
 
@@ -141,7 +120,7 @@ Most failures return:
 
 | HTTP | Typical cause |
 |------|----------------|
-| `400` | Missing/invalid body or query; both `workspace_name` and `flagged`; reserved workspace name |
+| `400` | Missing/invalid body or query; both `workspace_name` and `group`; reserved workspace name |
 | `404` | Unknown workspace, document, chat, or knowledge record |
 
 ---
@@ -153,19 +132,17 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | Method | Path | Summary |
 |--------|------|---------|
 | POST | `workspace/create/` | Create workspace + media folder |
-| GET | `workspace/list/` | List user workspaces (`is_flag`, excludes `__flagged_chat__`) |
-| GET | `workspace/stats/` | Totals: all, flagged, non-flagged workspace counts |
+| GET | `workspace/list/` | List user workspaces (`groups`, excludes `__flagged_chat__`) |
+| GET | `workspace/stats/` | Totals: all, in_group, ungrouped workspace counts |
 | GET | `workspace/page/` | Paginated workspaces with file/chunk/entity/relation counts |
-| GET | `workspace/flagged/count/` | Count and names of starred workspaces |
+| GET | `group/<name>/` | Count and names of group member workspaces |
 | DELETE | `workspace/delete/<name>/` | Delete workspace and files |
-| GET | `workspace/<name>/flag-status/` | Read `is_flag` for one workspace |
-| PATCH | `workspace/<name>/toggle-flag/` | Flip `is_flag` (syncs group `flagged`) |
 | POST | `group/create/` | Create workspace group |
-| GET | `group/list/` | List groups with `workspace_count` |
-| GET | `group/<name>/` | Group detail + member workspaces |
-| DELETE | `group/<name>/` | Delete group (not `flagged`) |
+| GET | `group/list/` | List groups |
+| GET | `group/<name>/` | Group detail |
 | POST | `group/<name>/workspaces/` | Add workspace to group |
-| DELETE | `group/<name>/workspaces/<workspace_name>/` | Remove workspace from group |
+| DELETE | `group/<name>/workspaces/<workspace_name>/` | Remove from group |
+| DELETE | `group/<name>/` | Delete group |
 | GET | `chat/group/<name>/` | Group-scoped chat history |
 | DELETE | `chat/group/<name>/` | Clear group-scoped chat |
 | POST | `document/upload/` | Upload `.txt`/`.md`; queue preprocess pipeline |
@@ -180,13 +157,11 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | GET | `knowledge/relation/<uuid>/` | Relation record JSON |
 | GET | `knowledge/chunk/<uuid>/` | Chunk record JSON (Mongo text) |
 | GET | `knowledge/document/<uuid>/` | Document text JSON |
-| GET | `chat/?flagged=true` | Flagged-scope chat history |
-| DELETE | `chat/?flagged=true` | Clear flagged-scope chat |
 | GET | `chat/<workspace_name>/` | Per-workspace chat history |
 | DELETE | `chat/<workspace_name>/` | Clear per-workspace chat |
 | GET | `chat/summary/` | Message counts / `updated_at` |
 
-WebSocket (not under `/api/`): `ws://<host>/ws/chat/group/<name>/`, `ws://<host>/ws/chat/flagged/`, `ws://<host>/ws/chat/<workspace_name>/`.
+WebSocket (not under `/api/`): `ws://<host>/ws/chat/group/<name>/`, `ws://<host>/ws/chat/<workspace_name>/`.
 
 ---
 
@@ -197,8 +172,7 @@ Several endpoints require **exactly one** scope (not both, not neither):
 | Scope | Query | Meaning |
 |-------|-------|---------|
 | Single workspace | `workspace_name=PRAJNA` | Data from that workspace only |
-| Group | `group=research` | One result object **per** workspace in that group |
-| Legacy | `flagged=true` | Alias for `group=flagged` (system group; synced with `is_flag`) |
+| Group | `group=<name>` | One result object **per** group member workspace, excluding internal `__group_chat__*` workspaces |
 
 Applies to:
 
@@ -213,17 +187,17 @@ Applies to:
 # Single workspace
 curl "http://localhost:8000/api/knowledge-graph/?workspace_name=PRAJNA&depth=1&limit=100"
 
-# All starred workspaces (per-workspace graphs in arrays)
-curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER"
+# All group member workspaces (per-workspace graphs in arrays)
+curl "http://localhost:8000/api/knowledge-graph/?group=<name>&entity_type=PER"
 
-curl "http://localhost:8000/api/knowledge/entities/search/?q=Alice&flagged=true&threshold=0.6"
+curl "http://localhost:8000/api/knowledge/entities/search/?q=Alice&group=<name>&threshold=0.6"
 
-curl "http://localhost:8000/api/workspace/flagged/count/"
+curl "http://localhost:8000/api/group/<name>/"
 ```
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Both `workspace_name` and `group` / `flagged=true`, or neither |
+| `400` | Both `workspace_name` and `group=<name>`, or neither |
 | `404` | Unknown `workspace_name` (single-workspace mode only) |
 
 ---
@@ -254,52 +228,25 @@ Create a workspace and its media directory.
 
 | Status | Condition |
 |--------|-----------|
-| `400` | `name` missing or reserved (`flagged`) |
+| `400` | `name` missing or reserved |
 
 ---
 
 ### `GET /api/workspace/list/`
 
-**Response `200`** — array, newest first. Internal `__flagged_chat__` is omitted.
+Lightweight paginated list (name, groups, `created_at` only — **no** file/entity counts). Same pagination query params as `GET /api/workspace/page/`. For counts use `/api/workspace/page/`.
+
+**Response `200`** — object with `workspaces`, `pagination`, `include_counts` (always `false`). Internal chat workspaces omitted.
 
 ```json
-[
-  {
-    "name": "PRAJNA",
-    "is_flag": true,
-    "groups": ["flagged", "research"],
-    "created_at": "2026-05-15T12:00:00.123456Z"
-  }
-]
+{
+  "include_counts": false,
+  "pagination": { "page": 1, "page_size": 20, "total_items": 522, "total_pages": 27, "has_next": true, "has_previous": false },
+  "workspaces": [
+    { "name": "PRAJNA", "groups": ["research"], "created_at": "2026-05-15T12:00:00.123456Z" }
+  ]
+}
 ```
-
----
-
-## Workspace groups
-
-### `POST /api/group/create/`
-
-**Body:** `{ "name": "research" }` — letters, digits, `_`, `-`; cannot be reserved name `flagged`.
-
-**Response `201`:** `{ "message", "group": { "name", "workspace_count", "created_at" } }`
-
-### `GET /api/group/list/`
-
-**Response `200`:** `{ "groups": [{ "name", "workspace_count", "created_at", "is_system" }, ...] }` — always includes system group `flagged`.
-
-### `GET /api/group/<name>/`
-
-**Response `200`:** `{ "name", "workspace_count", "is_system", "workspaces": [{ "name", "is_flag", "created_at" }] }`
-
-### `POST /api/group/<name>/workspaces/`
-
-**Body:** `{ "workspace_name": "PRAJNA" }`
-
-### `DELETE /api/group/<name>/workspaces/<workspace_name>/`
-
-### `DELETE /api/group/<name>/`
-
-Returns `400` if `name` is `flagged`.
 
 ---
 
@@ -318,18 +265,18 @@ curl "http://localhost:8000/api/workspace/stats/"
 ```json
 {
   "total": 5,
-  "flagged": 2,
-  "non_flagged": 3
+  "in_group": 2,
+  "ungrouped": 3
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
 | `total` | All user workspaces |
-| `flagged` | Workspaces with `is_flag=true` |
-| `non_flagged` | Workspaces with `is_flag=false` |
+| (removed) | Use `?group=<name>` on workspace page |
+| `ungrouped` | Workspaces in no group |
 
-Always `flagged + non_flagged === total`.
+Always `in_group + ungrouped === total`.
 
 ---
 
@@ -343,19 +290,23 @@ Paginated workspace list with per-workspace resource counts.
 |-------|---------|-----|-------------|
 | `page` | `1` | — | Page number (1-based); out-of-range pages clamp to last page |
 | `page_size` | `20` | `100` | Items per page |
-| `flag` | `all` | — | `all`, `flagged`, or `non_flagged` (aliases: `starred`, `unflagged`, `true`, `false`) |
+| `group` | — | — | Optional: filter to workspaces in this group name |
+| `include_counts` | `true` | — | Set `false` for a faster directory view (omits `counts` on each row) |
+
+Counts are computed **only for the current page** (not all workspaces). With 500+ workspaces, use `include_counts=false` when browsing and load counts on demand.
 
 **Request**
 
 ```bash
-curl "http://localhost:8000/api/workspace/page/?page=1&page_size=10&flag=flagged"
+curl "http://localhost:8000/api/workspace/page/?page=1&page_size=20&include_counts=false"
+curl "http://localhost:8000/api/workspace/page/?page=1&page_size=10&group=research"
 ```
 
 **Response `200`**
 
 ```json
 {
-  "filter": "flagged",
+  "group": "research",
   "pagination": {
     "page": 1,
     "page_size": 10,
@@ -367,7 +318,7 @@ curl "http://localhost:8000/api/workspace/page/?page=1&page_size=10&flag=flagged
   "workspaces": [
     {
       "name": "PRAJNA",
-      "is_flag": true,
+      
       "created_at": "2026-05-15T12:00:00.123456Z",
       "counts": {
         "files": 3,
@@ -395,27 +346,20 @@ Sorted by `created_at` descending, then `name` ascending.
 
 ---
 
-### `GET /api/workspace/flagged/count/`
+### `GET /api/group/<name>/`
 
-How many workspaces are **starred** (`is_flag=true`), for UI decisions before calling flagged-scope KG/chat APIs.
-
-Uses the same scope as `?flagged=true` on knowledge-graph and entity search (excludes internal `__flagged_chat__`).
+Group detail with **paginated** member list (`page`, `page_size`; default page size 20, max 100). `workspace_count` is the full membership total; `workspaces` is only the current page.
 
 **Response `200`**
 
 ```json
 {
-  "count": 2,
-  "workspaces": ["main", "PRAJNA"]
+  "name": "research",
+  "workspace_count": 522,
+  "pagination": { "page": 1, "page_size": 20, "total_items": 522, "total_pages": 27, "has_next": true, "has_previous": false },
+  "workspaces": [{ "name": "main", "created_at": "..." }]
 }
 ```
-
-| Field | Meaning |
-|-------|---------|
-| `count` | Number of starred workspaces |
-| `workspaces` | Their names, sorted alphabetically |
-
-`count: 0` means no workspace is starred — flagged chat search and `?flagged=true` graph APIs return empty scope.
 
 ---
 
@@ -435,34 +379,6 @@ Deletes workspace row and `media/workspaces/<name>/`.
 
 ---
 
-### `GET /api/workspace/<name>/flag-status/`
-
-**Response `200`**
-
-```json
-{
-  "workspace": "PRAJNA",
-  "is_flag": true
-}
-```
-
----
-
-### `PATCH /api/workspace/<name>/toggle-flag/`
-
-Flips `is_flag` boolean. No body.
-
-**Response `200`**
-
-```json
-{
-  "message": "Workspace flag updated successfully",
-  "workspace": "PRAJNA",
-  "is_flag": false
-}
-```
-
----
 
 ## Documents
 
@@ -476,7 +392,7 @@ Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#prepr
 
 | Field | Required | Default |
 |-------|----------|---------|
-| `workspace_name` | no | first starred workspace (`is_flag=true`, oldest `created_at`) |
+| `workspace_name` | no | oldest user workspace (`created_at` ascending) |
 | `file` | yes | — |
 
 **Response `200`**
@@ -509,7 +425,7 @@ Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#prepr
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Missing file, bad extension, or no starred workspace when `workspace_name` omitted |
+| `400` | Missing file, bad extension, or no group member workspace when `workspace_name` omitted |
 | `404` | Workspace not found |
 
 ---
@@ -707,7 +623,7 @@ Poll after upload until `overall.ready` is `true` and `overall.phase` is `ready`
 Source of truth: **Postgres** (`KnowledgeEntity`, `KnowledgeRelation`, per `DocumentChunk` when migrated).  
 Semantic search: **Qdrant** (vectors on entities, relations, and chunks; used by `Knowledge.search_graph` in chat).
 
-Entities and relations are always stored per **document** under a **named workspace**. Flagged-scope chat does not create its own KG rows; REST `?flagged=true` reads each starred workspace separately.
+Entities and relations are always stored per **document** under a **named workspace**. Group-scope chat does not create its own KG rows; REST `?group=<name>` reads each group member workspace separately.
 
 **Common `entity_type` values** (from ingest): `PER`, `ORG`, `LOC`, `PROD`, `EVENT`, `TECH`, `VULN`, `MALWARE`, `TOOL`, `IP`, `DOMAIN`, `SUBDOMAIN`, `OTHER`.
 
@@ -722,7 +638,7 @@ Entities and relations are always stored per **document** under a **named worksp
 
 ### `GET /api/knowledge-graph/entity-types/`
 
-Provide **exactly one** scope: `workspace_name` or `flagged=true`.
+Provide **exactly one** scope: `workspace_name` or `group=<name>`.
 
 Returns distinct `entity_type` values with entity counts, sorted by count descending (then `type` ascending).
 
@@ -760,7 +676,7 @@ curl "http://localhost:8000/api/knowledge-graph/entity-types/?workspace_name=PRA
 | `type` | Stored `entity_type` string, or JSON `null` when blank in Postgres |
 | `count` | Number of `KnowledgeEntity` rows with that type |
 
-Empty `workspaces: []` when no workspace is starred.
+Empty `workspaces: []` when no workspace exists.
 
 | Status | Condition |
 |--------|-----------|
@@ -771,20 +687,19 @@ Empty `workspaces: []` when no workspace is starred.
 
 ### `GET /api/knowledge-graph/`
 
-Provide **exactly one** scope: `workspace_name` or `flagged=true`.
+Provide **exactly one** scope: `workspace_name` or `group=<name>`.
 
-Optional filters (same for both modes; applied **per workspace** in flagged responses):
+Optional filters (same for both modes; applied **per workspace** in group responses):
 
 | Query | Default | Max | Description |
 |-------|---------|-----|-------------|
 | `entity_type` | — | — | Comma-separated, e.g. `PER,ORG` (case-sensitive) |
-| `file_name` | — | — | Comma-separated document file names (exact match), e.g. `notes.md,report.pdf` |
 | `depth` | `1` | `5` | BFS hops from seed entities |
 | `limit` | `500` | `5000` | Max nodes per workspace |
 
 **Traversal**
 
-1. **Seeds:** entities matching `entity_type` and/or `file_name` when set; otherwise all entities in the workspace.
+1. **Seeds:** entities matching `entity_type` when set; otherwise all entities in the workspace.
 2. **BFS:** expand via relations up to `depth` hops; stop at `limit` nodes.
 3. **Edges:** relations whose `source_id` and `target_id` are both in the node set (edges between seeds appear even when `depth=0`).
 
@@ -797,18 +712,18 @@ curl "http://localhost:8000/api/knowledge-graph/?workspace_name=PRAJNA&entity_ty
 ```json
 {
   "workspace": "PRAJNA",
-  "filters": {
-    "entity_types": ["PER", "ORG"],
-    "file_names": null,
-    "depth": 1,
-    "limit": 500
-  },
+  "filters": { "entity_types": ["PER", "ORG"], "depth": 1, "limit": 500 },
   "truncated": false,
   "nodes": [
     {
       "id": "…",
       "name": "Alice",
-      "entity_type": "PER"
+      "entity_type": "PER",
+      "attributes": { "role": "engineer" },
+      "document_id": "…",
+      "file_name": "notes.md",
+      "vector": "COMPLETED",
+      "created_at": "2026-05-15T12:00:00Z"
     }
   ],
   "edges": [
@@ -827,7 +742,7 @@ curl "http://localhost:8000/api/knowledge-graph/?workspace_name=PRAJNA&entity_ty
 **Flagged `200`**
 
 ```bash
-curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&limit=100"
+curl "http://localhost:8000/api/knowledge-graph/?group=<name>&entity_type=PER&limit=100"
 ```
 
 ```json
@@ -847,27 +762,25 @@ curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&li
 | Field | Notes |
 |-------|-------|
 | `filters.entity_types` | `null` when no `entity_type` query param |
-| `filters.file_names` | `null` when no `file_name` query param |
-| `nodes[]` | `id`, `name`, `entity_type` only |
 | `truncated` | `true` if seeds or BFS hit `limit` |
 | `edges[]` | Includes `id`, `source_id`, `target_id`, `type_description` |
 
 **Client notes**
 
 - No merged global `nodes` array; use one panel per `graphs[i]`.
-- Empty `graphs: []` — no starred workspaces (internal `__flagged_chat__` excluded).
+- Empty `graphs: []` — no group member workspaces (internal `__flagged_chat__` excluded).
 - Request higher `limit` / `depth` explicitly for larger subgraphs (defaults cap at 500 nodes).
 
 **Relation to chat**
 
 | API | Data |
 |-----|------|
-| `GET /api/knowledge-graph/?flagged=true` | Filtered Postgres subgraph per starred workspace |
+| `GET /api/knowledge-graph/?group=<name>` | Filtered Postgres subgraph per group member workspace |
 | Flagged chat `Knowledge.search_graph` | Top semantic hits (Qdrant → Postgres → markdown) |
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Both or neither scope; invalid `depth`/`limit`; empty `entity_type` or `file_name` after parse |
+| `400` | Both or neither scope; invalid `depth`/`limit`; empty `entity_type` after parse |
 | `404` | Unknown `workspace_name` |
 
 ---
@@ -876,7 +789,7 @@ curl "http://localhost:8000/api/knowledge-graph/?flagged=true&entity_type=PER&li
 
 Fuzzy **entity name** search (rapidfuzz: WRatio, partial_ratio, token_set_ratio, plus a broad candidate pool for typos) and a **subgraph** around matches using `depth` and `limit`.
 
-**Scope:** exactly one of `workspace_name` or `flagged=true` (see [Shared scope](#shared-scope-workspace_name-vs-flaggedtrue)).
+**Scope:** exactly one of `workspace_name` or `group=<name>` (see [Shared scope](#shared-scope-workspace_name-vs-group)).
 
 | Query | Required | Default | Max | Description |
 |-------|----------|---------|-----|-------------|
@@ -886,7 +799,6 @@ Fuzzy **entity name** search (rapidfuzz: WRatio, partial_ratio, token_set_ratio,
 | `depth` | no | `1` | `5` | BFS hops from seeds into `graph` **per workspace** |
 | `limit` | no | `500` | `5000` | Max nodes in each `graph` **per workspace** |
 | `entity_type` | no | — | — | Comma-separated filter on candidates, e.g. `PER,ORG` |
-| `file_name` | no | — | — | Comma-separated document file names (exact match) |
 
 **Scoring:** candidates are gathered via `icontains`, token prefixes, and a name-ordered workspace sample; each name is scored 0–1. Empty `matches` means nothing met `threshold` (try lowering it or shortening `q`).
 
@@ -904,7 +816,6 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
   "workspace": "PRAJNA",
   "filters": {
     "entity_types": null,
-    "file_names": null,
     "depth": 1,
     "limit": 100,
     "threshold": 0.6,
@@ -915,6 +826,11 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
       "id": "660e8400-e29b-41d4-a716-446655440001",
       "name": "Alice",
       "entity_type": "PER",
+      "attributes": { "role": "engineer" },
+      "document_id": "550e8400-e29b-41d4-a716-446655440000",
+      "file_name": "notes.md",
+      "vector": "COMPLETED",
+      "created_at": "2026-05-15T12:00:00Z",
       "score": 0.8,
       "workspace": "PRAJNA"
     }
@@ -926,12 +842,22 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
       {
         "id": "660e8400-e29b-41d4-a716-446655440001",
         "name": "Alice",
-        "entity_type": "PER"
+        "entity_type": "PER",
+        "attributes": { "role": "engineer" },
+        "document_id": "550e8400-e29b-41d4-a716-446655440000",
+        "file_name": "notes.md",
+        "vector": "COMPLETED",
+        "created_at": "2026-05-15T12:00:00Z"
       },
       {
         "id": "660e8400-e29b-41d4-a716-446655440002",
         "name": "Acme Corp",
-        "entity_type": "ORG"
+        "entity_type": "ORG",
+        "attributes": {},
+        "document_id": "550e8400-e29b-41d4-a716-446655440000",
+        "file_name": "notes.md",
+        "vector": "COMPLETED",
+        "created_at": "2026-05-15T12:00:01Z"
       }
     ],
     "edges": [
@@ -957,7 +883,7 @@ curl "http://localhost:8000/api/knowledge/entities/search/?q=Alcie&workspace_nam
 **Flagged — request**
 
 ```bash
-curl "http://localhost:8000/api/knowledge/entities/search/?q=Alice&flagged=true&threshold=0.6&depth=1&limit=100"
+curl "http://localhost:8000/api/knowledge/entities/search/?q=Alice&group=<name>&threshold=0.6&depth=1&limit=100"
 ```
 
 **Flagged — response `200`**
@@ -1154,57 +1080,6 @@ REST returns **persisted** user-visible messages (root branch only). **Live stre
 | Live reply | No | Token-by-token stream |
 | Tools | Not in GET response | `tool_calls` / `tool_completed` events |
 
-### `GET /api/chat/?flagged=true`
-
-Flagged-scope chat only. Query parameter **required**.
-
-| Query | Required |
-|-------|----------|
-| `flagged=true` | yes |
-
-`GET /api/chat/` without `flagged=true` → `400`.
-
-Lazy-creates on first access. Always `200` even when `starred_workspaces` is empty.
-
-**Response `200`**
-
-```json
-{
-  "flagged": true,
-  "starred_workspaces": ["main", "research"],
-  "messages": [
-    {
-      "id": "…",
-      "role": "system",
-      "content": "You are a workspace knowledge assistant…",
-      "sequence": 0,
-      "created_at": "2026-05-15T12:00:00Z"
-    }
-  ]
-}
-```
-
-| Field | Meaning |
-|-------|---------|
-| `flagged` | Always `true` for this endpoint |
-| `starred_workspaces` | Names of workspaces with `is_flag=true` (KG search scope) |
-| `messages` | Root-branch history for flagged-scope chat only |
-
-### `DELETE /api/chat/?flagged=true`
-
-Full reset of **flagged-scope** chat only (does not clear per-workspace chats).
-
-**Response `200`**
-
-```json
-{
-  "message": "Flagged-scope chat cleared",
-  "flagged": true,
-  "starred_workspaces": ["main", "research"]
-}
-```
-
----
 
 ### `GET /api/chat/<workspace_name>/`
 
@@ -1215,7 +1090,7 @@ Lazy-creates that workspace's chat on first access. Unknown or reserved name →
 ```json
 {
   "workspace": "main",
-  "is_flag": true,
+  
   "messages": []
 }
 ```
@@ -1266,9 +1141,9 @@ Full reset: clears messages, compression history, and internal branches; recreat
 
 ### `GET /api/chat/summary/`
 
-Same query rules as [Shared scope](#shared-scope-workspace_name-vs-flaggedtrue): `workspace_name` **or** `flagged=true`.
+Same query rules as [Shared scope](#shared-scope-workspace_name-vs-group): `workspace_name` **or** `group=<name>`.
 
-Does not include internal `__flagged_chat__` in flagged lists. Counts **root-branch** messages only (same as GET chat history).
+Does not include internal `__flagged_chat__` in group lists. Counts **root-branch** messages only (same as GET chat history).
 
 **Single workspace — request**
 
@@ -1281,7 +1156,7 @@ curl "http://localhost:8000/api/chat/summary/?workspace_name=PRAJNA"
 ```json
 {
   "workspace": "PRAJNA",
-  "is_flag": true,
+  
   "updated_at": "2026-05-15T12:30:00Z",
   "message_count": 12
 }
@@ -1290,7 +1165,7 @@ curl "http://localhost:8000/api/chat/summary/?workspace_name=PRAJNA"
 **Flagged — request**
 
 ```bash
-curl "http://localhost:8000/api/chat/summary/?flagged=true"
+curl "http://localhost:8000/api/chat/summary/?group=<name>"
 ```
 
 **Flagged — response `200`**
@@ -1300,13 +1175,13 @@ curl "http://localhost:8000/api/chat/summary/?flagged=true"
   "workspaces": [
     {
       "workspace": "PRAJNA",
-      "is_flag": true,
+      
       "updated_at": "2026-05-15T12:30:00Z",
       "message_count": 12
     },
     {
       "workspace": "research",
-      "is_flag": true,
+      
       "updated_at": null,
       "message_count": 0
     }
@@ -1332,19 +1207,19 @@ curl "http://localhost:8000/api/chat/summary/?flagged=true"
 
 | URL | Chat mode |
 |-----|-----------|
-| `ws://<host>/ws/chat/flagged/` | Flagged-scope (cross-workspace search) |
+| `ws://<host>/ws/chat/group/<name>/` | Group-scope (cross-workspace search) |
 | `ws://<host>/ws/chat/<workspace_name>/` | Single workspace |
 
-Reserved path segment: `flagged` is not a user workspace name.
+Reserved: names starting with `__group_chat__` is not a user workspace name.
 
-### Typical client flow (flagged-scope)
+### Typical client flow (group-scope)
 
-1. Star workspaces: `PATCH /api/workspace/main/toggle-flag/`
-2. `GET /api/knowledge-graph/entity-types/?flagged=true` and `GET /api/knowledge-graph/?flagged=true&entity_type=...` — optional KG UI data
-3. `GET /api/chat/?flagged=true` — load flagged chat history
-4. Connect `ws://<host>/ws/chat/flagged/` → `chat.ready`
+1. Create a group and add workspaces: `POST /api/group/create/`, `POST /api/group/<name>/workspaces/`
+2. `GET /api/knowledge-graph/entity-types/?group=<name>` and `GET /api/knowledge-graph/?group=<name>&entity_type=...` — optional KG UI data
+3. `GET /api/chat/group/<name>/` — load group chat history
+4. Connect `ws://<host>/ws/chat/group/<name>/` → `chat.ready`
 5. Send `chat.send` → stream → `chat.done`
-6. `GET /api/chat/?flagged=true` again — refresh messages
+6. `GET /api/chat/?group=<name>` again — refresh messages
 
 ### Typical client flow (per-workspace)
 
@@ -1561,21 +1436,21 @@ Tools and control events are **single frames** (full payload per event):
 }
 ```
 
-**Flagged-scope** (`/ws/chat/flagged/`):
+**Group-scope** (`/ws/chat/group/<name>/`):
 
 ```json
 {
   "type": "chat.ready",
-  "flagged": true,
-  "starred_workspaces": ["main", "research"]
+  "group": "research",
+  "workspaces": ["main", "research"]
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
 | `workspace` | Per-workspace mode only |
-| `flagged` | Flagged-scope mode only |
-| `starred_workspaces` | Workspaces included in `Knowledge.search_graph` for this connection |
+| `group` | Group-scope mode only |
+| `workspaces` | Workspaces included in `Knowledge.search_graph` for this connection |
 
 Close codes: `4000` invalid URL; `4004` unknown workspace (per-workspace mode).
 
@@ -1587,7 +1462,7 @@ Close codes: `4000` invalid URL; `4004` unknown workspace (per-workspace mode).
 
 Persisted messages:
 
-- Flagged-scope → `GET /api/chat/?flagged=true`
+- Group-scope → `GET /api/chat/?group=<name>`
 - Per-workspace → `GET /api/chat/<workspace_name>/`
 
 ---
@@ -1637,13 +1512,13 @@ Workspace scope is **automatic** (model must not pass `workspace`):
 
 | Chat connection | Workspaces searched in Qdrant |
 |-----------------|-------------------------------|
-| `/ws/chat/flagged/` | All starred (`is_flag=true`) only |
+| `/ws/chat/group/<name>/` | Group member workspaces only |
 | `/ws/chat/<name>/` | That workspace only |
 
-If flagged-scope chat runs and **no** workspace is starred, the tool returns plain text:
+If group-scope chat runs and the group has no members, the tool returns plain text:
 
 ```text
-No workspace is flagged (starred). Star at least one workspace (is_flag=true) to include it in knowledge search.
+No workspaces in this group. Add members via group APIs to include them in knowledge search.
 ```
 
 Prior search hit IDs from the same chat session are merged into later searches in that session.
@@ -1705,8 +1580,8 @@ Alphabetical by path segment. See sections above for full request/response bodie
 
 | Method | Path | Section |
 |--------|------|---------|
-| DELETE | `/api/chat/?flagged=true` | [Chat REST](#delete-apichatflaggedtrue) |
-| GET | `/api/chat/?flagged=true` | [Chat REST](#get-apichatflaggedtrue) |
+| DELETE | `/api/chat/group/<name>/` | [Chat REST](#delete-apichatflaggedtrue) |
+| GET | `/api/chat/group/<name>/` | [Chat REST](#get-apichatflaggedtrue) |
 | GET | `/api/chat/<workspace_name>/` | [Chat REST](#get-apichatworkspace_name) |
 | DELETE | `/api/chat/<workspace_name>/` | [Chat REST](#delete-apichatworkspace_name) |
 | GET | `/api/chat/summary/` | [Chat REST](#get-apichatsummary) |
@@ -1722,12 +1597,10 @@ Alphabetical by path segment. See sections above for full request/response bodie
 | GET | `/api/knowledge/relation/<uuid>/` | [Knowledge records](#get-apiknowledgerelationuuid) |
 | POST | `/api/workspace/create/` | [Workspace](#post-apiworkspacecreate) |
 | DELETE | `/api/workspace/delete/<name>/` | [Workspace](#delete-apiworkspacedeletename) |
-| GET | `/api/workspace/flagged/count/` | [Workspace](#get-apiworkspaceflaggedcount) |
+| GET | `/api/group/<name>/` | [Groups](#get-apigroupname) |
 | GET | `/api/workspace/list/` | [Workspace](#get-apiworkspacelist) |
 | GET | `/api/workspace/page/` | [Workspace](#get-apiworkspacepage) |
 | GET | `/api/workspace/stats/` | [Workspace](#get-apiworkspacestats) |
-| GET | `/api/workspace/<name>/flag-status/` | [Workspace](#get-apiworkspacenameflag-status) |
-| PATCH | `/api/workspace/<name>/toggle-flag/` | [Workspace](#patch-apiworkspacenametoggle-flag) |
 | GET | `/api/workspace/<workspace_name>/preprocess-status/` | [Preprocess](#get-apiworkspaceworkspace_namepreprocess-status) |
 | POST | `/api/workspace/preprocess/<workspace_name>/` | [Preprocess](#post-apiworkspacepreprocessworkspace_name) |
 
@@ -1735,7 +1608,7 @@ Alphabetical by path segment. See sections above for full request/response bodie
 
 | Direction | Path / event | Section |
 |-----------|----------------|---------|
-| Connect | `ws://<host>/ws/chat/flagged/` | [WebSocket](#chat-websocket) |
+| Connect | `ws://<host>/ws/chat/group/<name>/` | [WebSocket](#chat-websocket) |
 | Connect | `ws://<host>/ws/chat/<workspace_name>/` | [WebSocket](#chat-websocket) |
 | Client → server | `ping`, `chat.send`, `chat.cancel` | [Client → server](#client--server) |
 | Server → client | `chat.ready`, `thinking_token`, `assistant_response_token`, `section`, tools, `chat.compressed`, `chat.done`, `error`, `pong` | [Server → client](#server--client-message-categories) |

@@ -5,7 +5,7 @@ import { Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import {
-  getWorkspaces,
+  getAllWorkspaces,
   getWorkspaceStats,
   createWorkspace,
   addWorkspaceToGroup,
@@ -98,7 +98,7 @@ const WorkspaceManagement = () => {
 
   const syncGroupsFromList = useCallback(async () => {
     try {
-      const list = await getWorkspaces();
+      const list = await getAllWorkspaces();
       const map: Record<string, string[]> = {};
       for (const w of list) {
         map[w.name] = w.groups ?? [];

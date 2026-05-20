@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getWorkspaces,
+  getAllWorkspaces,
+  getWorkspaceList,
   type WorkspacePageItem,
   type WorkspacePagePagination,
 } from "@/database/workspaceStorage";
@@ -40,8 +41,8 @@ export interface UseWorkspaceDirectoryOptions {
 }
 
 /**
- * Workspace directory via GET /workspace/list/ (fast) with client-side filter/pagination.
- * Avoids GET /workspace/page/ which computes KG counts per row (~20s+ at scale).
+ * Workspace grid: server pagination via GET /workspace/list/ (and ?group=).
+ * Name search loads all pages once, then filters client-side.
  */
 export function useWorkspaceDirectory({
   page,
@@ -56,15 +57,17 @@ export function useWorkspaceDirectory({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isPaging, setIsPaging] = useState(false);
 
-  const listCacheRef = useRef<WorkspacePageItem[] | null>(null);
+  const fullListCacheRef = useRef<WorkspacePageItem[] | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const requestIdRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
 
   const isSearchActive = searchQuery.trim().length > 0;
+  const serverGroup =
+    groupFilter !== "all" && !isSearchActive ? groupFilter : undefined;
 
   const invalidateCache = useCallback(() => {
-    listCacheRef.current = null;
+    fullListCacheRef.current = null;
   }, []);
 
   const reload = useCallback(() => {
@@ -72,15 +75,15 @@ export function useWorkspaceDirectory({
     setReloadKey((k) => k + 1);
   }, [invalidateCache]);
 
-  const applyFilteredPage = useCallback(
+  const applySearchPage = useCallback(
     (all: WorkspacePageItem[], targetPage: number, size: number) => {
-      let filtered = [...all];
+      const q = searchQuery.trim().toLowerCase();
+      let filtered = all;
       if (groupFilter !== "all") {
         filtered = filtered.filter((w) =>
           (w.groups ?? []).includes(groupFilter)
         );
       }
-      const q = searchQuery.trim().toLowerCase();
       if (q) {
         filtered = filtered.filter((w) => w.name.toLowerCase().includes(q));
       }
@@ -124,17 +127,30 @@ export function useWorkspaceDirectory({
 
     const run = async () => {
       try {
-        if (!listCacheRef.current) {
-          const list = await getWorkspaces();
+        if (isSearchActive) {
+          if (!fullListCacheRef.current) {
+            const list = await getAllWorkspaces();
+            if (requestId !== requestIdRef.current) return;
+            fullListCacheRef.current = list.map(entryToItem);
+          }
           if (requestId !== requestIdRef.current) return;
-          listCacheRef.current = list.map(entryToItem);
+          applySearchPage(fullListCacheRef.current, page, pageSize);
+          return;
         }
 
+        const response = await getWorkspaceList({
+          page,
+          page_size: pageSize,
+          group: serverGroup,
+        });
         if (requestId !== requestIdRef.current) return;
-        applyFilteredPage(listCacheRef.current, page, pageSize);
+
+        setWorkspaces(response.workspaces.map(entryToItem));
+        setPagination(response.pagination);
+        hasLoadedOnceRef.current = true;
       } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        console.error("Failed to load workspace list:", error);
+        console.error("Failed to load workspaces:", error);
         if (!hasLoadedOnceRef.current) {
           setWorkspaces([]);
           setPagination(EMPTY_PAGINATION);
@@ -157,13 +173,15 @@ export function useWorkspaceDirectory({
     pageSize,
     groupFilter,
     searchQuery,
+    isSearchActive,
+    serverGroup,
     reloadKey,
-    applyFilteredPage,
+    applySearchPage,
   ]);
 
   useEffect(() => {
     if (!enabled) return;
-    listCacheRef.current = null;
+    fullListCacheRef.current = null;
   }, [enabled, reloadKey]);
 
   return {

@@ -56,25 +56,135 @@ export interface WorkspaceEntry {
   created_at: string;
 }
 
-export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
-  try {
-    const response = await fetch(`${API_ROOT}/workspace/list/`);
-    if (!response.ok) {
-      throw new Error(await parseErrorResponse(response));
-    }
-    const data: WorkspaceEntry[] = await response.json();
-    return (data || []).map((ws) => {
-      const groups = Array.isArray(ws.groups) ? ws.groups : [];
-      return {
-        ...ws,
-        is_flag: Boolean(ws.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
-        groups,
-      };
-    });
-  } catch (error) {
-    console.error("Error fetching workspaces:", error);
-    return [];
+export interface WorkspaceListResponse {
+  group: string | null;
+  include_counts: boolean;
+  pagination: WorkspacePagePagination;
+  workspaces: WorkspaceEntry[];
+}
+
+function normalizeWorkspaceEntry(raw: {
+  name: string;
+  created_at: string;
+  is_flag?: boolean;
+  groups?: string[];
+}): WorkspaceEntry {
+  const groups = Array.isArray(raw.groups) ? raw.groups : [];
+  return {
+    name: raw.name,
+    created_at: raw.created_at,
+    is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
+    groups,
+  };
+}
+
+function isWorkspaceListPayload(
+  data: unknown
+): data is { workspaces: unknown[]; pagination?: WorkspacePagePagination } {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    Array.isArray((data as { workspaces?: unknown }).workspaces)
+  );
+}
+
+export async function getWorkspaceList(params?: {
+  page?: number;
+  page_size?: number;
+  group?: string;
+  signal?: AbortSignal;
+}): Promise<WorkspaceListResponse> {
+  const query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  if (params?.group) query.group = params.group;
+
+  const response = await fetch(buildApiUrl("/workspace/list/", query), {
+    signal: params?.signal,
+  });
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
   }
+  const data: unknown = await response.json();
+
+  if (Array.isArray(data)) {
+    const workspaces = data.map((ws) =>
+      normalizeWorkspaceEntry(ws as { name: string; created_at: string })
+    );
+    return {
+      group: params?.group ?? null,
+      include_counts: false,
+      pagination: {
+        page: 1,
+        page_size: workspaces.length,
+        total_items: workspaces.length,
+        total_pages: 1,
+        has_next: false,
+        has_previous: false,
+      },
+      workspaces,
+    };
+  }
+
+  if (!isWorkspaceListPayload(data)) {
+    return {
+      group: params?.group ?? null,
+      include_counts: false,
+      pagination: {
+        page: 1,
+        page_size: 0,
+        total_items: 0,
+        total_pages: 0,
+        has_next: false,
+        has_previous: false,
+      },
+      workspaces: [],
+    };
+  }
+
+  const workspaces = data.workspaces.map((ws) =>
+    normalizeWorkspaceEntry(
+      ws as { name: string; created_at: string; is_flag?: boolean; groups?: string[] }
+    )
+  );
+  const p = data.pagination;
+  return {
+    group: (data as { group?: string | null }).group ?? params?.group ?? null,
+    include_counts: Boolean((data as { include_counts?: boolean }).include_counts),
+    pagination: {
+      page: p?.page ?? params?.page ?? 1,
+      page_size: p?.page_size ?? params?.page_size ?? 20,
+      total_items: p?.total_items ?? workspaces.length,
+      total_pages: p?.total_pages ?? 1,
+      has_next: Boolean(p?.has_next),
+      has_previous: Boolean(p?.has_previous),
+    },
+    workspaces,
+  };
+}
+
+/** Fetches every page from GET /workspace/list/ (for selectors, group dialogs). */
+export async function getAllWorkspaces(): Promise<WorkspaceEntry[]> {
+  const all: WorkspaceEntry[] = [];
+  let page = 1;
+  const page_size = 100;
+  try {
+    while (true) {
+      const res = await getWorkspaceList({ page, page_size });
+      all.push(...res.workspaces);
+      if (!res.pagination.has_next) break;
+      page += 1;
+    }
+    return all;
+  } catch (error) {
+    console.error("Error fetching all workspaces:", error);
+    return all.length > 0 ? all : [];
+  }
+}
+
+/** @deprecated Prefer getWorkspaceList (paginated) or getAllWorkspaces (full list). */
+export async function getWorkspaces(): Promise<WorkspaceEntry[]> {
+  return getAllWorkspaces();
 }
 
 export interface WorkspaceStats {
@@ -112,12 +222,13 @@ export interface WorkspacePagePagination {
 }
 
 export interface WorkspacePageResponse {
-  filter: string;
+  group: string | null;
+  include_counts: boolean;
   pagination: WorkspacePagePagination;
   workspaces: WorkspacePageItem[];
+  /** @deprecated Legacy field; use `group` */
+  filter?: string;
 }
-
-export type WorkspacePageFlag = "all" | "flagged" | "non_flagged";
 
 function normalizeWorkspaceCounts(raw: Partial<WorkspaceCounts> | undefined): WorkspaceCounts {
   return {
@@ -128,13 +239,16 @@ function normalizeWorkspaceCounts(raw: Partial<WorkspaceCounts> | undefined): Wo
   };
 }
 
-function normalizeWorkspacePageItem(raw: WorkspacePageItem): WorkspacePageItem {
+function normalizeWorkspacePageItem(
+  raw: Partial<WorkspacePageItem> & { name: string; created_at: string }
+): WorkspacePageItem {
+  const groups = Array.isArray(raw.groups) ? raw.groups : [];
   return {
     name: raw.name,
-    is_flag: Boolean(raw.is_flag),
+    is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
     created_at: raw.created_at,
     counts: normalizeWorkspaceCounts(raw.counts),
-    groups: Array.isArray(raw.groups) ? raw.groups : undefined,
+    groups: groups.length > 0 ? groups : undefined,
   };
 }
 
@@ -156,13 +270,15 @@ export async function getWorkspaceStats(): Promise<WorkspaceStats> {
 export async function getWorkspacePage(params: {
   page?: number;
   page_size?: number;
-  flag?: WorkspacePageFlag;
+  group?: string;
+  include_counts?: boolean;
   signal?: AbortSignal;
 }): Promise<WorkspacePageResponse> {
   const query: Record<string, string> = {};
   if (params.page !== undefined) query.page = String(params.page);
   if (params.page_size !== undefined) query.page_size = String(params.page_size);
-  if (params.flag !== undefined) query.flag = params.flag;
+  if (params.group) query.group = params.group;
+  if (params.include_counts === false) query.include_counts = "false";
 
   const response = await fetch(buildApiUrl("/workspace/page/", query), {
     signal: params.signal,
@@ -170,9 +286,10 @@ export async function getWorkspacePage(params: {
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
-  const data: WorkspacePageResponse = await response.json();
+  const data = await response.json();
   return {
-    filter: data.filter ?? params.flag ?? "all",
+    group: data.group ?? params.group ?? null,
+    include_counts: data.include_counts !== false,
     pagination: {
       page: data.pagination?.page ?? 1,
       page_size: data.pagination?.page_size ?? params.page_size ?? 20,
