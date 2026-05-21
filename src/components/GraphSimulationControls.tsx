@@ -178,6 +178,10 @@ export const GraphSimulationControls: React.FC<GraphSimulationControlsProps> = (
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Label mode</Label>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Labels also depend on zoom level — zoom in to reveal more. Large or
+                group graphs use compact defaults (hover + zoom).
+              </p>
               <div className="flex flex-wrap gap-1">
                 {(["always", "onSelect", "onHover"] as GraphLabelMode[]).map((mode) => (
                   <Button

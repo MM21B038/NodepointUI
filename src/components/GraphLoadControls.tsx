@@ -40,6 +40,8 @@ interface GraphLoadControlsProps {
   limitDefaultHint?: number;
   /** When true, limit applies per workspace in the active group. */
   limitPerWorkspace?: boolean;
+  /** Extra hint shown above Apply (e.g. workspace selection for large groups). */
+  selectionHint?: string | null;
 }
 
 export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
@@ -57,6 +59,7 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
   limitMax = KB_MAX_LIMIT,
   limitDefaultHint = KB_DEFAULT_LIMIT,
   limitPerWorkspace = false,
+  selectionHint = null,
 }) => {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp ?? openInternal;
@@ -225,6 +228,9 @@ export const GraphLoadControls: React.FC<GraphLoadControlsProps> = ({
         </div>
 
         <div className="flex shrink-0 flex-col gap-2 border-t border-border/60 px-3 py-3">
+          {selectionHint ? (
+            <p className="text-xs text-muted-foreground leading-snug">{selectionHint}</p>
+          ) : null}
           <Button
             size="sm"
             className="h-8 text-xs"

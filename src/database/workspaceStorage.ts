@@ -825,6 +825,54 @@ export const KB_MAX_LIMIT = 500;
 export const KB_INITIAL_TYPE_COUNT = 3;
 export const KB_DEFAULT_SEARCH_THRESHOLD = 0.6;
 
+/** Above this member count, KB skips auto graph load and full document fan-out. */
+export const KB_LARGE_GROUP_THRESHOLD = 30;
+/** Max workspaces that can be loaded into one merged group graph at once. */
+export const KB_MAX_GROUP_GRAPH_WORKSPACES = 25;
+/** Default workspace checklist size for large groups before Apply. */
+export const KB_DEFAULT_GROUP_SELECTION = 10;
+/** Parallel cap for per-workspace KG / document fetches. */
+export const KB_FETCH_CONCURRENCY = 6;
+
+export function isLargeGroup(memberCount: number): boolean {
+  return memberCount > KB_LARGE_GROUP_THRESHOLD;
+}
+
+export function defaultGroupWorkspaceSelection(memberNames: string[]): string[] {
+  const sorted = [...memberNames].sort((a, b) => a.localeCompare(b));
+  if (sorted.length <= KB_LARGE_GROUP_THRESHOLD) {
+    return sorted;
+  }
+  return sorted.slice(0, KB_DEFAULT_GROUP_SELECTION);
+}
+
+export interface GroupWorkspaceEntitySummary {
+  workspace: string;
+  entityTypes: EntityTypeEntry[];
+  totalEntities: number;
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await fn(items[index]);
+    }
+  }
+
+  const workers = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
 /** Per-workspace `limit` when splitting an aggregate budget across starred workspaces. */
 export function kbPerWorkspaceLimitFromBudget(
   budget: number,
@@ -996,7 +1044,12 @@ function mapGraphApiPayload(
 
 export async function getKnowledgeGraphEntityTypes(
   scope: KgApiScope
-): Promise<{ workspace?: string; group?: string; entityTypes: EntityTypeEntry[] }> {
+): Promise<{
+  workspace?: string;
+  group?: string;
+  entityTypes: EntityTypeEntry[];
+  workspaces?: GroupWorkspaceEntitySummary[];
+}> {
   const response = await fetch(
     buildApiUrl("/knowledge-graph/entity-types/", scopeToQueryParams(scope))
   );
@@ -1008,15 +1061,32 @@ export async function getKnowledgeGraphEntityTypes(
 
   if (isGroupScope(scope)) {
     const merged = new Map<string, number>();
+    const workspaces: GroupWorkspaceEntitySummary[] = [];
     for (const ws of data.workspaces ?? []) {
-      for (const et of ws.entity_types ?? []) {
-        merged.set(et.type, (merged.get(et.type) ?? 0) + (et.count ?? 0));
+      const types: EntityTypeEntry[] = (ws.entity_types ?? [])
+        .map((et: { type: string; count?: number }) => ({
+          type: et.type,
+          count: et.count ?? 0,
+        }))
+        .sort((a: EntityTypeEntry, b: EntityTypeEntry) => b.count - a.count);
+      const totalEntities = types.reduce((sum, et) => sum + et.count, 0);
+      workspaces.push({
+        workspace: ws.workspace ?? ws.name ?? "",
+        entityTypes: types,
+        totalEntities,
+      });
+      for (const et of types) {
+        merged.set(et.type, (merged.get(et.type) ?? 0) + et.count);
       }
     }
     const entityTypes: EntityTypeEntry[] = Array.from(merged.entries())
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count);
-    return { group: data.group ?? scope.group, entityTypes };
+    return {
+      group: data.group ?? scope.group,
+      entityTypes,
+      workspaces: workspaces.filter((w) => w.workspace),
+    };
   }
 
   const entityTypes: EntityTypeEntry[] = (data.entity_types ?? []).sort(
@@ -1138,6 +1208,61 @@ function mergeGroupGraphPayloads(
       });
     }
     for (const e of mapped.edges) {
+      const source = sid(e.source as string);
+      const target = sid(e.target as string);
+      const key = `${source}\0${target}\0${e.label}`;
+      if (edgeSeen.has(key)) continue;
+      edgeSeen.add(key);
+      edges.push({ ...e, source, target });
+    }
+  }
+
+  return { workspace: groupName, group: groupName, nodes, edges, truncated };
+}
+
+/** Per-workspace KG fetch + merge (for large group subsets without ?group= fan-out). */
+export async function fetchKnowledgeGraphForWorkspaces(
+  workspaceNames: string[],
+  groupName: string,
+  params?: GraphFetchParams,
+  options?: { concurrency?: number }
+): Promise<KnowledgeGraphPayload> {
+  const names = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b)
+  );
+  if (names.length === 0) {
+    return mergeGroupGraphPayloads([], groupName);
+  }
+
+  const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
+  const slices = await runWithConcurrency(names, concurrency, async (ws) => {
+    const payload = await getFilteredKnowledgeGraph({ workspaceName: ws }, params);
+    return {
+      workspace: ws,
+      nodes: payload.nodes,
+      edges: payload.edges,
+      truncated: payload.truncated,
+    };
+  });
+
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const edgeSeen = new Set<string>();
+  let truncated = false;
+
+  for (const g of slices) {
+    if (g.truncated) truncated = true;
+    const ws = g.workspace;
+    const sid = (id: string) => scopedKnowledgeNodeId(ws, id);
+
+    for (const n of g.nodes) {
+      nodes.push({
+        ...n,
+        id: sid(n.id),
+        attributes: { ...n.attributes, __kb_workspace: ws },
+      });
+    }
+    for (const e of g.edges) {
       const source = sid(e.source as string);
       const target = sid(e.target as string);
       const key = `${source}\0${target}\0${e.label}`;
@@ -1322,17 +1447,22 @@ export function resolveGraphFileNamesParam(
   return Array.from(selectedFiles).sort((a, b) => a.localeCompare(b));
 }
 
-export async function listFilesForWorkspaces(workspaceNames: string[]): Promise<string[]> {
+export async function listFilesForWorkspaces(
+  workspaceNames: string[],
+  options?: { concurrency?: number }
+): Promise<string[]> {
   const names = new Set<string>();
-  await Promise.all(
-    workspaceNames.map(async (ws) => {
-      try {
-        for (const f of await listFiles(ws)) names.add(f);
-      } catch {
-        /* skip workspace */
-      }
-    })
-  );
+  const unique = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))];
+  const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
+
+  await runWithConcurrency(unique, concurrency, async (ws) => {
+    try {
+      for (const f of await listFiles(ws)) names.add(f);
+    } catch {
+      /* skip workspace */
+    }
+  });
+
   return Array.from(names).sort((a, b) => a.localeCompare(b));
 }
 

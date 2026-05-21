@@ -20,7 +20,7 @@ export function wsBaseUrl(): string {
     return `${protocol}//${window.location.host}`;
   }
 
-  return "ws://10.10.112.72:8000";
+  return "ws://localhost:8000";
 }
 
 /**

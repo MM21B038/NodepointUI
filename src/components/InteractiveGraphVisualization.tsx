@@ -12,12 +12,17 @@ import {
   setStoredGraphConfig,
   type GraphSimulationConfig,
 } from "@/lib/graphSimulationConfig";
+import {
+  labelFontSizeScreenPx,
+  shouldShowNodeLabel,
+  shouldShowWorkspaceSublabel,
+  workspaceSublabelFontSizeScreenPx,
+  type GraphLabelProfile,
+} from "@/lib/graphLabelPolicy";
 
 const colorScale = d3.scaleOrdinal(d3.schemeSet3);
 
 const LABEL_TRUNCATE_LEN = 28;
-const LABEL_MIN_FONT_PX = 9;
-const LABEL_BASE_FONT_PX = 11;
 
 const getNodeD3Colors = (type: string, muted: boolean) => {
   const fill = colorScale(type);
@@ -60,6 +65,14 @@ interface InteractiveGraphVisualizationProps {
   visibleNodeIds?: Set<string> | null;
   /** BFS hop radius for selection/hover emphasis (default 1). */
   focusDepth?: number;
+  /** Use lighter defaults (hover labels, faster decay) for medium/large graphs. */
+  largeGraphMode?: boolean;
+  /** Scope/density preset for zoom LOD and label defaults. */
+  labelProfile?: GraphLabelProfile;
+  /** When true, show workspace name under entity label at sufficient zoom (group graphs). */
+  showWorkspaceSublabel?: boolean;
+  /** Fired when zoom scale changes (for label hints). */
+  onZoomChange?: (zoomK: number) => void;
 }
 
 type D3Node = GraphNode & d3.SimulationNodeDatum & { degree?: number };
@@ -146,11 +159,32 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   viewResetKey,
   visibleNodeIds = null,
   focusDepth = 1,
+  largeGraphMode = false,
+  labelProfile = "default",
+  showWorkspaceSublabel = false,
+  onZoomChange,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(400);
-  const [config, setConfig] = useState<GraphSimulationConfig>(() => getStoredGraphConfig());
+  const [config, setConfig] = useState<GraphSimulationConfig>(() => {
+    const stored = getStoredGraphConfig();
+    if (labelProfile === "detailed") {
+      return mergeConfigPatch(stored, {
+        labelMode: "always",
+        showLabels: true,
+      });
+    }
+    if (largeGraphMode || labelProfile === "compact") {
+      return mergeConfigPatch(stored, {
+        labelMode: "onHover",
+        showLabels: true,
+        velocityDecay: 0.55,
+        chargeStrength: -220,
+      });
+    }
+    return stored;
+  });
 
   const configRef = useRef(config);
   configRef.current = config;
@@ -160,6 +194,34 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
   const savedTransformRef = useRef<d3.ZoomTransform | null>(null);
   const updateHighlightingRef = useRef<() => void>(() => {});
   const fitViewRef = useRef<() => void>(() => {});
+  const onSelectRef = useRef(onSelect);
+  const onGraphBackgroundClickRef = useRef(onGraphBackgroundClick);
+  const onZoomChangeRef = useRef(onZoomChange);
+  const labelProfileRef = useRef(labelProfile);
+  const showWorkspaceSublabelRef = useRef(showWorkspaceSublabel);
+  onSelectRef.current = onSelect;
+  onGraphBackgroundClickRef.current = onGraphBackgroundClick;
+  onZoomChangeRef.current = onZoomChange;
+  labelProfileRef.current = labelProfile;
+  showWorkspaceSublabelRef.current = showWorkspaceSublabel;
+
+  useEffect(() => {
+    if (labelProfile === "detailed") {
+      setConfig((prev) =>
+        mergeConfigPatch(prev, { labelMode: "always", showLabels: true })
+      );
+      return;
+    }
+    if (largeGraphMode || labelProfile === "compact") {
+      setConfig((prev) =>
+        mergeConfigPatch(prev, {
+          labelMode: "onHover",
+          velocityDecay: 0.55,
+          chargeStrength: -220,
+        })
+      );
+    }
+  }, [largeGraphMode, labelProfile]);
 
   useEffect(() => {
     shouldAutoFitRef.current = true;
@@ -219,22 +281,45 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       if (!g) return;
 
       const k = d3.zoomTransform(g.node()!).k;
-      const fontSize = Math.max(LABEL_MIN_FONT_PX, LABEL_BASE_FONT_PX / k);
+      const mainSize = labelFontSizeScreenPx(k);
+      const subSize = workspaceSublabelFontSizeScreenPx(k);
 
-      labelGroup.each(function () {
+      labelGroup.each(function (d: D3Node) {
         const group = d3.select(this);
-        const text = group.select<SVGTextElement>(".label-text");
-        text.attr("font-size", `${fontSize}px`);
-        const textNode = text.node();
-        if (!textNode) return;
-        const bbox = textNode.getBBox();
+        const mainText = group.select<SVGTextElement>(".label-text");
+        mainText.attr("font-size", `${mainSize}px`);
+
+        const wsRaw = d.attributes?.__kb_workspace;
+        const wsName = typeof wsRaw === "string" ? wsRaw : "";
+        const subText = group.select<SVGTextElement>(".label-workspace");
+        if (!subText.empty()) {
+          subText
+            .attr("font-size", `${subSize}px`)
+            .text(wsName ? truncateLabel(wsName, 20) : "");
+        }
+
         const padding = 4;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        group.selectAll<SVGGraphicsElement, unknown>("text").each(function () {
+          const box = (this as SVGGraphicsElement).getBBox();
+          if (box.width === 0 && box.height === 0) return;
+          minX = Math.min(minX, box.x);
+          minY = Math.min(minY, box.y);
+          maxX = Math.max(maxX, box.x + box.width);
+          maxY = Math.max(maxY, box.y + box.height);
+        });
+
+        if (minX === Infinity) return;
         group
           .select(".label-background")
-          .attr("x", bbox.x - padding)
-          .attr("y", bbox.y - padding)
-          .attr("width", bbox.width + 2 * padding)
-          .attr("height", bbox.height + 2 * padding);
+          .attr("x", minX - padding)
+          .attr("y", minY - padding)
+          .attr("width", maxX - minX + 2 * padding)
+          .attr("height", maxY - minY + 2 * padding);
       });
     },
     []
@@ -270,20 +355,21 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       return "faded";
     };
 
-    const isLabelVisible = (d: D3Node): boolean => {
-      switch (cfg.labelMode) {
-        case "always":
-          return true;
-        case "onSelect":
-          if (!selectedId || !selectionEmphasisIds) return true;
-          return selectionEmphasisIds.has(d.id);
-        case "onHover":
-          if (!hoveredId || !hoverEmphasisIds) return true;
-          return hoverEmphasisIds.has(d.id);
-        default:
-          return true;
-      }
-    };
+    const zoomK = g?.node() ? d3.zoomTransform(g.node()!).k : 1;
+
+    const isLabelVisible = (d: D3Node): boolean =>
+      shouldShowNodeLabel({
+        zoomK,
+        labelMode: cfg.labelMode,
+        profile: labelProfileRef.current,
+        nodeId: d.id,
+        nodeDegree: d.degree ?? 0,
+        selectedId,
+        hoveredId,
+        emphasisIds,
+        selectionEmphasisIds,
+        hoverEmphasisIds,
+      });
 
     const isEdgeEmphasized = (d: D3Edge) => {
       if (!emphasisIds) return true;
@@ -360,6 +446,22 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       }
 
       group.attr("opacity", labelOpacity).style("display", "block");
+
+      const wsRaw = d.attributes?.__kb_workspace;
+      const wsName = typeof wsRaw === "string" ? wsRaw : null;
+      const showSub = shouldShowWorkspaceSublabel({
+        zoomK,
+        profile: labelProfileRef.current,
+        workspaceName: wsName,
+        nodeId: d.id,
+        selectedId,
+        hoveredId,
+        emphasisIds,
+      });
+      const subText = group.select<SVGTextElement>(".label-workspace");
+      if (!subText.empty()) {
+        subText.style("display", showSub && showWorkspaceSublabelRef.current ? "block" : "none");
+      }
     });
 
     syncLabelBackground(
@@ -423,6 +525,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
     const transform = d3.zoomIdentity.translate(w / 2, h / 2).scale(scale).translate(-cx, -cy);
 
     svg.transition().duration(400).call(zoom.transform as never, transform);
+    onZoomChangeRef.current?.(scale);
     updateHighlightingRef.current();
   }, [width, height]);
 
@@ -518,10 +621,10 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .attr("fill", "transparent")
       .style("pointer-events", "all")
       .on("click", () => {
-        onSelect(null);
+        onSelectRef.current(null);
         hoveredNodeIdRef.current = null;
         updateHighlightingRef.current();
-        onGraphBackgroundClick();
+        onGraphBackgroundClickRef.current();
       });
 
     const g = svg.append("g").attr("class", "graph-root");
@@ -538,6 +641,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       })
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
+        onZoomChangeRef.current?.(event.transform.k);
         updateHighlightingRef.current();
       });
 
@@ -567,7 +671,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .attr("r", cfg.nodeRadius)
       .on("click", (event, d) => {
         event.stopPropagation();
-        onSelect(cleanNodeData(d));
+        onSelectRef.current(cleanNodeData(d));
       })
       .on("dblclick", (event, d) => {
         event.stopPropagation();
@@ -603,13 +707,26 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       .attr("ry", 3)
       .attr("opacity", 0.92);
 
-    labelGroups
+    const labelMain = labelGroups
       .append("text")
       .attr("class", "label-text select-none")
       .text((d) => truncateLabel(d.label))
       .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
+      .attr("dy", "-0.15em")
       .attr("fill", "hsl(var(--foreground))");
+
+    if (showWorkspaceSublabelRef.current) {
+      labelGroups
+        .append("text")
+        .attr("class", "label-workspace select-none")
+        .attr("text-anchor", "middle")
+        .attr("dy", "1.05em")
+        .attr("fill", "hsl(var(--muted-foreground))")
+        .style("display", "none")
+        .text("");
+    }
+
+    void labelMain;
 
     const svgEl = svgRef.current;
     if (svgEl) {
@@ -648,7 +765,7 @@ const InteractiveGraphVisualization: React.FC<InteractiveGraphVisualizationProps
       }
       simulation.stop();
     };
-  }, [graphData, onSelect, drag, onGraphBackgroundClick, applyNodeVisibility]);
+  }, [graphData, drag, applyNodeVisibility]);
 
   const visibleNodeIdsKey = useMemo(() => {
     if (visibleNodeIds === null) return "__all__";
