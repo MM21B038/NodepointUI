@@ -5,7 +5,6 @@ import {
   Bot,
   Loader2,
   Send,
-  User,
   Trash2,
   RefreshCw,
   FolderOpen,
@@ -22,10 +21,12 @@ import {
 } from "@/database/chatStorage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { ChatTurn } from "@/lib/chatTypes";
-import { createEmptyAssistantTurn } from "@/lib/chatStreamReducer";
+import {
+  createEmptyAssistantTurn,
+  mergeHistoryWithStreamedAssistantTurn,
+} from "@/lib/chatStreamReducer";
 import { AssistantActivityView } from "@/components/chat/AssistantActivityView";
 import { CitationTag } from "@/components/chat/CitationTag";
 import { CopyButton } from "@/components/chat/CopyButton";
@@ -64,13 +65,56 @@ const StreamPage: React.FC = () => {
       : !!currentWorkspace?.trim());
   const canSend = isInputEnabled && currentInput.trim().length > 0 && !!workspaceKey;
 
-  const scrollToBottom = useCallback(() => {
-    scrollEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const SCROLL_NEAR_BOTTOM_PX = 96;
+  const userScrolledAwayRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const prevTurnsLengthRef = useRef(0);
+
+  const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = messagesRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+      lastScrollTopRef.current = el.scrollTop;
+      return;
+    }
+    scrollEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const onMessagesScroll = useCallback(() => {
+    const el = messagesRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    if (scrollTop < lastScrollTopRef.current - 2) {
+      userScrolledAwayRef.current = distanceFromBottom > SCROLL_NEAR_BOTTOM_PX;
+    } else if (distanceFromBottom <= SCROLL_NEAR_BOTTOM_PX) {
+      userScrolledAwayRef.current = false;
+    }
+
+    lastScrollTopRef.current = scrollTop;
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [turns, isStreaming, scrollToBottom]);
+    const el = messagesRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", onMessagesScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onMessagesScroll);
+  }, [onMessagesScroll]);
+
+  useEffect(() => {
+    const prevLen = prevTurnsLengthRef.current;
+    prevTurnsLengthRef.current = turns.length;
+    if (turns.length > prevLen) {
+      userScrolledAwayRef.current = false;
+      scrollMessagesToBottom("smooth");
+    }
+  }, [turns.length, scrollMessagesToBottom]);
+
+  useEffect(() => {
+    if (userScrolledAwayRef.current) return;
+    scrollMessagesToBottom("auto");
+  }, [turns, isStreaming, scrollMessagesToBottom]);
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -108,6 +152,13 @@ const StreamPage: React.FC = () => {
 
   useEffect(() => {
     if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
+      setIsLoadingHistory(false);
+      setLoadError(null);
+      setTurns([]);
+      setWorkspaceKey(null);
+      return;
+    }
+    if (scopeMode === "group" && !activeGroup?.trim()) {
       setIsLoadingHistory(false);
       setLoadError(null);
       setTurns([]);
@@ -203,7 +254,13 @@ const StreamPage: React.FC = () => {
         activeGroup
       );
       setResolvedWorkspace(workspace);
-      setTurns(history);
+      setTurns((prev) => {
+        const streamed = prev[prev.length - 1];
+        return mergeHistoryWithStreamedAssistantTurn(
+          history,
+          streamed?.role === "assistant" ? streamed : undefined
+        );
+      });
     } catch (error) {
       console.error("Chat stream failed:", error);
       const message =
@@ -319,7 +376,7 @@ const StreamPage: React.FC = () => {
         >
           <CitationChatAlign
             maxWidthClass={CHAT_THREAD_MAX_CLASS}
-            className="space-y-3 px-3 py-4 sm:px-6"
+            className="space-y-5 px-3 py-4 sm:px-6"
           >
           {emptyState === "no-workspace" && (
             <Alert>
@@ -367,80 +424,60 @@ const StreamPage: React.FC = () => {
             </div>
           )}
 
-          {turns.map((turn, index) => {
+          {turns.map((turn) => {
             const userText = turn.content?.trim() ?? "";
             const assistantText = getAssistantResponseText(turn.blocks);
-            const prevTurn = index > 0 ? turns[index - 1] : null;
-            const followsUser =
-              turn.role === "assistant" && prevTurn?.role === "user";
+            const copyText = turn.role === "user" ? userText : assistantText;
 
             return (
             <div
               key={turn.id}
               className={cn(
-                "flex gap-1.5 group",
-                turn.role === "user" ? "justify-end" : "justify-start",
-                followsUser && "-mt-1"
+                "group flex",
+                turn.role === "user" ? "justify-end" : "justify-start"
               )}
             >
-              {turn.role === "assistant" && (
-                <Avatar className="h-8 w-8 shrink-0 mt-0.5 ring-1 ring-border">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    <Bot className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-              )}
-
               <div
                 className={cn(
-                  "flex min-w-0 flex-col gap-0.5",
+                  "min-w-0",
                   turn.role === "user"
-                    ? "max-w-[min(100%,28rem)] shrink-0 items-end"
-                    : "flex-1 min-w-0 w-full items-start"
+                    ? "max-w-[min(100%,28rem)] shrink-0"
+                    : "w-full flex-1"
                 )}
               >
                 <div
                   className={cn(
-                    "w-full rounded-2xl px-4 py-3 shadow-sm",
+                    "relative w-full rounded-2xl px-4 py-3 shadow-sm",
                     turn.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
                   )}
                 >
                   {turn.role === "user" ? (
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{turn.content}</p>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed pr-6">
+                      {turn.content}
+                    </p>
                   ) : (
-                    <AssistantActivityView
-                      blocks={turn.blocks}
-                      isStreaming={turn.isStreaming}
-                    />
+                    <div className="pr-6">
+                      <AssistantActivityView
+                        blocks={turn.blocks}
+                        isStreaming={turn.isStreaming}
+                      />
+                    </div>
                   )}
-                </div>
-                <div
-                  className={cn(
-                    "flex max-h-0 items-center overflow-hidden opacity-0 transition-[max-height,opacity] duration-150",
-                    "group-hover:max-h-8 group-hover:opacity-100",
-                    "group-focus-within:max-h-8 group-focus-within:opacity-100",
-                    "[&:has(button:focus-visible)]:max-h-8 [&:has(button:focus-visible)]:opacity-100",
-                    turn.role === "user" ? "justify-end" : "justify-start"
-                  )}
-                >
                   <CopyButton
-                    text={turn.role === "user" ? userText : assistantText}
+                    text={copyText}
                     label={turn.role === "user" ? "Copy message" : "Copy response"}
-                    variant="ghost"
-                    className="h-7 w-7"
+                    variant={turn.role === "user" ? "ghostOnPrimary" : "ghost"}
+                    className={cn(
+                      "pointer-events-none absolute right-1.5 top-1.5 z-10 h-7 w-7 opacity-0 shadow-sm transition-opacity",
+                      "group-hover:pointer-events-auto group-hover:opacity-100",
+                      "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                      "focus-visible:pointer-events-auto focus-visible:opacity-100"
+                    )}
                   />
                 </div>
               </div>
-
-              {turn.role === "user" && (
-                <Avatar className="h-8 w-8 shrink-0 mt-0.5 ring-1 ring-border">
-                  <AvatarFallback className="bg-muted">
-                    <User className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-              )}
             </div>
             );
           })}

@@ -42,6 +42,10 @@ export type ChatBlock =
       id: string;
       kind: "error";
       message: string;
+    }
+  | {
+      id: string;
+      kind: "cycle_boundary";
     };
 
 export interface ChatTurn {

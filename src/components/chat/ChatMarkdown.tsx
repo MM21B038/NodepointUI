@@ -7,9 +7,55 @@ import remarkGfm from "remark-gfm";
 import { ExternalLink } from "lucide-react";
 import { CopyButton } from "@/components/chat/CopyButton";
 import { normalizeChatMarkdown } from "@/lib/normalizeChatMarkdown";
-import { resolveCitation } from "@/lib/chatCitations";
+import { normalizeCitationsInMarkdown, resolveCitation } from "@/lib/chatCitations";
+import { splitStreamingBlocks } from "@/lib/splitStreamingBlocks";
 import { CitationTag } from "@/components/chat/CitationTag";
 import { cn } from "@/lib/utils";
+import {
+  LiveEdgeMark,
+  StreamingContentShell,
+} from "@/components/chat/StreamingIndicators";
+
+const chatMarkdownBodyClass =
+  "chat-markdown font-chat min-w-0 max-w-none text-left text-foreground [text-wrap:pretty] [&_ul_ul]:mt-1.5 [&_ul_ul]:list-[circle] [&_ol_ol]:mt-1.5 [&_ul_ul_ul]:list-[square] [&_a]:break-words [&_li>input[type=checkbox]]:align-middle";
+
+const pendingStreamTextClass =
+  "inline whitespace-pre-wrap break-words text-[15px] leading-[1.75] text-foreground";
+
+const MARKDOWN_LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+
+function renderStreamingTextWithCitations(text: string): React.ReactNode {
+  if (!text) return null;
+
+  const normalized = normalizeCitationsInMarkdown(text);
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  MARKDOWN_LINK_RE.lastIndex = 0;
+
+  while ((match = MARKDOWN_LINK_RE.exec(normalized)) !== null) {
+    if (match.index > last) {
+      nodes.push(normalized.slice(last, match.index));
+    }
+    const citation = resolveCitation(match[1], match[2]);
+    if (citation) {
+      nodes.push(
+        <CitationTag key={`cite-${match.index}`} {...citation} href={match[2]} />
+      );
+    } else {
+      nodes.push(match[0]);
+    }
+    last = match.index + match[0].length;
+  }
+
+  if (last < normalized.length) {
+    nodes.push(normalized.slice(last));
+  }
+
+  if (nodes.length === 0) return normalized;
+  if (nodes.length === 1) return nodes[0];
+  return <>{nodes}</>;
+}
 
 interface ChatMarkdownProps {
   content: string;
@@ -70,11 +116,69 @@ function getTextContent(node: React.ReactNode): string {
   return "";
 }
 
+const ALERT_KIND_PATTERN = "NOTE|TIP|IMPORTANT|WARNING|CAUTION";
+
+function alertMarkerStartRe(kind: AlertKind): RegExp {
+  return new RegExp(
+    `^(?:>\\s*)?(?:\\*\\*)?\\[!(${kind.toUpperCase()})\\](?:\\*\\*)?\\s*`,
+    "i"
+  );
+}
+
+function stripLeadingAlertMarkers(text: string, kind: AlertKind): string {
+  let result = text;
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(alertMarkerStartRe(kind), "");
+  } while (result !== prev);
+  return result.trim();
+}
+
 function parseAlertKind(text: string): { kind: AlertKind; body: string } | null {
-  const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*)/i);
+  const match = text.trim().match(
+    new RegExp(
+      `^(?:>\\s*)?(?:\\*\\*)?\\[!(${ALERT_KIND_PATTERN})\\](?:\\*\\*)?\\s*([\\s\\S]*)`,
+      "i"
+    )
+  );
   if (!match) return null;
   const kind = match[1].toLowerCase() as AlertKind;
-  return { kind, body: match[2].trim() };
+  return { kind, body: stripLeadingAlertMarkers(match[2], kind) };
+}
+
+function isEmptyReactNode(node: React.ReactNode): boolean {
+  if (node == null || node === false) return true;
+  if (typeof node === "string") return node.trim() === "";
+  if (Array.isArray(node)) return node.every(isEmptyReactNode);
+  if (isValidElement(node)) {
+    return isEmptyReactNode((node.props as { children?: React.ReactNode }).children);
+  }
+  return false;
+}
+
+function stripAlertFromNode(node: React.ReactNode, kind: AlertKind): React.ReactNode {
+  if (node == null || typeof node === "boolean") return null;
+  if (typeof node === "string") {
+    const stripped = stripLeadingAlertMarkers(node, kind);
+    return stripped.length > 0 ? stripped : null;
+  }
+  if (typeof node === "number") return node;
+  if (Array.isArray(node)) {
+    const mapped = node
+      .map((child) => stripAlertFromNode(child, kind))
+      .filter((child) => child != null && !isEmptyReactNode(child));
+    if (mapped.length === 0) return null;
+    return mapped.length === 1 ? mapped[0] : mapped;
+  }
+  if (!isValidElement(node)) return node;
+
+  const stripped = stripAlertFromNode(
+    (node.props as { children?: React.ReactNode }).children,
+    kind
+  );
+  if (stripped == null || isEmptyReactNode(stripped)) return null;
+  return React.cloneElement(node, { key: node.key ?? undefined }, stripped);
 }
 
 function AlertCallout({ kind, children }: { kind: AlertKind; children: React.ReactNode }) {
@@ -98,26 +202,13 @@ function AlertCallout({ kind, children }: { kind: AlertKind; children: React.Rea
 }
 
 function stripAlertFromChildren(children: React.ReactNode, kind: AlertKind): React.ReactNode {
-  const items = React.Children.toArray(children);
-  if (items.length === 0) return children;
+  const items = React.Children.toArray(children)
+    .map((child) => stripAlertFromNode(child, kind))
+    .filter((child) => child != null && !isEmptyReactNode(child));
 
-  const first = items[0];
-  if (!isValidElement(first)) return children;
-
-  const text = getTextContent(first);
-  const parsed = parseAlertKind(text);
-  if (!parsed || parsed.kind !== kind) return children;
-
-  if (!parsed.body) return items.slice(1);
-
-  const firstChildren = (first.props as { children?: React.ReactNode }).children;
-  if (typeof firstChildren === "string") {
-    const rest = firstChildren.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, "").trim();
-    if (!rest) return items.slice(1);
-    return [React.cloneElement(first, { key: "alert-body" }, rest), ...items.slice(1)];
-  }
-
-  return items.slice(1);
+  if (items.length === 0) return null;
+  if (items.length === 1) return items[0];
+  return items;
 }
 
 function CopyableBlockChrome({
@@ -423,12 +514,7 @@ const markdownComponents: Components = {
     const fullText = getTextContent(children).trim();
     const alert = parseAlertKind(fullText);
     if (alert) {
-      const body =
-        alert.body.length > 0 ? (
-          stripAlertFromChildren(children, alert.kind)
-        ) : (
-          stripAlertFromChildren(children, alert.kind)
-        );
+      const body = stripAlertFromChildren(children, alert.kind);
       return <AlertCallout kind={alert.kind}>{body}</AlertCallout>;
     }
     return (
@@ -497,28 +583,77 @@ const markdownComponents: Components = {
   },
 };
 
+function ChatMarkdownBody({
+  content,
+  isStreaming,
+  className,
+}: {
+  content: string;
+  isStreaming?: boolean;
+  className?: string;
+}) {
+  const split = useMemo(
+    () => (isStreaming ? splitStreamingBlocks(content) : null),
+    [content, isStreaming]
+  );
+
+  if (!isStreaming || !split) {
+    return (
+      <div className={cn(chatMarkdownBodyClass, className)}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  const { committed, pending } = split;
+  const hasCommitted = committed.length > 0;
+  const hasPending = pending.length > 0;
+
+  return (
+    <div className={cn(chatMarkdownBodyClass, className)}>
+      {hasCommitted ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {committed}
+        </ReactMarkdown>
+      ) : null}
+      {hasPending ? (
+        <span className={pendingStreamTextClass}>
+          {renderStreamingTextWithCitations(pending)}
+          <LiveEdgeMark />
+        </span>
+      ) : (
+        <LiveEdgeMark />
+      )}
+    </div>
+  );
+}
+
 export function ChatMarkdown({ content, isStreaming, className }: ChatMarkdownProps) {
   const normalized = useMemo(() => normalizeChatMarkdown(content), [content]);
 
   if (!normalized && !isStreaming) return null;
 
+  const hasContent = normalized.length > 0;
+
+  if (isStreaming && !hasContent) {
+    return (
+      <StreamingContentShell isStreaming hasContent={false}>
+        <div className={cn(chatMarkdownBodyClass, className)}>
+          <LiveEdgeMark className="mt-0.5" />
+        </div>
+      </StreamingContentShell>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "chat-markdown font-chat min-w-0 max-w-none text-left text-foreground [text-wrap:pretty]",
-        "[&_ul_ul]:mt-1.5 [&_ul_ul]:list-[circle] [&_ol_ol]:mt-1.5",
-        "[&_ul_ul_ul]:list-[square]",
-        "[&_a]:break-words",
-        "[&_li>input[type=checkbox]]:align-middle",
-        className
-      )}
-    >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {normalized}
-      </ReactMarkdown>
-      {isStreaming && (
-        <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary/60 align-middle" />
-      )}
-    </div>
+    <StreamingContentShell isStreaming={Boolean(isStreaming)} hasContent={hasContent}>
+      <ChatMarkdownBody
+        content={normalized}
+        isStreaming={isStreaming}
+        className={className}
+      />
+    </StreamingContentShell>
   );
 }

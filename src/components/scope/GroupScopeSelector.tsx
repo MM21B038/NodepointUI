@@ -1,14 +1,8 @@
 "use client";
 
-import { FolderOpen, Users } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import GroupCombobox from "@/components/scope/GroupCombobox";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import type { ViewScopeMode } from "@/lib/viewScope";
 
@@ -69,26 +63,12 @@ export default function GroupScopeSelector({
             Create a group on Workspaces
           </span>
         ) : (
-          <Select
-            value={activeGroup ?? undefined}
-            onValueChange={handleGroupChange}
+          <GroupCombobox
+            groups={groups}
+            value={activeGroup}
+            onSelect={handleGroupChange}
             disabled={disabled}
-          >
-            <SelectTrigger className="h-8 w-[10rem] text-xs">
-              <Users className="mr-1 h-3 w-3 shrink-0" />
-              <SelectValue placeholder="Select group" />
-            </SelectTrigger>
-            <SelectContent>
-              {groups.map((g) => (
-                <SelectItem key={g.name} value={g.name} className="text-xs">
-                  {g.name}
-                  <span className="ml-1 text-muted-foreground">
-                    ({g.workspace_count})
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
         )
       )}
 

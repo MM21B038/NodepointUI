@@ -2,19 +2,116 @@ import type { ChatStreamEvent } from "@/database/chatStorage";
 import type { ChatMessageRecord } from "@/database/chatStorage";
 import { type ChatBlock, type ChatTurn, createBlockId } from "@/lib/chatTypes";
 
-function finalizeStreamingBlocks(blocks: ChatBlock[]): ChatBlock[] {
+function stripStreamingFlag<T extends { isStreaming?: boolean }>(block: T): T {
+  const { isStreaming: _, ...rest } = block;
+  return rest as T;
+}
+
+/** Finalize only blocks for the given section (or all stream blocks if section omitted). */
+function finalizeStreamingBlocks(
+  blocks: ChatBlock[],
+  section?: "thinking" | "response"
+): ChatBlock[] {
   return blocks.map((b) => {
     if (b.kind === "thinking" || b.kind === "response") {
-      if (b.isStreaming) {
-        const { isStreaming: _, ...rest } = b;
-        return rest as ChatBlock;
-      }
+      if (!b.isStreaming) return b;
+      if (section && b.kind !== section) return b;
+      return stripStreamingFlag(b) as ChatBlock;
     }
-    if (b.kind === "tool_call" && b.status === "running") {
+    if (b.kind === "tool_call" && b.status === "running" && !section) {
       return { ...b, status: "completed" as const, ok: true };
     }
     return b;
   });
+}
+
+function findLastBlockIndex(blocks: ChatBlock[], kind: "thinking" | "response"): number {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].kind === kind) return i;
+  }
+  return -1;
+}
+
+function isToolBlock(block: ChatBlock): boolean {
+  return (
+    block.kind === "tool_call" ||
+    block.kind === "tool_calls" ||
+    block.kind === "tool_result"
+  );
+}
+
+/**
+ * Tools that finish after the response section has already opened are appended
+ * after the response block in the array. Insert new tools before that response
+ * unless a new thinking block already started (next cycle).
+ */
+function insertIndexForNewTool(blocks: ChatBlock[]): number {
+  let responseIdx = -1;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].kind === "response") {
+      responseIdx = i;
+      break;
+    }
+  }
+  if (responseIdx < 0) return blocks.length;
+
+  for (let i = responseIdx + 1; i < blocks.length; i++) {
+    if (blocks[i].kind === "thinking" || blocks[i].kind === "cycle_boundary") {
+      return blocks.length;
+    }
+  }
+  return responseIdx;
+}
+
+/** Move tool blocks that sit after a response (no thinking between) to before that response. */
+export function reorderLateToolsBeforeResponse(blocks: ChatBlock[]): ChatBlock[] {
+  const out: ChatBlock[] = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const block = blocks[i];
+    if (block.kind !== "response") {
+      out.push(block);
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    const lateTools: ChatBlock[] = [];
+    while (j < blocks.length) {
+      const b = blocks[j];
+      if (b.kind === "thinking" || b.kind === "cycle_boundary" || b.kind === "response") {
+        break;
+      }
+      if (isToolBlock(b)) {
+        lateTools.push(b);
+        j++;
+        continue;
+      }
+      break;
+    }
+    if (lateTools.length > 0) {
+      out.push(...lateTools);
+    }
+    out.push(block);
+    i = j;
+  }
+  return out;
+}
+
+function findRunningToolIndex(
+  blocks: ChatBlock[],
+  toolCallId: string,
+  toolName: string
+): number {
+  const byId = blocks.findIndex(
+    (b) => b.kind === "tool_call" && b.toolCallId === toolCallId
+  );
+  if (byId >= 0) return byId;
+  return blocks.findIndex(
+    (b) =>
+      b.kind === "tool_call" &&
+      b.toolName === toolName &&
+      b.status === "running"
+  );
 }
 
 function completeToolCall(
@@ -23,30 +120,31 @@ function completeToolCall(
   toolName: string,
   ok: boolean
 ): ChatBlock[] {
-  const idx = blocks.findIndex(
-    (b) => b.kind === "tool_call" && b.toolCallId === toolCallId
-  );
+  const idx = findRunningToolIndex(blocks, toolCallId, toolName);
   if (idx >= 0) {
     const existing = blocks[idx] as Extract<ChatBlock, { kind: "tool_call" }>;
     const next = [...blocks];
     next[idx] = {
       ...existing,
-      status: ok ? "completed" : "failed",
-      ok,
-    };
-    return next;
-  }
-  return [
-    ...blocks,
-    {
-      id: createBlockId("tool-call"),
-      kind: "tool_call",
       toolCallId,
       toolName,
       status: ok ? "completed" : "failed",
       ok,
-    },
-  ];
+    };
+    return reorderLateToolsBeforeResponse(next);
+  }
+  const newBlock: ChatBlock = {
+    id: createBlockId("tool-call"),
+    kind: "tool_call",
+    toolCallId,
+    toolName,
+    status: ok ? "completed" : "failed",
+    ok,
+  };
+  const insertAt = insertIndexForNewTool(blocks);
+  const next = [...blocks];
+  next.splice(insertAt, 0, newBlock);
+  return reorderLateToolsBeforeResponse(next);
 }
 
 function appendToLastBlock(
@@ -55,9 +153,14 @@ function appendToLastBlock(
   token: string
 ): ChatBlock[] {
   const next = [...blocks];
-  const last = next[next.length - 1];
-  if (last?.kind === kind && last.isStreaming) {
-    next[next.length - 1] = { ...last, content: last.content + token };
+  const idx = findLastBlockIndex(next, kind);
+  if (idx >= 0) {
+    const block = next[idx] as Extract<ChatBlock, { kind: typeof kind }>;
+    next[idx] = {
+      ...block,
+      content: block.content + token,
+      isStreaming: true,
+    };
     return next;
   }
   next.push({
@@ -74,20 +177,35 @@ function upsertToolCall(
   toolCallId: string,
   toolName: string
 ): ChatBlock[] {
-  const idx = blocks.findIndex(
+  const byId = blocks.findIndex(
     (b) => b.kind === "tool_call" && b.toolCallId === toolCallId
   );
-  if (idx >= 0) return blocks;
-  return [
-    ...blocks,
-    {
-      id: createBlockId("tool-call"),
-      kind: "tool_call",
-      toolCallId,
-      toolName,
-      status: "running",
-    },
-  ];
+  if (byId >= 0) return blocks;
+
+  const runningByName = blocks.findIndex(
+    (b) =>
+      b.kind === "tool_call" &&
+      b.toolName === toolName &&
+      b.status === "running"
+  );
+  if (runningByName >= 0) {
+    const next = [...blocks];
+    const existing = blocks[runningByName] as Extract<ChatBlock, { kind: "tool_call" }>;
+    next[runningByName] = { ...existing, toolCallId };
+    return next;
+  }
+
+  const newBlock: ChatBlock = {
+    id: createBlockId("tool-call"),
+    kind: "tool_call",
+    toolCallId,
+    toolName,
+    status: "running",
+  };
+  const insertAt = insertIndexForNewTool(blocks);
+  const next = [...blocks];
+  next.splice(insertAt, 0, newBlock);
+  return reorderLateToolsBeforeResponse(next);
 }
 
 export function createEmptyAssistantTurn(id?: string): ChatTurn {
@@ -101,6 +219,11 @@ export function createEmptyAssistantTurn(id?: string): ChatTurn {
 }
 
 export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): ChatBlock[] {
+  const next = applyStreamEventInner(blocks, event);
+  return reorderLateToolsBeforeResponse(next);
+}
+
+function applyStreamEventInner(blocks: ChatBlock[], event: ChatStreamEvent): ChatBlock[] {
   switch (event.type) {
     case "thinking_token":
       if ("token" in event && typeof event.token === "string") {
@@ -118,13 +241,30 @@ export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): C
       const section = event.section as string | undefined;
       const action = event.action as "open" | "close" | undefined;
       if (action === "close") {
-        return finalizeStreamingBlocks(blocks);
+        const closedSection =
+          section === "thinking" || section === "response" ? section : undefined;
+        let next = finalizeStreamingBlocks(blocks, closedSection);
+        if (closedSection === "response") {
+          next = [
+            ...next,
+            { id: createBlockId("cycle-boundary"), kind: "cycle_boundary" },
+          ];
+        }
+        return next;
       }
       if (action === "open" && section === "thinking") {
         const last = blocks[blocks.length - 1];
         if (last?.kind === "thinking" && last.isStreaming) return blocks;
+        const hasFinalizedResponse = blocks.some(
+          (b) => b.kind === "response" && b.isStreaming !== true
+        );
+        const prefix: ChatBlock[] =
+          hasFinalizedResponse && last?.kind !== "cycle_boundary"
+            ? [{ id: createBlockId("cycle-boundary"), kind: "cycle_boundary" }]
+            : [];
         return [
           ...blocks,
+          ...prefix,
           { id: createBlockId("thinking"), kind: "thinking", content: "", isStreaming: true },
         ];
       }
@@ -176,24 +316,45 @@ export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): C
 
     case "tool_result": {
       const ok = Boolean(event.ok);
-      const toolCallId =
-        "tool_call_id" in event ? String(event.tool_call_id) : createBlockId("tc");
       const toolName =
         "tool_name" in event ? String(event.tool_name) : "tool";
+      const toolCallId =
+        "tool_call_id" in event && event.tool_call_id != null && String(event.tool_call_id)
+          ? String(event.tool_call_id)
+          : (() => {
+              const idx = findRunningToolIndex(blocks, "", toolName);
+              if (idx >= 0) {
+                const existing = blocks[idx] as Extract<ChatBlock, { kind: "tool_call" }>;
+                return existing.toolCallId;
+              }
+              return createBlockId("tc");
+            })();
       return completeToolCall(blocks, toolCallId, toolName, ok);
     }
 
-    case "agent_turn_start":
+    case "agent_turn_start": {
+      const hasActivity = blocks.some(
+        (b) =>
+          b.kind === "thinking" ||
+          b.kind === "tool_call" ||
+          b.kind === "tool_calls" ||
+          b.kind === "tool_result" ||
+          b.kind === "response"
+      );
+      if (!hasActivity) return blocks;
+      const last = blocks[blocks.length - 1];
+      // Round already opened via thinking section; tools for this cycle follow.
+      if (last?.kind === "cycle_boundary" || last?.kind === "thinking") return blocks;
+      // Same user turn can repeat think→tools before any response; no boundary yet.
+      const hasFinalizedResponse = blocks.some(
+        (b) => b.kind === "response" && b.isStreaming !== true
+      );
+      if (!hasFinalizedResponse) return blocks;
       return [
         ...blocks,
-        {
-          id: createBlockId("status"),
-          kind: "status",
-          label: "Agent turn",
-          detail:
-            "turn_index" in event ? `Round ${String(event.turn_index)}` : undefined,
-        },
+        { id: createBlockId("cycle-boundary"), kind: "cycle_boundary" },
       ];
+    }
 
     case "model_turn_complete":
       return [
@@ -249,7 +410,36 @@ export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): C
 }
 
 export function finalizeAssistantBlocks(blocks: ChatBlock[]): ChatBlock[] {
-  return finalizeStreamingBlocks(blocks);
+  return reorderLateToolsBeforeResponse(finalizeStreamingBlocks(blocks));
+}
+
+function countToolCallBlocks(blocks: ChatBlock[]): number {
+  return blocks.filter((b) => b.kind === "tool_call").length;
+}
+
+/** Keep streamed blocks when REST history omits tool rows from a multi-cycle turn. */
+export function mergeHistoryWithStreamedAssistantTurn(
+  history: ChatTurn[],
+  streamedAssistant: ChatTurn | undefined
+): ChatTurn[] {
+  if (!streamedAssistant || streamedAssistant.role !== "assistant") return history;
+  const streamedTools = countToolCallBlocks(streamedAssistant.blocks);
+  if (streamedTools === 0) return history;
+
+  const lastIdx = history.length - 1;
+  if (lastIdx < 0 || history[lastIdx].role !== "assistant") return history;
+
+  const historyAssistant = history[lastIdx];
+  const historyTools = countToolCallBlocks(historyAssistant.blocks);
+  if (streamedTools <= historyTools) return history;
+
+  const next = [...history];
+  next[lastIdx] = {
+    ...historyAssistant,
+    blocks: streamedAssistant.blocks,
+    isStreaming: false,
+  };
+  return next;
 }
 
 function parseToolCallsBlock(toolCalls: unknown): ChatBlock[] {
@@ -279,6 +469,25 @@ function parseToolCallsBlock(toolCalls: unknown): ChatBlock[] {
   return blocks;
 }
 
+function shouldInsertCycleBoundaryBeforeAssistant(
+  blocks: ChatBlock[],
+  message: ChatMessageRecord
+): boolean {
+  if (blocks.length === 0) return false;
+  const last = blocks[blocks.length - 1];
+  if (last.kind === "cycle_boundary") return false;
+
+  const addsReasoning = Boolean(message.reasoning_content?.trim());
+  const addsTools = parseToolCallsBlock(message.tool_calls).length > 0;
+  if (!addsReasoning && !addsTools) return false;
+
+  return (
+    last.kind === "response" ||
+    last.kind === "tool_call" ||
+    last.kind === "thinking"
+  );
+}
+
 export function messagesToTurns(messages: ChatMessageRecord[]): ChatTurn[] {
   const turns: ChatTurn[] = [];
   let i = 0;
@@ -305,6 +514,9 @@ export function messagesToTurns(messages: ChatMessageRecord[]): ChatTurn[] {
     while (i < messages.length && messages[i].role !== "user") {
       const m = messages[i];
       if (m.role === "assistant") {
+        if (shouldInsertCycleBoundaryBeforeAssistant(blocks, m)) {
+          blocks.push({ id: `${m.id}-cycle`, kind: "cycle_boundary" });
+        }
         if (m.reasoning_content?.trim()) {
           blocks.push({
             id: `${m.id}-thinking`,
