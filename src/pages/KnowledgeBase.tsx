@@ -88,6 +88,7 @@ const KnowledgeBase = () => {
   const graphSearchRef = useRef<HTMLDivElement>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const lastBootstrappedKeyRef = useRef<string | null>(null);
+  const scopeLoadRequestIdRef = useRef(0);
 
   const [entityTypeCatalog, setEntityTypeCatalog] = useState<EntityTypeEntry[]>([]);
   const [graphLoadParams, setGraphLoadParams] = useState<GraphLoadParams>({
@@ -290,7 +291,10 @@ const KnowledgeBase = () => {
         groupTargets?: string[];
       }
     ) => {
+      const requestId = scopeLoadRequestIdRef.current;
+
       if (types.size === 0) {
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         setAllNodes([]);
         setAllEdges([]);
         setTruncated(false);
@@ -298,6 +302,7 @@ const KnowledgeBase = () => {
       }
 
       if (fileCatalog.length > 0 && selectedFiles.size === 0) {
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         setAllNodes([]);
         setAllEdges([]);
         setTruncated(false);
@@ -356,10 +361,12 @@ const KnowledgeBase = () => {
             fetchParams
           );
         }
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         setIsSearchMode(false);
         setSearchMatches([]);
         applyGraphResponse(data);
       } catch (err: unknown) {
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         console.error("KnowledgeBase: loadBrowseGraph error:", err);
         setError(
           mode === "group"
@@ -372,7 +379,9 @@ const KnowledgeBase = () => {
         setSelectedNodeTypes(new Set());
         setSelectedSourceFiles(new Set());
       } finally {
-        setGraphLoading(false);
+        if (requestId === scopeLoadRequestIdRef.current) {
+          setGraphLoading(false);
+        }
       }
     },
     [applyGraphResponse]
@@ -382,7 +391,8 @@ const KnowledgeBase = () => {
     async (
       mode: ViewScopeMode,
       workspaceName: string | null,
-      groupName: string | null
+      groupName: string | null,
+      requestId: number
     ) => {
       setScopeLoading(true);
       setError(null);
@@ -394,6 +404,7 @@ const KnowledgeBase = () => {
       try {
         if (mode === "group") {
           if (!groupName?.trim()) {
+            if (requestId !== scopeLoadRequestIdRef.current) return;
             setGroupMemberCount(0);
             setGroupMemberNamesFromApi([]);
             setEntityTypeCatalog([]);
@@ -403,6 +414,7 @@ const KnowledgeBase = () => {
             getKnowledgeGraphEntityTypes(groupScope(groupName)),
             getGroupMemberNames(groupName),
           ]);
+          if (requestId !== scopeLoadRequestIdRef.current) return;
           if (entityTypesResult.status === "rejected") {
             throw entityTypesResult.reason;
           }
@@ -440,6 +452,7 @@ const KnowledgeBase = () => {
           setGraphLoadParams(loadParams);
 
           if (large) {
+            if (requestId !== scopeLoadRequestIdRef.current) return;
             setAvailableSourceFiles([]);
             setSelectedSourceFiles(new Set());
             setAllNodes([]);
@@ -449,6 +462,7 @@ const KnowledgeBase = () => {
           }
 
           const files = await listFilesForWorkspaces(apiWorkspaces);
+          if (requestId !== scopeLoadRequestIdRef.current) return;
           setAvailableSourceFiles(files);
           setSelectedSourceFiles(new Set(files));
 
@@ -470,6 +484,7 @@ const KnowledgeBase = () => {
         const { entityTypes } = await getKnowledgeGraphEntityTypes({
           workspaceName: workspaceName!,
         });
+        if (requestId !== scopeLoadRequestIdRef.current) return;
 
         setEntityTypeCatalog(entityTypes);
         const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
@@ -481,6 +496,7 @@ const KnowledgeBase = () => {
         setGraphLoadParams(loadParams);
 
         const files = await listFiles(workspaceName!);
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         setAvailableSourceFiles(files);
         setSelectedSourceFiles(new Set(files));
 
@@ -496,6 +512,7 @@ const KnowledgeBase = () => {
           );
         }
       } catch (err: unknown) {
+        if (requestId !== scopeLoadRequestIdRef.current) return;
         console.error("KnowledgeBase: loadEntityTypeCatalog error:", err);
         setError(
           mode === "group"
@@ -508,7 +525,9 @@ const KnowledgeBase = () => {
         setAllNodes([]);
         setAllEdges([]);
       } finally {
-        setScopeLoading(false);
+        if (requestId === scopeLoadRequestIdRef.current) {
+          setScopeLoading(false);
+        }
       }
     },
     [loadBrowseGraph, resetBrowseUiFilters]
@@ -883,21 +902,46 @@ const KnowledgeBase = () => {
   useEffect(() => {
     if (scopeMode === "workspace") {
       if (!currentWorkspace?.trim()) {
+        scopeLoadRequestIdRef.current += 1;
         clearGraphStateRef.current();
         return;
       }
       if (lastBootstrappedKeyRef.current === scopeLoadKey) return;
       lastBootstrappedKeyRef.current = scopeLoadKey;
-      void loadEntityTypeCatalogRef.current("workspace", currentWorkspace, null);
+      const requestId = ++scopeLoadRequestIdRef.current;
+      setScopeLoading(true);
+      setGraphLoading(false);
+      setError(null);
+      setAllNodes([]);
+      setAllEdges([]);
+      setSelectedItem(null);
+      setSelectedGroupWorkspaces(new Set());
+      setActiveFilterPanel("none");
+      void loadEntityTypeCatalogRef.current(
+        "workspace",
+        currentWorkspace,
+        null,
+        requestId
+      );
       return;
     }
     if (!activeGroup?.trim()) {
+      scopeLoadRequestIdRef.current += 1;
       clearGraphStateRef.current();
       return;
     }
     if (lastBootstrappedKeyRef.current === scopeLoadKey) return;
     lastBootstrappedKeyRef.current = scopeLoadKey;
-    void loadEntityTypeCatalogRef.current("group", null, activeGroup);
+    const requestId = ++scopeLoadRequestIdRef.current;
+    setScopeLoading(true);
+    setGraphLoading(false);
+    setError(null);
+    setAllNodes([]);
+    setAllEdges([]);
+    setSelectedItem(null);
+    setSelectedGroupWorkspaces(new Set());
+    setActiveFilterPanel("none");
+    void loadEntityTypeCatalogRef.current("group", null, activeGroup, requestId);
   }, [scopeLoadKey, scopeMode, currentWorkspace, activeGroup]);
 
   const hasValidScope =
@@ -1248,15 +1292,7 @@ const KnowledgeBase = () => {
           </Badge>
         </div>
 
-        <GroupScopeSelector
-          disabled={loading}
-          onScopeChange={() => {
-            lastBootstrappedKeyRef.current = null;
-            setSelectedGroupWorkspaces(new Set());
-            setActiveFilterPanel("none");
-            setSelectedItem(null);
-          }}
-        />
+        <GroupScopeSelector disabled={loading} />
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-hidden p-4">

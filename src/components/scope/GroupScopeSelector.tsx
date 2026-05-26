@@ -8,12 +8,10 @@ import type { ViewScopeMode } from "@/lib/viewScope";
 
 interface GroupScopeSelectorProps {
   disabled?: boolean;
-  onScopeChange?: () => void;
 }
 
 export default function GroupScopeSelector({
   disabled = false,
-  onScopeChange,
 }: GroupScopeSelectorProps) {
   const {
     scopeMode,
@@ -30,12 +28,10 @@ export default function GroupScopeSelector({
     if (mode === "group" && !activeGroup && groups.length > 0) {
       setActiveGroup(groups[0].name);
     }
-    onScopeChange?.();
   };
 
   const handleGroupChange = (name: string) => {
     setActiveGroup(name);
-    onScopeChange?.();
   };
 
   return (

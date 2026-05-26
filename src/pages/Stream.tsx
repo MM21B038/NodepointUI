@@ -56,6 +56,7 @@ const StreamPage: React.FC = () => {
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cancelRef = useRef<(() => void) | null>(null);
+  const chatLoadRequestIdRef = useRef(0);
 
   const isInputEnabled =
     !isStreaming &&
@@ -127,47 +128,65 @@ const StreamPage: React.FC = () => {
     adjustTextareaHeight();
   }, [currentInput, adjustTextareaHeight]);
 
-  const loadChat = useCallback(async () => {
-    setIsLoadingHistory(true);
-    setLoadError(null);
-    try {
-      const { chatKey, workspace, turns: history } = await loadChatTurns(
-        scopeMode,
-        currentWorkspace,
-        activeGroup
-      );
-      setWorkspaceKey(chatKey);
-      setResolvedWorkspace(workspace);
-      setTurns(history);
-    } catch (error) {
-      console.error("Failed to load chat:", error);
-      setWorkspaceKey(null);
-      setResolvedWorkspace(null);
-      setTurns([]);
-      setLoadError(error instanceof Error ? error.message : "Failed to load chat history");
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [scopeMode, currentWorkspace, activeGroup]);
+  const loadChat = useCallback(
+    async (requestId: number) => {
+      try {
+        const { chatKey, workspace, turns: history } = await loadChatTurns(
+          scopeMode,
+          currentWorkspace,
+          activeGroup
+        );
+        if (requestId !== chatLoadRequestIdRef.current) return;
+        setWorkspaceKey(chatKey);
+        setResolvedWorkspace(workspace);
+        setTurns(history);
+        setLoadError(null);
+      } catch (error) {
+        if (requestId !== chatLoadRequestIdRef.current) return;
+        console.error("Failed to load chat:", error);
+        setWorkspaceKey(null);
+        setResolvedWorkspace(null);
+        setTurns([]);
+        setLoadError(
+          error instanceof Error ? error.message : "Failed to load chat history"
+        );
+      } finally {
+        if (requestId === chatLoadRequestIdRef.current) {
+          setIsLoadingHistory(false);
+        }
+      }
+    },
+    [scopeMode, currentWorkspace, activeGroup]
+  );
 
   useEffect(() => {
     if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
+      chatLoadRequestIdRef.current += 1;
       setIsLoadingHistory(false);
       setLoadError(null);
       setTurns([]);
       setWorkspaceKey(null);
+      setResolvedWorkspace(null);
       return;
     }
     if (scopeMode === "group" && !activeGroup?.trim()) {
+      chatLoadRequestIdRef.current += 1;
       setIsLoadingHistory(false);
       setLoadError(null);
       setTurns([]);
       setWorkspaceKey(null);
+      setResolvedWorkspace(null);
       return;
     }
     cancelRef.current?.();
     cancelRef.current = null;
-    loadChat();
+    const requestId = ++chatLoadRequestIdRef.current;
+    setIsLoadingHistory(true);
+    setLoadError(null);
+    setTurns([]);
+    setWorkspaceKey(null);
+    setResolvedWorkspace(null);
+    void loadChat(requestId);
   }, [scopeMode, currentWorkspace, activeGroup, loadChat]);
 
   useEffect(() => {
@@ -183,7 +202,9 @@ const StreamPage: React.FC = () => {
     try {
       await clearChat(scopeMode, currentWorkspace, activeGroup);
       toast.success("Chat cleared");
-      await loadChat();
+      const requestId = ++chatLoadRequestIdRef.current;
+      setIsLoadingHistory(true);
+      await loadChat(requestId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to clear chat");
     }
@@ -338,16 +359,22 @@ const StreamPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <GroupScopeSelector
-                disabled={isStreaming}
-                onScopeChange={() => void loadChat()}
-              />
+              <GroupScopeSelector disabled={isStreaming} />
 
               <span className="hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden />
 
               <div className="flex items-center gap-1.5">
                 {loadError && (
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => loadChat()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => {
+                      const requestId = ++chatLoadRequestIdRef.current;
+                      setIsLoadingHistory(true);
+                      void loadChat(requestId);
+                    }}
+                  >
                     <RefreshCw className="mr-1 h-3.5 w-3.5" />
                     Retry
                   </Button>
