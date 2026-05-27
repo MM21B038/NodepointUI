@@ -63,7 +63,10 @@ function insertIndexForNewTool(blocks: ChatBlock[]): number {
   return responseIdx;
 }
 
-/** Move tool blocks that sit after a response (no thinking between) to before that response. */
+/**
+ * Move tool blocks that sit directly after a response (same cycle, response opened early).
+ * Do NOT move tools when a thinking block follows — those belong to the next round.
+ */
 export function reorderLateToolsBeforeResponse(blocks: ChatBlock[]): ChatBlock[] {
   const out: ChatBlock[] = [];
   let i = 0;
@@ -76,23 +79,20 @@ export function reorderLateToolsBeforeResponse(blocks: ChatBlock[]): ChatBlock[]
     }
     let j = i + 1;
     const lateTools: ChatBlock[] = [];
-    while (j < blocks.length) {
-      const b = blocks[j];
-      if (b.kind === "thinking" || b.kind === "cycle_boundary" || b.kind === "response") {
-        break;
-      }
-      if (isToolBlock(b)) {
-        lateTools.push(b);
-        j++;
-        continue;
-      }
-      break;
+    while (j < blocks.length && isToolBlock(blocks[j])) {
+      lateTools.push(blocks[j]);
+      j++;
     }
-    if (lateTools.length > 0) {
+    const followedByThinking =
+      j < blocks.length && blocks[j].kind === "thinking";
+    if (lateTools.length > 0 && !followedByThinking) {
       out.push(...lateTools);
+      out.push(block);
+      i = j;
+    } else {
+      out.push(block);
+      i++;
     }
-    out.push(block);
-    i = j;
   }
   return out;
 }

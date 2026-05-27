@@ -425,35 +425,14 @@ function activityGroupInProgressDuringStream(
 function shouldUseBundledActivity(
   items: DisplayItem[],
   activityIndex: number,
-  activityPhaseStreaming: boolean,
-  responseStreaming: boolean,
-  visibleActivityDuringResponse: number | null
+  activityPhaseStreaming: boolean
 ): boolean {
   if (activityGroupHasFollowingResponse(items, activityIndex)) return true;
-  if (
-    responseStreaming &&
-    visibleActivityDuringResponse !== null &&
-    activityIndex === visibleActivityDuringResponse
-  ) {
-    return true;
-  }
   return activityGroupInProgressDuringStream(
     items,
     activityIndex,
     activityPhaseStreaming
   );
-}
-
-/** During response stream, only the activity group before the live response is shown. */
-function activityIndexBeforeStreamingResponse(items: DisplayItem[]): number | null {
-  const responseIdx = items.findIndex(
-    (item) => item.kind === "response" && item.segment.isStreaming
-  );
-  if (responseIdx < 0) return null;
-  for (let i = responseIdx - 1; i >= 0; i--) {
-    if (items[i].kind === "activity") return i;
-  }
-  return null;
 }
 
 function getActiveSegmentId(segments: ActivitySegment[], turnStreaming?: boolean): string | null {
@@ -573,6 +552,7 @@ interface ActivityTreeProps {
   segments: ActivitySegmentOnly[];
   activeId: string | null;
   turnStreaming?: boolean;
+  activityPhaseStreaming?: boolean;
   responseStreaming?: boolean;
   freezeToolsList?: boolean;
   onToggle: (id: string) => void;
@@ -614,6 +594,7 @@ function ActivityTree({
   segments,
   activeId,
   turnStreaming,
+  activityPhaseStreaming = false,
   responseStreaming,
   freezeToolsList,
   onToggle,
@@ -621,8 +602,7 @@ function ActivityTree({
   onMergedThinkingChange,
 }: ActivityTreeProps) {
   const [mergedBySegment, setMergedBySegment] = useState<Record<string, number>>({});
-  const hideMainTimelineRail = Boolean(turnStreaming && !responseStreaming);
-  const activityPhaseStreaming = Boolean(turnStreaming && !responseStreaming);
+  const hideMainTimelineRail = Boolean(turnStreaming && activityPhaseStreaming);
   const rounds = activityRounds(segments);
   const showRoundLabels = rounds.length > 1;
   const lastRoundIndex = rounds.length - 1;
@@ -831,6 +811,37 @@ function isResponseStreaming(
   return segments.some((s) => s.kind === "response" && s.isStreaming);
 }
 
+function getStreamingResponseId(segments: ActivitySegment[]): string | null {
+  const streaming = segments.find(
+    (s) => s.kind === "response" && s.isStreaming
+  );
+  return streaming?.kind === "response" ? streaming.id : null;
+}
+
+function isActivityPhaseStreaming(
+  segments: ActivitySegment[],
+  turnStreaming?: boolean
+): boolean {
+  if (!turnStreaming) return false;
+  const last = segments[segments.length - 1];
+  if (last?.kind === "response" && last.isStreaming) return false;
+  return segments.some(
+    (s) =>
+      s.kind === "tools" ||
+      (s.kind === "thinking" && (s.content || s.isStreaming))
+  );
+}
+
+function nextResponseItem(
+  items: DisplayItem[],
+  fromIndex: number
+): Extract<DisplayItem, { kind: "response" }> | null {
+  const found = items
+    .slice(fromIndex + 1)
+    .find((d): d is Extract<DisplayItem, { kind: "response" }> => d.kind === "response");
+  return found ?? null;
+}
+
 export function AssistantActivityView({ blocks, isStreaming }: AssistantActivityViewProps) {
   const segments = useMemo(
     () => parseSegments(normalizeBlockTimeline(blocks)),
@@ -865,18 +876,17 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     [displayItems, activeId, isStreaming]
   );
 
-  const responseStreaming = useMemo(
-    () => isResponseStreaming(segments, isStreaming),
+  const streamingResponseId = useMemo(
+    () => (isStreaming ? getStreamingResponseId(segments) : null),
     [segments, isStreaming]
   );
 
-  const visibleActivityDuringResponse = useMemo(
-    () =>
-      responseStreaming ? activityIndexBeforeStreamingResponse(displayItems) : null,
-    [displayItems, responseStreaming]
-  );
+  const responseStreaming = streamingResponseId !== null;
 
-  const activityPhaseStreaming = Boolean(isStreaming && !responseStreaming);
+  const activityPhaseStreaming = useMemo(
+    () => isActivityPhaseStreaming(segments, isStreaming),
+    [segments, isStreaming]
+  );
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [activityOpen, setActivityOpen] = useState<Record<string, boolean>>({});
@@ -885,41 +895,15 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
   >({});
   const activeGroupRef = useRef<HTMLDivElement | null>(null);
   const prevActiveGroupRef = useRef<string | null>(null);
-  const enteredResponseStreamRef = useRef(false);
   const responseMinHeightsRef = useRef<Record<string, number>>({});
   const responseContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [, bumpResponseLayout] = useState(0);
 
   useEffect(() => {
-    if (responseStreaming) {
-      if (!enteredResponseStreamRef.current) {
-        enteredResponseStreamRef.current = true;
-        setActivityOpen((prev) => {
-          const next = { ...prev };
-          for (const item of displayItems) {
-            if (item.kind !== "activity") continue;
-            if (activityGroupHasFollowingResponse(displayItems, displayItems.indexOf(item))) {
-              next[item.id] = false;
-            }
-          }
-          return next;
-        });
-        setExpanded((prev) => {
-          const next = { ...prev };
-          for (const item of displayItems) {
-            if (item.kind !== "activity") continue;
-            for (const seg of item.segments) {
-              next[seg.id] = false;
-            }
-          }
-          return next;
-        });
-      }
-      return;
+    if (!responseStreaming) {
+      responseMinHeightsRef.current = {};
     }
-    enteredResponseStreamRef.current = false;
-    responseMinHeightsRef.current = {};
-  }, [responseStreaming, displayItems]);
+  }, [responseStreaming]);
 
   useLayoutEffect(() => {
     let grew = false;
@@ -993,26 +977,13 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
       let changed = false;
       displayItems.forEach((item, index) => {
         if (item.kind !== "activity") return;
-        if (
-          !shouldUseBundledActivity(
-            displayItems,
-            index,
-            activityPhaseStreaming,
-            responseStreaming,
-            null
-          )
-        ) {
+        if (!shouldUseBundledActivity(displayItems, index, activityPhaseStreaming)) {
           return;
         }
 
         const isActiveGroup = item.id === activeActivityGroupId;
-        if (isActiveGroup) {
-          if (next[item.id] !== true) {
-            next[item.id] = true;
-            changed = true;
-          }
-        } else if (next[item.id] !== false) {
-          next[item.id] = false;
+        if (isActiveGroup && activityPhaseStreaming && next[item.id] !== true) {
+          next[item.id] = true;
           changed = true;
         }
       });
@@ -1037,18 +1008,19 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     activeGroupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [activeActivityGroupId, responseStreaming]);
 
-  const isExpanded = (seg: ActivitySegmentOnly) => {
-    if (expanded[seg.id] !== undefined) return expanded[seg.id];
-    if (seg.kind === "thinking") return false;
-    if (responseStreaming) return false;
-    if (seg.kind === "tools" && isStreaming && seg.id !== activeId) return false;
-    if (seg.kind === "tools") return seg.id === activeId;
-    return false;
-  };
-
   const toggle = (id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const isExpandedForGroup =
+    (freezeExpansion: boolean) => (seg: ActivitySegmentOnly) => {
+      if (expanded[seg.id] !== undefined) return expanded[seg.id];
+      if (seg.kind === "thinking") return false;
+      if (freezeExpansion) return false;
+      if (seg.kind === "tools" && isStreaming && seg.id !== activeId) return false;
+      if (seg.kind === "tools") return seg.id === activeId;
+      return false;
+    };
 
   return (
     <div className="min-w-0 space-y-2 font-chat text-[13px]">
@@ -1076,7 +1048,7 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
               {(seg.content || seg.isStreaming) && (
                 <ChatMarkdown
                   content={seg.content}
-                  isStreaming={seg.isStreaming || (Boolean(isStreaming) && responseStreaming)}
+                  isStreaming={Boolean(seg.isStreaming)}
                 />
               )}
             </div>
@@ -1096,20 +1068,15 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
           );
         }
 
-        if (
-          responseStreaming &&
-          visibleActivityDuringResponse !== null &&
-          index !== visibleActivityDuringResponse
-        ) {
-          return null;
-        }
+        const followingResponse = nextResponseItem(displayItems, index);
+        const followingResponseStreaming = Boolean(
+          followingResponse?.segment.isStreaming
+        );
 
         const useBundledActivity = shouldUseBundledActivity(
           displayItems,
           index,
-          activityPhaseStreaming,
-          responseStreaming,
-          visibleActivityDuringResponse
+          activityPhaseStreaming
         );
         const mergedEarlierThinking = mergedThinkingByActivity[item.id] ?? 0;
         const summary = activitySummary(item.segments);
@@ -1124,10 +1091,15 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
         const responseAfterStreaming =
           isStreaming || Boolean(responseAfter?.segment.isStreaming);
         const isActiveGroup = item.id === activeActivityGroupId;
-        const groupOpen = responseStreaming
-          ? (activityOpen[item.id] ?? false)
-          : (activityOpen[item.id] ??
-            (useBundledActivity && (isActiveGroup || activityPhaseStreaming)));
+        const groupInActivityPhase = Boolean(
+          activityPhaseStreaming && isActiveGroup && !followingResponseStreaming
+        );
+        const groupOpen =
+          activityOpen[item.id] ??
+          (useBundledActivity &&
+            (isActiveGroup ||
+              activityPhaseStreaming ||
+              (!followingResponseStreaming && activityStillRunning)));
 
         if (useBundledActivity) {
           return (
@@ -1143,8 +1115,10 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
                   ref={isActiveGroup ? activeGroupRef : undefined}
                   className={cn(
                     "min-w-0 overflow-hidden",
-                    !responseStreaming && "transition-shadow duration-300",
-                    isActiveGroup && activityStillRunning && !responseStreaming &&
+                    !followingResponseStreaming && "transition-shadow duration-300",
+                    isActiveGroup &&
+                      activityStillRunning &&
+                      !followingResponseStreaming &&
                       "rounded-lg ring-1 ring-violet-500/20"
                   )}
                 >
@@ -1187,7 +1161,7 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
                   <CollapsibleContent
                     className={cn(
                       "overflow-hidden data-[state=closed]:hidden",
-                      responseStreaming
+                      followingResponseStreaming
                         ? "!transition-none"
                         : "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 duration-200"
                     )}
@@ -1198,10 +1172,11 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
                           segments={item.segments}
                           activeId={activeId}
                           turnStreaming={isStreaming}
-                          responseStreaming={responseStreaming}
-                          freezeToolsList={responseStreaming}
+                          activityPhaseStreaming={groupInActivityPhase}
+                          responseStreaming={followingResponseStreaming}
+                          freezeToolsList={followingResponseStreaming}
                           onToggle={toggle}
-                          isExpanded={isExpanded}
+                          isExpanded={isExpandedForGroup(followingResponseStreaming)}
                           onMergedThinkingChange={(count) =>
                             setMergedThinkingByActivity((prev) => ({
                               ...prev,
@@ -1224,8 +1199,10 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
               ref={isActiveGroup ? activeGroupRef : undefined}
               className={cn(
                 "rounded-lg border border-violet-500/20 bg-violet-500/[0.05]",
-                !responseStreaming && "transition-shadow duration-300",
-                isActiveGroup && activityStillRunning && !responseStreaming &&
+                !followingResponseStreaming && "transition-shadow duration-300",
+                isActiveGroup &&
+                  activityStillRunning &&
+                  !followingResponseStreaming &&
                   "ring-1 ring-violet-500/25"
               )}
             >
@@ -1233,10 +1210,11 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
                 segments={item.segments}
                 activeId={activeId}
                 turnStreaming={isStreaming}
-                responseStreaming={responseStreaming}
-                freezeToolsList={responseStreaming}
+                activityPhaseStreaming={groupInActivityPhase}
+                responseStreaming={followingResponseStreaming}
+                freezeToolsList={followingResponseStreaming}
                 onToggle={toggle}
-                isExpanded={isExpanded}
+                isExpanded={isExpandedForGroup(followingResponseStreaming)}
                 onMergedThinkingChange={(count) =>
                   setMergedThinkingByActivity((prev) => ({
                     ...prev,
