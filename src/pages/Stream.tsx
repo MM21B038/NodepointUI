@@ -14,17 +14,18 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import GroupScopeSelector from "@/components/scope/GroupScopeSelector";
+import { loadChatTurns, clearChat } from "@/database/chatStorage";
 import {
-  loadChatTurns,
-  sendChatTurn,
-  clearChat,
-} from "@/database/chatStorage";
+  ChatWebSocketClient,
+  type ChatConnectionState,
+} from "@/lib/chatWebSocket";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { ChatTurn } from "@/lib/chatTypes";
+import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
   createEmptyAssistantTurn,
+  markLastAssistantStreaming,
   mergeHistoryWithStreamedAssistantTurn,
 } from "@/lib/chatStreamReducer";
 import { AssistantActivityView } from "@/components/chat/AssistantActivityView";
@@ -50,21 +51,35 @@ const StreamPage: React.FC = () => {
   const [workspaceKey, setWorkspaceKey] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [connectionState, setConnectionState] =
+    useState<ChatConnectionState>("disconnected");
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [currentInput, setCurrentInput] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cancelRef = useRef<(() => void) | null>(null);
+  const chatClientRef = useRef<ChatWebSocketClient | null>(null);
   const chatLoadRequestIdRef = useRef(0);
 
+  const streamActive = isStreaming || agentBusy;
+  const isConnected =
+    connectionState === "connected" || connectionState === "reconnecting";
+
   const isInputEnabled =
-    !isStreaming &&
+    !streamActive &&
     !isLoadingHistory &&
+    isConnected &&
     (scopeMode === "group"
       ? !!activeGroup?.trim()
       : !!currentWorkspace?.trim());
-  const canSend = isInputEnabled && currentInput.trim().length > 0 && !!workspaceKey;
+  const canSend =
+    isInputEnabled &&
+    !agentBusy &&
+    currentInput.trim().length > 0 &&
+    !!workspaceKey;
 
   const SCROLL_NEAR_BOTTOM_PX = 96;
   const userScrolledAwayRef = useRef(false);
@@ -115,7 +130,7 @@ const StreamPage: React.FC = () => {
   useEffect(() => {
     if (userScrolledAwayRef.current) return;
     scrollMessagesToBottom("auto");
-  }, [turns, isStreaming, scrollMessagesToBottom]);
+  }, [turns, streamActive, scrollMessagesToBottom]);
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -159,6 +174,194 @@ const StreamPage: React.FC = () => {
     [scopeMode, currentWorkspace, activeGroup]
   );
 
+  const applyStreamBlocks = useCallback((blocks: ChatBlock[]) => {
+    setTurns((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === "assistant" && last.isStreaming) {
+        next[next.length - 1] = { ...last, blocks: [...blocks] };
+        return next;
+      }
+      if (last?.role === "assistant") {
+        next[next.length - 1] = {
+          ...last,
+          isStreaming: true,
+          blocks: [...blocks],
+        };
+        return next;
+      }
+      next.push({ ...createEmptyAssistantTurn(), blocks: [...blocks] });
+      return next;
+    });
+  }, []);
+
+  const syncChatFromServer = useCallback(
+    async (liveBlocks?: ChatBlock[]) => {
+      try {
+        const { turns: history, workspace } = await loadChatTurns(
+          scopeMode,
+          currentWorkspace,
+          activeGroup
+        );
+        setResolvedWorkspace(workspace);
+        setTurns((prev) => {
+          const streamedAssistant =
+            liveBlocks?.length
+              ? ({
+                  ...createEmptyAssistantTurn(),
+                  blocks: liveBlocks,
+                  isStreaming: true,
+                } satisfies ChatTurn)
+              : prev[prev.length - 1]?.role === "assistant"
+                ? prev[prev.length - 1]
+                : undefined;
+
+          let next = mergeHistoryWithStreamedAssistantTurn(
+            history,
+            streamedAssistant?.role === "assistant" ? streamedAssistant : undefined
+          );
+
+          const attachLive =
+            chatClientRef.current?.isAgentBusy() ||
+            Boolean(liveBlocks?.length) ||
+            Boolean(streamedAssistant?.isStreaming);
+
+          if (attachLive) {
+            next = markLastAssistantStreaming(next, liveBlocks);
+          }
+          return next;
+        });
+      } catch (error) {
+        console.error("Failed to sync chat after reconnect:", error);
+      }
+    },
+    [scopeMode, currentWorkspace, activeGroup]
+  );
+
+  const streamHandlersRef = useRef({
+    applyStreamBlocks,
+    syncChatFromServer,
+    setResolvedWorkspace,
+    setIsStreaming,
+    setAgentBusy,
+    setConnectionState,
+    setReconnectAttempt,
+  });
+  streamHandlersRef.current = {
+    applyStreamBlocks,
+    syncChatFromServer,
+    setResolvedWorkspace,
+    setIsStreaming,
+    setAgentBusy,
+    setConnectionState,
+    setReconnectAttempt,
+  };
+
+  useEffect(() => {
+    if (!workspaceKey || isLoadingHistory) return;
+
+    const client = new ChatWebSocketClient(workspaceKey, {
+      onReady: (ready) => {
+        if (ready.workspace) {
+          streamHandlersRef.current.setResolvedWorkspace(ready.workspace);
+        }
+        if (ready.agent_busy) {
+          streamHandlersRef.current.setIsStreaming(true);
+          void streamHandlersRef.current.syncChatFromServer(
+            client.getBlocks()
+          );
+        }
+      },
+      onReconnected: () => {
+        toast.info("Reconnected — resuming live stream", { id: "chat-reconnect" });
+        streamHandlersRef.current.setIsStreaming(true);
+        void streamHandlersRef.current.syncChatFromServer(client.getBlocks());
+      },
+      onReconnecting: (attempt) => {
+        streamHandlersRef.current.setReconnectAttempt(attempt);
+        toast.loading(`Reconnecting (${attempt})…`, { id: "chat-reconnect" });
+      },
+      onConnectionStateChange: (state) => {
+        streamHandlersRef.current.setConnectionState(state);
+        if (state === "connected") {
+          streamHandlersRef.current.setReconnectAttempt(0);
+          toast.dismiss("chat-reconnect");
+        }
+      },
+      onAgentBusyChange: (busy) => {
+        streamHandlersRef.current.setAgentBusy(busy);
+        streamHandlersRef.current.setIsStreaming(busy);
+      },
+      onDone: () => {
+        streamHandlersRef.current.setIsStreaming(false);
+        streamHandlersRef.current.setAgentBusy(false);
+        void streamHandlersRef.current.syncChatFromServer();
+      },
+      onCancelled: () => {
+        streamHandlersRef.current.setIsStreaming(false);
+        streamHandlersRef.current.setAgentBusy(false);
+        void streamHandlersRef.current.syncChatFromServer();
+      },
+      onBlocksChange: (blocks) => {
+        streamHandlersRef.current.applyStreamBlocks(blocks);
+      },
+      onCompressed: () => {
+        toast.info("Context compressed", {
+          description:
+            "Older context was summarized server-side. History shown is unchanged.",
+        });
+      },
+      onCompressStarted: (message) => {
+        toast.info(message ?? "Compressing context…", { id: "chat-compress" });
+      },
+      onCompressCompleted: (message) => {
+        toast.success(message ?? "Context compressed", { id: "chat-compress" });
+      },
+      onCompressFailed: (message) => {
+        toast.warning(message ?? "Context compression failed", {
+          id: "chat-compress",
+        });
+      },
+      onInterrupted: () => {
+        streamHandlersRef.current.setIsStreaming(false);
+        streamHandlersRef.current.setAgentBusy(false);
+        toast.warning("Stream interrupted — partial reply saved");
+        void streamHandlersRef.current.syncChatFromServer();
+      },
+      onError: (message) => {
+        streamHandlersRef.current.setIsStreaming(false);
+        streamHandlersRef.current.setAgentBusy(false);
+        toast.error(message, { id: "chat-reconnect" });
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === "assistant") {
+            next[next.length - 1] = {
+              ...last,
+              isStreaming: false,
+              blocks: [
+                ...last.blocks,
+                { id: createBlockId("err"), kind: "error", message },
+              ],
+            };
+          }
+          return next;
+        });
+      },
+    });
+
+    client.connect();
+    chatClientRef.current = client;
+
+    return () => {
+      client.destroy();
+      chatClientRef.current = null;
+      setConnectionState("disconnected");
+      setAgentBusy(false);
+      setReconnectAttempt(0);
+    };
+  }, [workspaceKey, isLoadingHistory]);
+
   useEffect(() => {
     if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
       chatLoadRequestIdRef.current += 1;
@@ -180,6 +383,11 @@ const StreamPage: React.FC = () => {
     }
     cancelRef.current?.();
     cancelRef.current = null;
+    chatClientRef.current?.destroy();
+    chatClientRef.current = null;
+    setConnectionState("disconnected");
+    setAgentBusy(false);
+    setIsStreaming(false);
     const requestId = ++chatLoadRequestIdRef.current;
     setIsLoadingHistory(true);
     setLoadError(null);
@@ -197,7 +405,7 @@ const StreamPage: React.FC = () => {
   }, []);
 
   const handleClearChat = async () => {
-    if (isStreaming || !workspaceKey) return;
+    if (streamActive || !workspaceKey) return;
     if (!window.confirm("Clear all messages in this chat? This cannot be undone.")) return;
     try {
       await clearChat(scopeMode, currentWorkspace, activeGroup);
@@ -214,6 +422,12 @@ const StreamPage: React.FC = () => {
     const query = currentInput.trim();
     if (!query || !canSend || !workspaceKey) return;
 
+    const client = chatClientRef.current;
+    if (!client) {
+      toast.error("Chat is not connected yet. Wait a moment and try again.");
+      return;
+    }
+
     const userTurn: ChatTurn = {
       id: createBlockId("user"),
       role: "user",
@@ -226,48 +440,11 @@ const StreamPage: React.FC = () => {
     setTurns((prev) => [...prev, userTurn, assistantTurn]);
     setCurrentInput("");
     setIsStreaming(true);
+    setAgentBusy(true);
 
     try {
-      const { cancel, done } = sendChatTurn(workspaceKey, query, {
-        onReady: (ready) => {
-          setResolvedWorkspace(ready.workspace);
-        },
-        onBlocksChange: (blocks) => {
-          setTurns((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant" && last.isStreaming) {
-              next[next.length - 1] = { ...last, blocks: [...blocks] };
-            }
-            return next;
-          });
-        },
-        onCompressed: () => {
-          toast.info("Context compressed", {
-            description: "Older context was summarized server-side. History shown is unchanged.",
-          });
-        },
-        onError: (message) => {
-          setTurns((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant") {
-              next[next.length - 1] = {
-                ...last,
-                isStreaming: false,
-                blocks: [
-                  ...last.blocks,
-                  { id: createBlockId("err"), kind: "error", message },
-                ],
-              };
-            }
-            return next;
-          });
-        },
-      });
-
-      cancelRef.current = cancel;
-      await done;
+      cancelRef.current = () => client.cancelTurn({ destroy: false });
+      await client.sendChat(query);
 
       const { turns: history, workspace } = await loadChatTurns(
         scopeMode,
@@ -277,10 +454,18 @@ const StreamPage: React.FC = () => {
       setResolvedWorkspace(workspace);
       setTurns((prev) => {
         const streamed = prev[prev.length - 1];
-        return mergeHistoryWithStreamedAssistantTurn(
+        const merged = mergeHistoryWithStreamedAssistantTurn(
           history,
           streamed?.role === "assistant" ? streamed : undefined
         );
+        const last = merged[merged.length - 1];
+        if (last?.role === "assistant" && last.isStreaming) {
+          return [
+            ...merged.slice(0, -1),
+            { ...last, isStreaming: false },
+          ];
+        }
+        return merged;
       });
     } catch (error) {
       console.error("Chat stream failed:", error);
@@ -303,6 +488,7 @@ const StreamPage: React.FC = () => {
       });
     } finally {
       setIsStreaming(false);
+      setAgentBusy(false);
       cancelRef.current = null;
     }
   }, [currentInput, canSend, workspaceKey, scopeMode, currentWorkspace, activeGroup]);
@@ -359,7 +545,7 @@ const StreamPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <GroupScopeSelector disabled={isStreaming} />
+              <GroupScopeSelector disabled={streamActive} />
 
               <span className="hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden />
 
@@ -385,7 +571,7 @@ const StreamPage: React.FC = () => {
                   size="sm"
                   className="h-8"
                   onClick={handleClearChat}
-                  disabled={isStreaming || !workspaceKey}
+                  disabled={streamActive || !workspaceKey}
                   title="Clear chat history"
                 >
                   <Trash2 className="mr-1 h-3.5 w-3.5" />
@@ -396,6 +582,31 @@ const StreamPage: React.FC = () => {
           </div>
         </CitationChatAlign>
       </header>
+
+      {connectionState === "reconnecting" && (
+        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS} className="px-4 pb-2">
+          <Alert className="border-amber-500/40 bg-amber-500/10 py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle className="text-sm">Reconnecting</AlertTitle>
+            <AlertDescription className="text-xs">
+              Connection lost during streaming. The agent is still running
+              {reconnectAttempt > 0 ? ` (attempt ${reconnectAttempt})` : ""}…
+            </AlertDescription>
+          </Alert>
+        </CitationChatAlign>
+      )}
+
+      {agentBusy && connectionState === "connected" && !isStreaming && (
+        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS} className="px-4 pb-2">
+          <Alert className="border-primary/30 bg-primary/5 py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertTitle className="text-sm">Agent busy</AlertTitle>
+            <AlertDescription className="text-xs">
+              A turn is in progress on the server. Live updates are attached — wait before sending.
+            </AlertDescription>
+          </Alert>
+        </CitationChatAlign>
+      )}
 
         <div
           ref={messagesRef}
@@ -451,10 +662,15 @@ const StreamPage: React.FC = () => {
             </div>
           )}
 
-          {turns.map((turn) => {
+          {turns.map((turn, turnIndex) => {
             const userText = turn.content?.trim() ?? "";
             const assistantText = getAssistantResponseText(turn.blocks);
             const copyText = turn.role === "user" ? userText : assistantText;
+            const assistantStreaming =
+              Boolean(turn.isStreaming) ||
+              (streamActive &&
+                turn.role === "assistant" &&
+                turnIndex === turns.length - 1);
 
             return (
             <div
@@ -488,7 +704,7 @@ const StreamPage: React.FC = () => {
                     <div className="pr-6">
                       <AssistantActivityView
                         blocks={turn.blocks}
-                        isStreaming={turn.isStreaming}
+                        isStreaming={assistantStreaming}
                       />
                     </div>
                   )}
@@ -537,7 +753,7 @@ const StreamPage: React.FC = () => {
               className="h-10 w-10 shrink-0 rounded-xl"
               title="Send"
             >
-              {isStreaming ? (
+              {streamActive ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
@@ -550,6 +766,14 @@ const StreamPage: React.FC = () => {
                 ? `Group chat · searches workspaces in ${activeGroup ?? "group"}`
                 : `Workspace ${displayTarget} chat`}
             </span>
+            {connectionState !== "connected" && connectionState !== "reconnecting" && (
+              <span className="text-amber-600 dark:text-amber-400">
+                · {connectionState === "connecting" ? "Connecting…" : "Offline"}
+              </span>
+            )}
+            {agentBusy && (
+              <span className="text-primary">· Agent busy</span>
+            )}
             <span className="text-muted-foreground/80">· Citations</span>
             <CitationTag kind="doc" label="" />
             <CitationTag kind="entity" label="" />

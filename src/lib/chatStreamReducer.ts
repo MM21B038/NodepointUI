@@ -442,6 +442,32 @@ function countToolCallBlocks(blocks: ChatBlock[]): number {
 }
 
 /** Keep streamed blocks when REST history omits tool rows from a multi-cycle turn. */
+/** Mark the last assistant turn as live-streaming (reconnect / agent_busy attach). */
+export function markLastAssistantStreaming(
+  turns: ChatTurn[],
+  liveBlocks?: ChatBlock[]
+): ChatTurn[] {
+  if (turns.length === 0) {
+    const turn = createEmptyAssistantTurn();
+    if (liveBlocks?.length) turn.blocks = liveBlocks;
+    return [turn];
+  }
+  const last = turns[turns.length - 1];
+  if (last.role === "assistant") {
+    return [
+      ...turns.slice(0, -1),
+      {
+        ...last,
+        isStreaming: true,
+        blocks: liveBlocks?.length ? liveBlocks : last.blocks,
+      },
+    ];
+  }
+  const turn = createEmptyAssistantTurn();
+  if (liveBlocks?.length) turn.blocks = liveBlocks;
+  return [...turns, turn];
+}
+
 export function mergeHistoryWithStreamedAssistantTurn(
   history: ChatTurn[],
   streamedAssistant: ChatTurn | undefined

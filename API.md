@@ -1217,8 +1217,8 @@ Reserved: names starting with `__group_chat__` is not a user workspace name.
 1. Create a group and add workspaces: `POST /api/group/create/`, `POST /api/group/<name>/workspaces/`
 2. `GET /api/knowledge-graph/entity-types/?group=<name>` and `GET /api/knowledge-graph/?group=<name>&entity_type=...` — optional KG UI data
 3. `GET /api/chat/group/<name>/` — load group chat history
-4. Connect `ws://<host>/ws/chat/group/<name>/` → `chat.ready`
-5. Send `chat.send` → stream → `chat.done`
+4. Connect `ws://<host>/ws/chat/group/<name>/` → `chat.ready` (if `agent_busy`, turn still running — live stream auto-attaches)
+5. Send `chat.send` → `chat.turn_started` → stream → `chat.done`
 6. `GET /api/chat/?group=<name>` again — refresh messages
 
 ### Typical client flow (per-workspace)
@@ -1268,6 +1268,37 @@ One JSON object per text frame.
 ```
 
 **Response:** `{ "type": "chat.cancelled" }`
+
+#### Reconnect (live stream attach)
+
+```json
+{ "type": "chat.reconnect" }
+```
+
+Use after a drop **or** rely on auto-attach: `chat.ready` with `agent_busy: true` already subscribes to the in-flight turn.
+
+**Response (turn running):**
+
+```json
+{
+  "type": "chat.reconnected",
+  "agent_busy": true,
+  "turn_id": "...",
+  "hint": "Refresh chat history via REST for content received while offline; live stream continues from reconnect."
+}
+```
+
+**Response (idle):** `{ "type": "chat.reconnected", "agent_busy": false }`
+
+While offline, call `GET /api/chat/<workspace>/` or `GET /api/chat/group/<name>/` once to fill the gap; live tokens resume on the WebSocket from reconnect onward (no token replay).
+
+#### Turn status
+
+```json
+{ "type": "chat.status" }
+```
+
+**Response:** `{ "type": "chat.status", "agent_busy": true|false, "turn_id": "...", "turn_started_at": "..." }`
 
 ---
 
@@ -1404,7 +1435,10 @@ Tools and control events are **single frames** (full payload per event):
 | `agent_turn_start` | Model round started | `turn_index` |
 | `model_turn_complete` | Model round ended | `finish_reason` |
 | `agent_session_done` | Agent loop finished text turn | — |
+| `chat.compress_started` | Context compression began | `message` |
+| `chat.compress_completed` | Handoff summary generated | `message`, `summary_chars` |
 | `chat.compressed` | Context compression (server switched branch internally) | — |
+| `chat.compress_failed` | Compression failed; turn continues without new branch | `message` |
 | `chat.done` | Entire user turn complete | — |
 | `error` | Failure | `message` |
 
@@ -1469,14 +1503,18 @@ Persisted messages:
 
 ### Context compression
 
-When the active thread exceeds **`CHAT_COMPRESS_TOKEN_THRESHOLD`** (default **64000**):
+When the active thread exceeds **`CHAT_COMPRESS_TOKEN_THRESHOLD`** (default **80000**):
 
-1. Server generates a compression report (not sent to client).
-2. Creates an **internal** child branch with a handoff user message (model-only).
-3. Switches `active_branch_id` to the new branch.
-4. Emits `{ "type": "chat.compressed" }` (no branch IDs exposed).
+1. Emits `{ "type": "chat.compress_started", "message": "…" }` (UI status; wrapped in `section: compression`).
+2. Calls the compression model with **`CHAT_COMPRESS_MAX_OUTPUT_TOKENS`** (default **4000**) and a terse handoff prompt.
+3. Emits `{ "type": "chat.compress_completed", "message": "…", "summary_chars": N }`.
+4. Creates an **internal** child branch with the handoff report (not shown in REST root history).
+5. Switches `active_branch_id` to the new branch and emits `{ "type": "chat.compressed" }`.
+6. On failure: `{ "type": "chat.compress_failed", "message": "…" }` and the turn continues without a new branch.
 
-REST history (`messages` on GET chat) stays on the **root** branch only.
+REST history (`messages` on GET chat) is served from the **root** branch. User/assistant/tool
+messages are mirrored to root as they are saved (compression handoff text stays internal-only).
+On compression, any messages on the parent branch are synced to root before the internal child is created.
 
 ---
 
@@ -1562,7 +1600,10 @@ Returns matches with `score` (fuzzy mode), outgoing/incoming relations (relation
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHAT_COMPRESS_TOKEN_THRESHOLD` | `64000` | Trigger internal branch compression |
+| `CHAT_COMPRESS_TOKEN_THRESHOLD` | `80000` | Trigger internal branch compression |
+| `CHAT_COMPRESS_MAX_OUTPUT_TOKENS` | `4000` | Max tokens in handoff report |
+| `CHAT_COMPRESS_TEMPERATURE` | `0.2` | Compression LLM temperature |
+| `CHAT_COMPRESS_MAX_MESSAGES` | `30` | Max thread messages sent to compression |
 | `CHAT_MAX_CONCURRENT_SEARCHES` | `8` | Max parallel Knowledge tool runs per web worker |
 | `WEB_WORKERS` | `4` | Uvicorn worker processes for ASGI |
 | `DB_CONN_MAX_AGE` | `60` | Postgres connection reuse (seconds) |
@@ -1611,7 +1652,7 @@ Alphabetical by path segment. See sections above for full request/response bodie
 | Connect | `ws://<host>/ws/chat/group/<name>/` | [WebSocket](#chat-websocket) |
 | Connect | `ws://<host>/ws/chat/<workspace_name>/` | [WebSocket](#chat-websocket) |
 | Client → server | `ping`, `chat.send`, `chat.cancel` | [Client → server](#client--server) |
-| Server → client | `chat.ready`, `thinking_token`, `assistant_response_token`, `section`, tools, `chat.compressed`, `chat.done`, `error`, `pong` | [Server → client](#server--client-message-categories) |
+| Server → client | `chat.ready`, `thinking_token`, `assistant_response_token`, `section`, tools, `chat.compress_*`, `chat.compressed`, `chat.done`, `error`, `pong` | [Server → client](#server--client-message-categories) |
 
 ### Agent tools (WebSocket only)
 

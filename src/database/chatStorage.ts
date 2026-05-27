@@ -2,10 +2,10 @@ import type { ChatMessage, ProvenanceEntry } from "@/database/workspaceStorage";
 import { buildApiUrl, wsBaseUrl } from "@/database/apiUrl";
 import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
-  applyStreamEvent,
   finalizeAssistantBlocks,
   messagesToTurns,
 } from "@/lib/chatStreamReducer";
+import { ChatWebSocketClient } from "@/lib/chatWebSocket";
 import { readMigratedLocalStorage } from "@/lib/migrateStorageKey";
 import {
   getStoredViewScope,
@@ -102,6 +102,13 @@ export type ChatStreamEvent =
   | { type: "model_turn_complete"; finish_reason?: string }
   | { type: "agent_session_done" }
   | { type: "chat.compressed" }
+  | { type: "chat.compress_started"; message?: string }
+  | { type: "chat.compress_completed"; message?: string; summary_chars?: number }
+  | { type: "chat.compress_failed"; message?: string }
+  | { type: "chat.reconnected"; agent_busy: boolean; turn_id?: string; hint?: string }
+  | { type: "chat.status"; agent_busy?: boolean; turn_id?: string }
+  | { type: "chat.turn_started"; turn_id?: string }
+  | { type: "chat.interrupted" }
   | { type: "chat.done" }
   | { type: "chat.cancelled" }
   | { type: "error"; message: string }
@@ -109,7 +116,12 @@ export type ChatStreamEvent =
 
 export interface ChatReadyEvent {
   type: "chat.ready";
-  workspace: string;
+  workspace?: string;
+  group?: string;
+  workspaces?: string[];
+  agent_busy?: boolean;
+  conversation_id?: string;
+  active_branch_id?: string;
 }
 
 export interface ChatStreamCallbacks {
@@ -296,7 +308,7 @@ function chatWebSocketPath(chatKey: string): string {
   return `${encodeWorkspaceKey(chatKey)}/`;
 }
 
-function chatWebSocketUrl(chatKey: string): string {
+export function chatWebSocketUrl(chatKey: string): string {
   return `${wsBaseUrl()}/ws/chat/${chatWebSocketPath(chatKey)}`;
 }
 
@@ -306,173 +318,15 @@ export function sendChatTurn(
   callbacks: ChatStreamCallbacks = {},
   options?: { excludeServers?: string[] }
 ): { cancel: () => void; done: Promise<{ answer: string; thinking: string; blocks: ChatBlock[] }> } {
-  const ws = new WebSocket(chatWebSocketUrl(chatKey));
-  let thinking = "";
-  let answer = "";
-  let blocks: ChatBlock[] = [];
-  let settled = false;
-  let readyReceived = false;
-  let turnCompleted = false;
+  const client = new ChatWebSocketClient(chatKey, callbacks);
+  client.connect();
 
-  const emitBlocks = () => {
-    callbacks.onBlocksChange?.(blocks);
-  };
-
-  const applyEventToBlocks = (data: ChatStreamEvent) => {
-    blocks = applyStreamEvent(blocks, data);
-    emitBlocks();
-  };
-
-  const finish = (
-    resolve: (v: { answer: string; thinking: string; blocks: ChatBlock[] }) => void,
-    reject: (e: Error) => void
-  ) => ({
-    resolve: (value: { answer: string; thinking: string; blocks: ChatBlock[] }) => {
-      if (settled) return;
-      settled = true;
-      ws.close();
-      resolve(value);
-    },
-    reject: (err: Error) => {
-      if (settled) return;
-      settled = true;
-      ws.close();
-      reject(err);
-    },
-  });
-
-  let finishHandlers: ReturnType<typeof finish> | null = null;
-  let timeoutId: ReturnType<typeof window.setTimeout> | undefined;
-
-  const done = new Promise<{ answer: string; thinking: string; blocks: ChatBlock[] }>((resolve, reject) => {
-    finishHandlers = finish(resolve, reject);
-
-    ws.onmessage = (event) => {
-      let data: ChatStreamEvent;
-      try {
-        data = JSON.parse(event.data as string) as ChatStreamEvent;
-      } catch {
-        return;
-      }
-
-      callbacks.onEvent?.(data);
-
-      switch (data.type) {
-        case "chat.ready":
-          readyReceived = true;
-          callbacks.onReady?.(data as ChatReadyEvent);
-          ws.send(
-            JSON.stringify({
-              type: "chat.send",
-              content,
-              ...(options?.excludeServers?.length
-                ? { exclude_servers: options.excludeServers }
-                : {}),
-            })
-          );
-          return;
-        case "thinking_token":
-          if ("token" in data && typeof data.token === "string") {
-            thinking += data.token;
-            callbacks.onThinkingToken?.(data.token);
-          }
-          break;
-        case "assistant_response_token":
-          if ("token" in data && typeof data.token === "string") {
-            answer += data.token;
-            callbacks.onResponseToken?.(data.token);
-          }
-          break;
-        case "section":
-          if ("section" in data && "action" in data) {
-            callbacks.onSection?.(data.section as string, data.action as "open" | "close");
-          }
-          break;
-        case "tool_calls":
-          if ("names" in data && Array.isArray(data.names)) {
-            callbacks.onToolCalls?.(data.names as string[]);
-          }
-          break;
-        case "tool_completed":
-          if ("tool_name" in data && "tool_call_id" in data && "ok" in data) {
-            callbacks.onToolCompleted?.(
-              data.tool_name as string,
-              data.tool_call_id as string,
-              Boolean(data.ok)
-            );
-          }
-          break;
-        case "chat.compressed":
-          callbacks.onCompressed?.();
-          break;
-        case "chat.done": {
-          turnCompleted = true;
-          blocks = finalizeAssistantBlocks(blocks);
-          emitBlocks();
-          callbacks.onDone?.();
-          finishHandlers?.resolve({ answer, thinking, blocks });
-          return;
-        }
-        case "chat.cancelled":
-          turnCompleted = true;
-          blocks = finalizeAssistantBlocks(blocks);
-          emitBlocks();
-          callbacks.onCancelled?.();
-          finishHandlers?.resolve({ answer, thinking, blocks });
-          return;
-        case "error":
-          callbacks.onError?.((data as { message: string }).message);
-          finishHandlers?.reject(new Error((data as { message: string }).message));
-          return;
-        default:
-          break;
-      }
-
-      applyEventToBlocks(data);
-    };
-
-    ws.onerror = () => {
-      if (!settled) {
-        finishHandlers?.reject(new Error("WebSocket connection failed"));
-      }
-    };
-
-    ws.onclose = (event) => {
-      if (settled || turnCompleted) return;
-      const detail =
-        event.reason?.trim() ||
-        (event.code ? `code ${event.code}` : "connection closed");
-      if (!readyReceived) {
-        finishHandlers?.reject(
-          new Error(
-            `Chat WebSocket closed before ready (${detail}). Check workspace exists and Vite /ws proxy.`
-          )
-        );
-        return;
-      }
-      finishHandlers?.reject(
-        new Error(`Chat WebSocket closed before the turn finished (${detail})`)
-      );
-    };
-
-    timeoutId = window.setTimeout(() => {
-      finishHandlers?.reject(new Error("Chat request timed out"));
-    }, 300_000);
-  });
-
-  void done.finally(() => {
-    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  const done = client.sendChat(content, options).finally(() => {
+    client.destroy();
   });
 
   return {
-    cancel: () => {
-      if (settled) return;
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "chat.cancel" }));
-      }
-      finishHandlers?.reject(new Error("Chat cancelled"));
-      ws.close();
-    },
+    cancel: () => client.cancelTurn({ destroy: true }),
     done,
   };
 }
