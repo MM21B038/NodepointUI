@@ -649,10 +649,19 @@ export interface UploadFileResponse {
   status: DocumentStatus;
 }
 
+function isAllowedUploadFile(file: File): boolean {
+  const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
+  return ext === ".txt" || ext === ".md";
+}
+
 export async function uploadFile(
   workspaceName: string,
   file: File
 ): Promise<UploadFileResponse> {
+  if (!isAllowedUploadFile(file)) {
+    throw new Error("Only .txt and .md files can be uploaded.");
+  }
+
   const formData = new FormData();
   formData.append("workspace_name", workspaceName);
   formData.append("file", file);

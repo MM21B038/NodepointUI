@@ -97,6 +97,27 @@ export function reorderLateToolsBeforeResponse(blocks: ChatBlock[]): ChatBlock[]
   return out;
 }
 
+/**
+ * Tool events often arrive before the thinking section opens, leaving tool_call
+ * blocks at the start of the array. Move that prefix to after the first thinking
+ * block so the UI shows think → tools, not tools → think.
+ */
+export function moveLeadingToolsAfterFirstThinking(blocks: ChatBlock[]): ChatBlock[] {
+  const firstThinkIdx = blocks.findIndex((b) => b.kind === "thinking");
+  if (firstThinkIdx <= 0) return blocks;
+
+  const leadingTools = blocks.slice(0, firstThinkIdx).filter(isToolBlock);
+  if (leadingTools.length === 0) return blocks;
+
+  const rest = blocks.slice(firstThinkIdx);
+  return [rest[0], ...leadingTools, ...rest.slice(1)];
+}
+
+/** Canonical timeline for activity UI: late tools + leading-tool fix. */
+export function normalizeBlockTimeline(blocks: ChatBlock[]): ChatBlock[] {
+  return moveLeadingToolsAfterFirstThinking(reorderLateToolsBeforeResponse(blocks));
+}
+
 function findRunningToolIndex(
   blocks: ChatBlock[],
   toolCallId: string,
@@ -131,7 +152,7 @@ function completeToolCall(
       status: ok ? "completed" : "failed",
       ok,
     };
-    return reorderLateToolsBeforeResponse(next);
+    return normalizeBlockTimeline(next);
   }
   const newBlock: ChatBlock = {
     id: createBlockId("tool-call"),
@@ -144,7 +165,7 @@ function completeToolCall(
   const insertAt = insertIndexForNewTool(blocks);
   const next = [...blocks];
   next.splice(insertAt, 0, newBlock);
-  return reorderLateToolsBeforeResponse(next);
+  return normalizeBlockTimeline(next);
 }
 
 function appendToLastBlock(
@@ -205,7 +226,7 @@ function upsertToolCall(
   const insertAt = insertIndexForNewTool(blocks);
   const next = [...blocks];
   next.splice(insertAt, 0, newBlock);
-  return reorderLateToolsBeforeResponse(next);
+  return normalizeBlockTimeline(next);
 }
 
 export function createEmptyAssistantTurn(id?: string): ChatTurn {
@@ -220,7 +241,7 @@ export function createEmptyAssistantTurn(id?: string): ChatTurn {
 
 export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): ChatBlock[] {
   const next = applyStreamEventInner(blocks, event);
-  return reorderLateToolsBeforeResponse(next);
+  return normalizeBlockTimeline(next);
 }
 
 function applyStreamEventInner(blocks: ChatBlock[], event: ChatStreamEvent): ChatBlock[] {
@@ -262,11 +283,14 @@ function applyStreamEventInner(blocks: ChatBlock[], event: ChatStreamEvent): Cha
           hasFinalizedResponse && last?.kind !== "cycle_boundary"
             ? [{ id: createBlockId("cycle-boundary"), kind: "cycle_boundary" }]
             : [];
-        return [
-          ...blocks,
-          ...prefix,
-          { id: createBlockId("thinking"), kind: "thinking", content: "", isStreaming: true },
-        ];
+        const newThinking: ChatBlock = {
+          id: createBlockId("thinking"),
+          kind: "thinking",
+          content: "",
+          isStreaming: true,
+        };
+        const withThink = [...blocks, ...prefix, newThinking];
+        return normalizeBlockTimeline(withThink);
       }
       if (action === "open" && section === "response") {
         const last = blocks[blocks.length - 1];
@@ -410,7 +434,7 @@ function applyStreamEventInner(blocks: ChatBlock[], event: ChatStreamEvent): Cha
 }
 
 export function finalizeAssistantBlocks(blocks: ChatBlock[]): ChatBlock[] {
-  return reorderLateToolsBeforeResponse(finalizeStreamingBlocks(blocks));
+  return normalizeBlockTimeline(finalizeStreamingBlocks(blocks));
 }
 
 function countToolCallBlocks(blocks: ChatBlock[]): number {
@@ -559,7 +583,7 @@ export function messagesToTurns(messages: ChatMessageRecord[]): ChatTurn[] {
       turns.push({
         id: runId,
         role: "assistant",
-        blocks,
+        blocks: normalizeBlockTimeline(blocks),
         timestamp,
       });
     }

@@ -6,10 +6,18 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { uploadFile } from "@/database/workspaceStorage";
 
+const ALLOWED_UPLOAD_EXTENSIONS = [".txt", ".md"] as const;
+const UPLOAD_ACCEPT =
+  ".txt,.md,text/plain,text/markdown,application/markdown";
+
+function isAllowedUploadFile(file: File): boolean {
+  const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
+  return (ALLOWED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext);
+}
+
 interface FileUploadProps {
   workspaceName: string | null;
   onUploadSuccess: () => void;
-  accept?: string;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
   showLabel?: boolean;
@@ -18,7 +26,6 @@ interface FileUploadProps {
 const FileUpload: React.FC<FileUploadProps> = ({
   workspaceName,
   onUploadSuccess,
-  accept = ".md,.txt,.text",
   variant = "default",
   size = "default",
   showLabel = true,
@@ -30,10 +37,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const allowedExtensions = accept.split(",").map((ext) => ext.trim().toLowerCase());
-    const fileExtension = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
-    if (!allowedExtensions.includes(fileExtension)) {
-      toast.error(`Unsupported file type. Allowed: ${allowedExtensions.join(", ")}`);
+    if (!isAllowedUploadFile(file)) {
+      toast.error("Unsupported file type. Only .txt and .md files are allowed.");
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -80,7 +85,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept={accept}
+        accept={UPLOAD_ACCEPT}
         className="hidden"
         disabled={isDisabled}
       />
@@ -90,7 +95,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         size={size}
         onClick={handleClick}
         disabled={isDisabled}
-        title={isUploading ? "Uploading…" : "Upload document"}
+        title={isUploading ? "Uploading…" : "Upload .txt or .md"}
         className={showLabel ? "gap-2" : undefined}
       >
         {isUploading ? (

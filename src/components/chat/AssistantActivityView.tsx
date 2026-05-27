@@ -18,7 +18,7 @@ import {
 } from "@/components/chat/ThinkingPipeline";
 import { cn } from "@/lib/utils";
 import type { ChatBlock } from "@/lib/chatTypes";
-import { reorderLateToolsBeforeResponse } from "@/lib/chatStreamReducer";
+import { normalizeBlockTimeline } from "@/lib/chatStreamReducer";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { PreStreamPlaceholder } from "@/components/chat/StreamingIndicators";
 import {
@@ -57,14 +57,13 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
   let toolsSegId: string | null = null;
 
   const flushThinking = () => {
-    if (thinkingBuf && (thinkingBuf.content || thinkingBuf.isStreaming)) {
-      segments.push({
-        kind: "thinking",
-        id: thinkingBuf.id,
-        content: thinkingBuf.content,
-        isStreaming: thinkingBuf.isStreaming,
-      });
-    }
+    if (!thinkingBuf) return;
+    segments.push({
+      kind: "thinking",
+      id: thinkingBuf.id,
+      content: thinkingBuf.content,
+      isStreaming: thinkingBuf.isStreaming,
+    });
     thinkingBuf = null;
   };
 
@@ -83,9 +82,9 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
   for (const block of blocks) {
     switch (block.kind) {
       case "thinking": {
-        flushTools();
         if (thinkingBuf && thinkingBuf.id !== block.id) {
           flushThinking();
+          flushTools();
         }
         if (!thinkingBuf) {
           thinkingBuf = {
@@ -100,7 +99,6 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
         break;
       }
       case "tool_calls": {
-        flushThinking();
         for (const name of block.names) {
           const exists = toolsBuf.some((t) => t.name === name && t.status === "running");
           if (!exists) {
@@ -115,7 +113,6 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
         break;
       }
       case "tool_call": {
-        flushThinking();
         const idx = findToolBufIndex(toolsBuf, block.toolCallId, block.toolName, block.status);
         const item: ToolItem = {
           id: block.toolCallId,
@@ -128,7 +125,6 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
         break;
       }
       case "tool_result": {
-        flushThinking();
         const idx = findToolBufIndex(
           toolsBuf,
           block.toolCallId,
@@ -146,8 +142,12 @@ function parseSegments(blocks: ChatBlock[]): ActivitySegment[] {
         break;
       }
       case "response": {
-        flushThinking();
-        flushTools();
+        if (thinkingBuf) {
+          flushThinking();
+          flushTools();
+        } else {
+          flushTools();
+        }
         segments.push({
           kind: "response",
           id: block.id,
@@ -258,8 +258,14 @@ function activityRounds(segments: ActivitySegmentOnly[]): ActivitySegmentOnly[][
 
   for (const seg of segments) {
     if (seg.kind === "thinking") {
-      if (current.some((s) => s.kind === "thinking")) pushRound();
-      current.push(seg);
+      if (current.some((s) => s.kind === "thinking")) {
+        pushRound();
+        current = [seg];
+      } else if (current.length > 0 && current.every((s) => s.kind === "tools")) {
+        current = [seg, ...current];
+      } else {
+        current = [seg];
+      }
     } else if (seg.kind === "tools") {
       current.push(seg);
     }
@@ -827,7 +833,7 @@ function isResponseStreaming(
 
 export function AssistantActivityView({ blocks, isStreaming }: AssistantActivityViewProps) {
   const segments = useMemo(
-    () => parseSegments(reorderLateToolsBeforeResponse(blocks)),
+    () => parseSegments(normalizeBlockTimeline(blocks)),
     [blocks]
   );
   const displayItems = useMemo(() => buildDisplayItems(segments), [segments]);
