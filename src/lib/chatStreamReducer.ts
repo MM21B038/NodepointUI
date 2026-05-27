@@ -441,7 +441,109 @@ function countToolCallBlocks(blocks: ChatBlock[]): number {
   return blocks.filter((b) => b.kind === "tool_call").length;
 }
 
-/** Keep streamed blocks when REST history omits tool rows from a multi-cycle turn. */
+/** Heuristic: prefer the block snapshot with more streamed / tool content. */
+export function blockRichnessScore(blocks: ChatBlock[]): number {
+  let score = 0;
+  for (const b of blocks) {
+    switch (b.kind) {
+      case "thinking":
+      case "response":
+        score += (b.content?.length ?? 0) + 40;
+        break;
+      case "tool_call":
+        score += 100;
+        break;
+      default:
+        score += 8;
+    }
+  }
+  return score;
+}
+
+export function pickRicherBlocks(...candidates: ChatBlock[][]): ChatBlock[] {
+  let best: ChatBlock[] = [];
+  let bestScore = -1;
+  for (const blocks of candidates) {
+    if (!blocks.length) continue;
+    const score = blockRichnessScore(blocks);
+    if (score > bestScore) {
+      bestScore = score;
+      best = blocks;
+    }
+  }
+  return best.length ? [...best] : [];
+}
+
+/**
+ * Merge REST gap-fill with in-memory UI + live WS blocks without replacing the whole thread.
+ */
+export function mergeReconnectChatTurns(
+  history: ChatTurn[],
+  prevTurns: ChatTurn[],
+  liveBlocks: ChatBlock[] = []
+): ChatTurn[] {
+  if (prevTurns.length === 0) {
+    return liveBlocks.length
+      ? markLastAssistantStreaming(history, liveBlocks)
+      : history;
+  }
+
+  const lastPrev = prevTurns[prevTurns.length - 1];
+  let prevUser: ChatTurn | undefined;
+  let prevAssistant: ChatTurn | undefined;
+
+  if (lastPrev?.role === "assistant") {
+    prevAssistant = lastPrev;
+    const maybeUser = prevTurns[prevTurns.length - 2];
+    if (maybeUser?.role === "user") prevUser = maybeUser;
+  } else if (lastPrev?.role === "user") {
+    prevUser = lastPrev;
+  }
+
+  const histLast = history[history.length - 1];
+  const histAssistant = histLast?.role === "assistant" ? histLast : undefined;
+
+  const mergedBlocks = pickRicherBlocks(
+    liveBlocks,
+    prevAssistant?.blocks ?? [],
+    histAssistant?.blocks ?? []
+  );
+
+  const stillLive =
+    Boolean(prevAssistant?.isStreaming) ||
+    liveBlocks.length > 0 ||
+    blockRichnessScore(mergedBlocks) > blockRichnessScore(histAssistant?.blocks ?? []);
+
+  if (!stillLive) return history;
+
+  const preserveAssistantId = prevAssistant?.id;
+
+  const withStableIds = (turns: ChatTurn[]): ChatTurn[] => {
+    if (!preserveAssistantId) return turns;
+    const last = turns[turns.length - 1];
+    if (last?.role !== "assistant") return turns;
+    return [...turns.slice(0, -1), { ...last, id: preserveAssistantId }];
+  };
+
+  if (prevUser) {
+    const lastHistUser = [...history].reverse().find((t) => t.role === "user");
+    const userMatches =
+      lastHistUser?.content?.trim() === prevUser.content?.trim();
+    if (!userMatches) {
+      const base =
+        histLast?.role === "assistant" ? history.slice(0, -1) : history;
+      return withStableIds(
+        markLastAssistantStreaming(
+          [...base, { ...prevUser, blocks: [] }],
+          mergedBlocks
+        )
+      );
+    }
+  }
+
+  return withStableIds(markLastAssistantStreaming(history, mergedBlocks));
+}
+
 /** Mark the last assistant turn as live-streaming (reconnect / agent_busy attach). */
 export function markLastAssistantStreaming(
   turns: ChatTurn[],

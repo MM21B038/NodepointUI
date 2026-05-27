@@ -11,6 +11,7 @@ import { normalizeCitationsInMarkdown, resolveCitation } from "@/lib/chatCitatio
 import { splitStreamingBlocks } from "@/lib/splitStreamingBlocks";
 import { CitationTag } from "@/components/chat/CitationTag";
 import { cn } from "@/lib/utils";
+import { useThrottledStreamContent } from "@/hooks/useThrottledStreamContent";
 import {
   LiveEdgeMark,
   StreamingContentShell,
@@ -632,10 +633,15 @@ function ChatMarkdownBody({
 
 export function ChatMarkdown({ content, isStreaming, className }: ChatMarkdownProps) {
   const normalized = useMemo(() => normalizeChatMarkdown(content), [content]);
+  const displayContent = useThrottledStreamContent(
+    normalized,
+    Boolean(isStreaming),
+    100
+  );
 
   if (!normalized && !isStreaming) return null;
 
-  const hasContent = normalized.length > 0;
+  const hasContent = displayContent.length > 0;
 
   if (isStreaming && !hasContent) {
     return (
@@ -650,7 +656,7 @@ export function ChatMarkdown({ content, isStreaming, className }: ChatMarkdownPr
   return (
     <StreamingContentShell isStreaming={Boolean(isStreaming)} hasContent={hasContent}>
       <ChatMarkdownBody
-        content={normalized}
+        content={displayContent}
         isStreaming={isStreaming}
         className={className}
       />

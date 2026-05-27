@@ -5,6 +5,8 @@ import {
 } from "@/lib/chatStreamReducer";
 import type { ChatStreamCallbacks, ChatStreamEvent } from "@/database/chatStorage";
 import { chatWebSocketUrl } from "@/database/chatStorage";
+import { pickRicherBlocks } from "@/lib/chatStreamReducer";
+import { rafThrottle, type RafThrottled } from "@/lib/rafThrottle";
 
 export type ChatConnectionState =
   | "disconnected"
@@ -165,10 +167,14 @@ export class ChatWebSocketClient {
 
   private turnResolve: ((v: SendChatTurnResult) => void) | null = null;
   private turnReject: ((e: Error) => void) | null = null;
+  private readonly emitBlocksThrottled: RafThrottled<() => void>;
 
   constructor(chatKey: string, callbacks: ChatWebSocketCallbacks = {}) {
     this.chatKey = chatKey;
     this.callbacks = callbacks;
+    this.emitBlocksThrottled = rafThrottle(() => {
+      this.callbacks.onBlocksChange?.([...this.blocks]);
+    });
   }
 
   getConnectionState(): ChatConnectionState {
@@ -183,6 +189,20 @@ export class ChatWebSocketClient {
     return this.blocks;
   }
 
+  /** Prefer the richer snapshot (UI catch-up during reconnect). */
+  hydrateBlocks(blocks: ChatBlock[]): void {
+    const merged = pickRicherBlocks(this.blocks, blocks);
+    if (merged.length) {
+      this.blocks = merged;
+    }
+  }
+
+  /** Push the latest blocks immediately (after reconnect, not throttled). */
+  flushBlockEmit(): void {
+    this.emitBlocksThrottled.cancel();
+    this.callbacks.onBlocksChange?.([...this.blocks]);
+  }
+
   connect(): void {
     this.intentionalClose = false;
     this.openSocket();
@@ -190,6 +210,7 @@ export class ChatWebSocketClient {
 
   destroy(): void {
     this.intentionalClose = true;
+    this.emitBlocksThrottled.cancel();
     this.clearTimers();
     this.rejectActiveTurn(new Error("Chat connection closed"));
     if (this.ws) {
@@ -291,7 +312,6 @@ export class ChatWebSocketClient {
     this.ws = ws;
 
     ws.onopen = () => {
-      this.reconnectAttempts = 0;
       this.armPing();
     };
 
@@ -413,6 +433,7 @@ export class ChatWebSocketClient {
   }
 
   private onChatReconnected(event: ChatReconnectedEvent): void {
+    this.reconnectAttempts = 0;
     this.setConnectionState("connected");
     this.setAgentBusy(Boolean(event.agent_busy));
     this.callbacks.onReconnected?.(event);
@@ -421,6 +442,7 @@ export class ChatWebSocketClient {
       this.activeTurn = true;
       this.armTurnTimeout();
       this.ws?.send(JSON.stringify({ type: "chat.status" }));
+      this.flushBlockEmit();
     } else {
       this.activeTurn = false;
       this.clearTurnTimeout();
@@ -490,6 +512,10 @@ export class ChatWebSocketClient {
   }
 
   private emitBlocks(): void {
+    if (this.activeTurn || this.agentBusy) {
+      this.emitBlocksThrottled();
+      return;
+    }
     this.callbacks.onBlocksChange?.([...this.blocks]);
   }
 

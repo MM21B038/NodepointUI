@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Brain,
   CheckCircle2,
@@ -776,6 +783,8 @@ function ActivityTree({
 interface AssistantActivityViewProps {
   blocks: ChatBlock[];
   isStreaming?: boolean;
+  /** Completed turn: skip streaming layout effects and scroll-into-view. */
+  historyMode?: boolean;
 }
 
 function isUserVisibleStatus(block: Extract<ChatBlock, { kind: "status" }>): boolean {
@@ -842,7 +851,12 @@ function nextResponseItem(
   return found ?? null;
 }
 
-export function AssistantActivityView({ blocks, isStreaming }: AssistantActivityViewProps) {
+function AssistantActivityViewInner({
+  blocks,
+  isStreaming,
+  historyMode = false,
+}: AssistantActivityViewProps) {
+  const liveStream = Boolean(isStreaming) && !historyMode;
   const segments = useMemo(
     () => parseSegments(normalizeBlockTimeline(blocks)),
     [blocks]
@@ -864,28 +878,28 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     [displayItems]
   );
   const statusDetail = useMemo(() => latestStatusDetail(blocks), [blocks]);
-  const showPreStream = Boolean(isStreaming && !hasActiveStreamWork(segments));
+  const showPreStream = Boolean(liveStream && !hasActiveStreamWork(segments));
 
   const activeId = useMemo(
-    () => getActiveSegmentId(segments, isStreaming),
-    [segments, isStreaming]
+    () => getActiveSegmentId(segments, liveStream),
+    [segments, liveStream]
   );
 
   const activeActivityGroupId = useMemo(
-    () => getActiveActivityGroupId(displayItems, activeId, isStreaming),
-    [displayItems, activeId, isStreaming]
+    () => getActiveActivityGroupId(displayItems, activeId, liveStream),
+    [displayItems, activeId, liveStream]
   );
 
   const streamingResponseId = useMemo(
-    () => (isStreaming ? getStreamingResponseId(segments) : null),
-    [segments, isStreaming]
+    () => (liveStream ? getStreamingResponseId(segments) : null),
+    [segments, liveStream]
   );
 
   const responseStreaming = streamingResponseId !== null;
 
   const activityPhaseStreaming = useMemo(
-    () => isActivityPhaseStreaming(segments, isStreaming),
-    [segments, isStreaming]
+    () => isActivityPhaseStreaming(segments, liveStream),
+    [segments, liveStream]
   );
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -906,6 +920,7 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
   }, [responseStreaming]);
 
   useLayoutEffect(() => {
+    if (!liveStream) return;
     let grew = false;
     for (const item of displayItems) {
       if (item.kind !== "response" || !item.segment.isStreaming) continue;
@@ -919,7 +934,7 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
       }
     }
     if (grew) bumpResponseLayout((n) => n + 1);
-  }, [displayItems, blocks]);
+  }, [displayItems, blocks, liveStream]);
 
   useEffect(() => {
     if (responseStreaming) return;
@@ -1229,3 +1244,11 @@ export function AssistantActivityView({ blocks, isStreaming }: AssistantActivity
     </div>
   );
 }
+
+export const AssistantActivityView = memo(
+  AssistantActivityViewInner,
+  (prev, next) =>
+    prev.blocks === next.blocks &&
+    prev.isStreaming === next.isStreaming &&
+    prev.historyMode === next.historyMode
+);

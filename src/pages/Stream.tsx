@@ -21,18 +21,17 @@ import {
 } from "@/lib/chatWebSocket";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
   createEmptyAssistantTurn,
-  markLastAssistantStreaming,
   mergeHistoryWithStreamedAssistantTurn,
+  mergeReconnectChatTurns,
+  pickRicherBlocks,
 } from "@/lib/chatStreamReducer";
-import { AssistantActivityView } from "@/components/chat/AssistantActivityView";
+import { ChatTurnRow } from "@/components/chat/ChatTurnRow";
 import { CitationTag } from "@/components/chat/CitationTag";
-import { CopyButton } from "@/components/chat/CopyButton";
-import { getAssistantResponseText } from "@/lib/chatCopyText";
 import { createBlockId } from "@/lib/chatTypes";
+import { throttle } from "@/lib/rafThrottle";
 import { toast } from "sonner";
 import { CitationModalProvider } from "@/components/chat/CitationModalContext";
 import { CitationChatAlign } from "@/components/chat/CitationChatAlign";
@@ -43,6 +42,9 @@ const TEXTAREA_MAX_HEIGHT = 160;
 const CHAT_THREAD_MAX_CLASS = "max-w-6xl";
 /** Composer bar max width (narrower than message thread) */
 const CHAT_COMPOSER_MAX_CLASS = "max-w-2xl";
+/** Max turns mounted in the DOM; older messages load on demand. */
+const INITIAL_VISIBLE_TURNS = 60;
+const LOAD_OLDER_TURNS_STEP = 40;
 
 const StreamPage: React.FC = () => {
   const { currentWorkspace, scopeMode, activeGroup } = useWorkspace();
@@ -63,6 +65,16 @@ const StreamPage: React.FC = () => {
   const cancelRef = useRef<(() => void) | null>(null);
   const chatClientRef = useRef<ChatWebSocketClient | null>(null);
   const chatLoadRequestIdRef = useRef(0);
+  const turnsRef = useRef(turns);
+  const syncGenRef = useRef(0);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const pendingLiveBlocksRef = useRef<ChatBlock[] | undefined>(undefined);
+  const [visibleFromIndex, setVisibleFromIndex] = useState(0);
+  const scrollOnStreamRef = useRef<ReturnType<typeof throttle<() => void>> | null>(
+    null
+  );
+
+  turnsRef.current = turns;
 
   const streamActive = isStreaming || agentBusy;
   const isConnected =
@@ -96,6 +108,14 @@ const StreamPage: React.FC = () => {
     scrollEndRef.current?.scrollIntoView({ behavior, block: "end" });
   }, []);
 
+  useEffect(() => {
+    scrollOnStreamRef.current = throttle(() => {
+      if (userScrolledAwayRef.current) return;
+      scrollMessagesToBottom("auto");
+    }, 120);
+    return () => scrollOnStreamRef.current?.cancel();
+  }, [scrollMessagesToBottom]);
+
   const onMessagesScroll = useCallback(() => {
     const el = messagesRef.current;
     if (!el) return;
@@ -128,9 +148,21 @@ const StreamPage: React.FC = () => {
   }, [turns.length, scrollMessagesToBottom]);
 
   useEffect(() => {
-    if (userScrolledAwayRef.current) return;
-    scrollMessagesToBottom("auto");
-  }, [turns, streamActive, scrollMessagesToBottom]);
+    const next = Math.max(0, turns.length - INITIAL_VISIBLE_TURNS);
+    setVisibleFromIndex((prev) => (streamActive ? next : Math.min(prev, next)));
+  }, [turns.length, workspaceKey, streamActive]);
+
+  const visibleTurns = useMemo(
+    () => turns.slice(visibleFromIndex),
+    [turns, visibleFromIndex]
+  );
+  const hiddenTurnCount = visibleFromIndex;
+
+  const showOlderMessages = useCallback(() => {
+    setVisibleFromIndex((prev) =>
+      Math.max(0, prev - LOAD_OLDER_TURNS_STEP)
+    );
+  }, []);
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -155,6 +187,7 @@ const StreamPage: React.FC = () => {
         setWorkspaceKey(chatKey);
         setResolvedWorkspace(workspace);
         setTurns(history);
+        setVisibleFromIndex(Math.max(0, history.length - INITIAL_VISIBLE_TURNS));
         setLoadError(null);
       } catch (error) {
         if (requestId !== chatLoadRequestIdRef.current) return;
@@ -179,68 +212,108 @@ const StreamPage: React.FC = () => {
       const next = [...prev];
       const last = next[next.length - 1];
       if (last?.role === "assistant" && last.isStreaming) {
-        next[next.length - 1] = { ...last, blocks: [...blocks] };
+        next[next.length - 1] = { ...last, blocks };
         return next;
       }
       if (last?.role === "assistant") {
         next[next.length - 1] = {
           ...last,
           isStreaming: true,
-          blocks: [...blocks],
+          blocks,
         };
         return next;
       }
-      next.push({ ...createEmptyAssistantTurn(), blocks: [...blocks] });
+      next.push({ ...createEmptyAssistantTurn(), blocks });
       return next;
     });
+    scrollOnStreamRef.current?.();
   }, []);
 
   const syncChatFromServer = useCallback(
-    async (liveBlocks?: ChatBlock[]) => {
+    async (liveBlocks?: ChatBlock[], options?: { fullReplace?: boolean }) => {
+      const gen = ++syncGenRef.current;
       try {
         const { turns: history, workspace } = await loadChatTurns(
           scopeMode,
           currentWorkspace,
           activeGroup
         );
+        if (gen !== syncGenRef.current) return;
+
         setResolvedWorkspace(workspace);
+        const client = chatClientRef.current;
+        const busy = client?.isAgentBusy() ?? false;
+        const blocks =
+          liveBlocks ??
+          pendingLiveBlocksRef.current ??
+          client?.getBlocks() ??
+          [];
+
         setTurns((prev) => {
-          const streamedAssistant =
-            liveBlocks?.length
-              ? ({
-                  ...createEmptyAssistantTurn(),
-                  blocks: liveBlocks,
-                  isStreaming: true,
-                } satisfies ChatTurn)
-              : prev[prev.length - 1]?.role === "assistant"
-                ? prev[prev.length - 1]
-                : undefined;
-
-          let next = mergeHistoryWithStreamedAssistantTurn(
-            history,
-            streamedAssistant?.role === "assistant" ? streamedAssistant : undefined
-          );
-
-          const attachLive =
-            chatClientRef.current?.isAgentBusy() ||
-            Boolean(liveBlocks?.length) ||
-            Boolean(streamedAssistant?.isStreaming);
-
-          if (attachLive) {
-            next = markLastAssistantStreaming(next, liveBlocks);
+          if (options?.fullReplace) {
+            const streamed = prev[prev.length - 1];
+            let next = mergeHistoryWithStreamedAssistantTurn(
+              history,
+              streamed?.role === "assistant" ? streamed : undefined
+            );
+            const last = next[next.length - 1];
+            if (last?.role === "assistant" && last.isStreaming) {
+              next = [
+                ...next.slice(0, -1),
+                { ...last, isStreaming: false },
+              ];
+            }
+            return next;
           }
-          return next;
+          if (!busy && blocks.length === 0) return history;
+          return mergeReconnectChatTurns(history, prev, blocks);
         });
+
+        if (blocks.length) {
+          client?.hydrateBlocks(blocks);
+        }
       } catch (error) {
+        if (gen !== syncGenRef.current) return;
         console.error("Failed to sync chat after reconnect:", error);
       }
     },
     [scopeMode, currentWorkspace, activeGroup]
   );
 
+  const scheduleReconnectSync = useCallback(
+    (liveBlocks?: ChatBlock[]) => {
+      if (liveBlocks?.length) {
+        pendingLiveBlocksRef.current = liveBlocks;
+      }
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = undefined;
+        const pending = pendingLiveBlocksRef.current;
+        pendingLiveBlocksRef.current = undefined;
+        void syncChatFromServer(pending);
+      }, 280);
+    },
+    [syncChatFromServer]
+  );
+
+  const getUiAssistantBlocks = useCallback((): ChatBlock[] => {
+    const list = turnsRef.current;
+    const last = list[list.length - 1];
+    if (last?.role === "assistant") return last.blocks;
+    if (
+      list.length >= 2 &&
+      list[list.length - 2]?.role === "assistant"
+    ) {
+      return list[list.length - 2]!.blocks;
+    }
+    return [];
+  }, []);
+
   const streamHandlersRef = useRef({
     applyStreamBlocks,
+    scheduleReconnectSync,
     syncChatFromServer,
+    getUiAssistantBlocks,
     setResolvedWorkspace,
     setIsStreaming,
     setAgentBusy,
@@ -249,7 +322,9 @@ const StreamPage: React.FC = () => {
   });
   streamHandlersRef.current = {
     applyStreamBlocks,
+    scheduleReconnectSync,
     syncChatFromServer,
+    getUiAssistantBlocks,
     setResolvedWorkspace,
     setIsStreaming,
     setAgentBusy,
@@ -267,15 +342,21 @@ const StreamPage: React.FC = () => {
         }
         if (ready.agent_busy) {
           streamHandlersRef.current.setIsStreaming(true);
-          void streamHandlersRef.current.syncChatFromServer(
-            client.getBlocks()
-          );
+          streamHandlersRef.current.setAgentBusy(true);
         }
       },
       onReconnected: () => {
-        toast.info("Reconnected — resuming live stream", { id: "chat-reconnect" });
+        toast.success("Reconnected — resuming live stream", {
+          id: "chat-reconnect",
+        });
         streamHandlersRef.current.setIsStreaming(true);
-        void streamHandlersRef.current.syncChatFromServer(client.getBlocks());
+        streamHandlersRef.current.setAgentBusy(true);
+        const uiBlocks = streamHandlersRef.current.getUiAssistantBlocks();
+        client.hydrateBlocks(
+          pickRicherBlocks(uiBlocks, client.getBlocks())
+        );
+        client.flushBlockEmit();
+        streamHandlersRef.current.scheduleReconnectSync(client.getBlocks());
       },
       onReconnecting: (attempt) => {
         streamHandlersRef.current.setReconnectAttempt(attempt);
@@ -283,24 +364,25 @@ const StreamPage: React.FC = () => {
       },
       onConnectionStateChange: (state) => {
         streamHandlersRef.current.setConnectionState(state);
-        if (state === "connected") {
-          streamHandlersRef.current.setReconnectAttempt(0);
-          toast.dismiss("chat-reconnect");
-        }
       },
       onAgentBusyChange: (busy) => {
         streamHandlersRef.current.setAgentBusy(busy);
-        streamHandlersRef.current.setIsStreaming(busy);
       },
       onDone: () => {
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
-        void streamHandlersRef.current.syncChatFromServer();
+        toast.dismiss("chat-reconnect");
+        void streamHandlersRef.current.syncChatFromServer(undefined, {
+          fullReplace: true,
+        });
       },
       onCancelled: () => {
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
-        void streamHandlersRef.current.syncChatFromServer();
+        toast.dismiss("chat-reconnect");
+        void streamHandlersRef.current.syncChatFromServer(undefined, {
+          fullReplace: true,
+        });
       },
       onBlocksChange: (blocks) => {
         streamHandlersRef.current.applyStreamBlocks(blocks);
@@ -325,8 +407,11 @@ const StreamPage: React.FC = () => {
       onInterrupted: () => {
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
+        toast.dismiss("chat-reconnect");
         toast.warning("Stream interrupted — partial reply saved");
-        void streamHandlersRef.current.syncChatFromServer();
+        void streamHandlersRef.current.syncChatFromServer(undefined, {
+          fullReplace: true,
+        });
       },
       onError: (message) => {
         streamHandlersRef.current.setIsStreaming(false);
@@ -354,6 +439,8 @@ const StreamPage: React.FC = () => {
     chatClientRef.current = client;
 
     return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncGenRef.current += 1;
       client.destroy();
       chatClientRef.current = null;
       setConnectionState("disconnected");
@@ -392,6 +479,7 @@ const StreamPage: React.FC = () => {
     setIsLoadingHistory(true);
     setLoadError(null);
     setTurns([]);
+    setVisibleFromIndex(0);
     setWorkspaceKey(null);
     setResolvedWorkspace(null);
     void loadChat(requestId);
@@ -401,6 +489,7 @@ const StreamPage: React.FC = () => {
     return () => {
       cancelRef.current?.();
       cancelRef.current = null;
+      scrollOnStreamRef.current?.cancel();
     };
   }, []);
 
@@ -438,6 +527,9 @@ const StreamPage: React.FC = () => {
 
     const assistantTurn = createEmptyAssistantTurn();
     setTurns((prev) => [...prev, userTurn, assistantTurn]);
+    setVisibleFromIndex((prev) =>
+      Math.max(0, turns.length + 2 - INITIAL_VISIBLE_TURNS, prev)
+    );
     setCurrentInput("");
     setIsStreaming(true);
     setAgentBusy(true);
@@ -487,11 +579,22 @@ const StreamPage: React.FC = () => {
         return next;
       });
     } finally {
-      setIsStreaming(false);
-      setAgentBusy(false);
+      const stillBusy = chatClientRef.current?.isAgentBusy() ?? false;
+      if (!stillBusy) {
+        setIsStreaming(false);
+        setAgentBusy(false);
+      }
       cancelRef.current = null;
     }
-  }, [currentInput, canSend, workspaceKey, scopeMode, currentWorkspace, activeGroup]);
+  }, [
+    currentInput,
+    canSend,
+    workspaceKey,
+    scopeMode,
+    currentWorkspace,
+    activeGroup,
+    turns.length,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -662,66 +765,34 @@ const StreamPage: React.FC = () => {
             </div>
           )}
 
-          {turns.map((turn, turnIndex) => {
-            const userText = turn.content?.trim() ?? "";
-            const assistantText = getAssistantResponseText(turn.blocks);
-            const copyText = turn.role === "user" ? userText : assistantText;
+          {hiddenTurnCount > 0 && (
+            <div className="flex justify-center py-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={showOlderMessages}
+              >
+                Load older messages ({hiddenTurnCount} hidden)
+              </Button>
+            </div>
+          )}
+
+          {visibleTurns.map((turn, index) => {
+            const globalIndex = visibleFromIndex + index;
             const assistantStreaming =
               Boolean(turn.isStreaming) ||
               (streamActive &&
                 turn.role === "assistant" &&
-                turnIndex === turns.length - 1);
+                globalIndex === turns.length - 1);
 
             return (
-            <div
-              key={turn.id}
-              className={cn(
-                "group flex",
-                turn.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              <div
-                className={cn(
-                  "min-w-0",
-                  turn.role === "user"
-                    ? "max-w-[min(100%,28rem)] shrink-0"
-                    : "w-full flex-1"
-                )}
-              >
-                <div
-                  className={cn(
-                    "relative w-full rounded-2xl px-4 py-3 shadow-sm",
-                    turn.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
-                  )}
-                >
-                  {turn.role === "user" ? (
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed pr-6">
-                      {turn.content}
-                    </p>
-                  ) : (
-                    <div className="pr-6">
-                      <AssistantActivityView
-                        blocks={turn.blocks}
-                        isStreaming={assistantStreaming}
-                      />
-                    </div>
-                  )}
-                  <CopyButton
-                    text={copyText}
-                    label={turn.role === "user" ? "Copy message" : "Copy response"}
-                    variant={turn.role === "user" ? "ghostOnPrimary" : "ghost"}
-                    className={cn(
-                      "pointer-events-none absolute right-1.5 top-1.5 z-10 h-7 w-7 opacity-0 shadow-sm transition-opacity",
-                      "group-hover:pointer-events-auto group-hover:opacity-100",
-                      "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
-                      "focus-visible:pointer-events-auto focus-visible:opacity-100"
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
+              <ChatTurnRow
+                key={turn.id}
+                turn={turn}
+                isStreaming={assistantStreaming}
+              />
             );
           })}
 
