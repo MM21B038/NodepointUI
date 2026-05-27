@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   Bot,
   Loader2,
-  Send,
   Trash2,
   RefreshCw,
   FolderOpen,
@@ -20,7 +19,6 @@ import {
   type ChatConnectionState,
 } from "@/lib/chatWebSocket";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
   createEmptyAssistantTurn,
@@ -28,6 +26,7 @@ import {
   mergeReconnectChatTurns,
   pickRicherBlocks,
 } from "@/lib/chatStreamReducer";
+import { ChatComposerBar } from "@/components/chat/ChatComposerBar";
 import { ChatTurnRow } from "@/components/chat/ChatTurnRow";
 import { CitationTag } from "@/components/chat/CitationTag";
 import { createBlockId } from "@/lib/chatTypes";
@@ -57,6 +56,7 @@ const StreamPage: React.FC = () => {
   const [connectionState, setConnectionState] =
     useState<ChatConnectionState>("disconnected");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [isStopping, setIsStopping] = useState(false);
   const [currentInput, setCurrentInput] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const scrollEndRef = useRef<HTMLDivElement>(null);
@@ -369,17 +369,29 @@ const StreamPage: React.FC = () => {
         streamHandlersRef.current.setAgentBusy(busy);
       },
       onDone: () => {
+        setIsStopping(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.dismiss("chat-reconnect");
+        toast.dismiss("chat-stop");
         void streamHandlersRef.current.syncChatFromServer(undefined, {
           fullReplace: true,
         });
       },
       onCancelled: () => {
+        setIsStopping(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.dismiss("chat-reconnect");
+        toast.dismiss("chat-stop");
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === "assistant") {
+            next[next.length - 1] = { ...last, isStreaming: false };
+          }
+          return next;
+        });
         void streamHandlersRef.current.syncChatFromServer(undefined, {
           fullReplace: true,
         });
@@ -405,6 +417,7 @@ const StreamPage: React.FC = () => {
         });
       },
       onInterrupted: () => {
+        setIsStopping(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.dismiss("chat-reconnect");
@@ -414,6 +427,7 @@ const StreamPage: React.FC = () => {
         });
       },
       onError: (message) => {
+        setIsStopping(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.error(message, { id: "chat-reconnect" });
@@ -533,9 +547,10 @@ const StreamPage: React.FC = () => {
     setCurrentInput("");
     setIsStreaming(true);
     setAgentBusy(true);
+    setIsStopping(false);
 
     try {
-      cancelRef.current = () => client.cancelTurn({ destroy: false });
+      cancelRef.current = () => client.requestCancel();
       await client.sendChat(query);
 
       const { turns: history, workspace } = await loadChatTurns(
@@ -560,9 +575,10 @@ const StreamPage: React.FC = () => {
         return merged;
       });
     } catch (error) {
-      console.error("Chat stream failed:", error);
       const message =
         error instanceof Error ? error.message : "An unknown error occurred during chat.";
+      if (message === "Chat cancelled") return;
+      console.error("Chat stream failed:", error);
       setTurns((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];
@@ -583,6 +599,7 @@ const StreamPage: React.FC = () => {
       if (!stillBusy) {
         setIsStreaming(false);
         setAgentBusy(false);
+        setIsStopping(false);
       }
       cancelRef.current = null;
     }
@@ -596,8 +613,15 @@ const StreamPage: React.FC = () => {
     turns.length,
   ]);
 
+  const handleStop = useCallback(() => {
+    const client = chatClientRef.current;
+    if (!client || !streamActive || isStopping) return;
+    setIsStopping(true);
+    client.requestCancel();
+  }, [streamActive, isStopping]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !streamActive) {
       e.preventDefault();
       handleSend();
     }
@@ -802,35 +826,23 @@ const StreamPage: React.FC = () => {
 
       <footer className="z-10 shrink-0  border-border/40 bg-background px-4 pb-3 pt-2">
         <CitationChatAlign maxWidthClass={CHAT_COMPOSER_MAX_CLASS}>
-          <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
-            <Textarea
-              ref={textareaRef}
-              placeholder={
-                scopeMode === "group"
-                  ? `Message group ${activeGroup ?? ""}…`
-                  : `Message ${displayTarget}…`
-              }
-              value={currentInput}
-              onChange={(e) => setCurrentInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={!isInputEnabled || !workspaceKey}
-              rows={1}
-              className="min-h-[44px] max-h-40 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!canSend}
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-xl"
-              title="Send"
-            >
-              {streamActive ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+          <ChatComposerBar
+            value={currentInput}
+            onChange={setCurrentInput}
+            onKeyDown={handleKeyDown}
+            onSend={handleSend}
+            onStop={handleStop}
+            placeholder={
+              scopeMode === "group"
+                ? `Message group ${activeGroup ?? ""}…`
+                : `Message ${displayTarget}…`
+            }
+            textareaRef={textareaRef}
+            disabled={!isInputEnabled || !workspaceKey}
+            canSend={canSend}
+            isStreaming={streamActive}
+            isStopping={isStopping}
+          />
           <p className="text-[10px] text-center text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
             <span>
               {scopeMode === "group"

@@ -230,11 +230,15 @@ export class ChatWebSocketClient {
     this.setAgentBusy(false);
   }
 
-  cancelTurn(options?: { destroy?: boolean }): void {
+  /** Ask the server to stop the current agent turn (no local promise rejection). */
+  requestCancel(): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "chat.cancel" }));
     }
-    this.rejectActiveTurn(new Error("Chat cancelled"));
+  }
+
+  cancelTurn(options?: { destroy?: boolean }): void {
+    this.requestCancel();
     if (options?.destroy !== false) {
       this.destroy();
     }
