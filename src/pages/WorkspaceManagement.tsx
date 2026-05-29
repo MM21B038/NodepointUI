@@ -12,8 +12,6 @@ import {
   deleteWorkspace,
   startPreprocess,
   summarizePreprocessStart,
-  preprocessOptionsForMode,
-  type PreprocessStartMode,
   WorkspaceCreateError,
   type WorkspacePageItem,
   type WorkspaceStats,
@@ -257,17 +255,14 @@ const WorkspaceManagement = () => {
   }, [workspaceToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
 
   const handleExtract = useCallback(
-    async (workspaceName: string, mode: PreprocessStartMode = "default") => {
+    async (workspaceName: string) => {
       setIsExtractingMap((prev) => new Map(prev).set(workspaceName, true));
       const loadingToastId = toast.loading(
         `Starting extraction for workspace "${workspaceName}"...`
       );
 
       try {
-        const result = await startPreprocess(
-          workspaceName,
-          preprocessOptionsForMode(mode)
-        );
+        const result = await startPreprocess(workspaceName);
         toast.success(summarizePreprocessStart(result), {
           id: loadingToastId,
         });

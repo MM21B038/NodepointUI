@@ -696,7 +696,7 @@ export async function deleteFile(
 export interface StartPreprocessOptions {
   /** When true (default), clicked workspace uses the high-priority RQ queue. */
   priority?: boolean;
-  /** When true (default), also queue every other workspace that is not overall.ready. */
+  /** When true, also queue every other workspace that is not overall.ready. */
   includeOtherWorkspaces?: boolean;
 }
 
@@ -721,21 +721,6 @@ export interface StartPreprocessResponse {
   other_workspaces: OtherWorkspacePreprocessResult[];
   /** Present on older API responses. */
   pipeline?: PreprocessPipelineResult;
-}
-
-export type PreprocessStartMode = "default" | "this_workspace_only" | "legacy";
-
-export function preprocessOptionsForMode(
-  mode: PreprocessStartMode
-): Required<StartPreprocessOptions> {
-  switch (mode) {
-    case "this_workspace_only":
-      return { priority: true, includeOtherWorkspaces: false };
-    case "legacy":
-      return { priority: false, includeOtherWorkspaces: false };
-    default:
-      return { priority: true, includeOtherWorkspaces: true };
-  }
 }
 
 export function summarizePreprocessStart(res: StartPreprocessResponse): string {
@@ -768,7 +753,7 @@ export async function startPreprocess(
   options: StartPreprocessOptions = {}
 ): Promise<StartPreprocessResponse> {
   const priority = options.priority ?? true;
-  const includeOtherWorkspaces = options.includeOtherWorkspaces ?? true;
+  const includeOtherWorkspaces = options.includeOtherWorkspaces ?? false;
   const response = await fetch(
     `${API_ROOT}/workspace/preprocess/${encodeURIComponent(workspaceName)}/`,
     {
