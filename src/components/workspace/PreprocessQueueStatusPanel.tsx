@@ -27,7 +27,6 @@ import {
   computePreprocessSummary,
   formatTimestamp,
   hasPreprocessActivity,
-  orderedQueueNames,
   PREPROCESS_POLL_MS,
   shouldPollPreprocessStatus,
 } from "@/components/workspace/preprocessQueueStatusUtils";
@@ -247,27 +246,6 @@ const PreprocessQueueStatusPanel = ({
                 )}
                 {summary.lockCount > 0 && (
                   <MetricPill label="Locks" value={summary.lockCount} highlight />
-                )}
-                {data && active && (
-                  <div className="col-span-full flex flex-wrap gap-1 pt-0.5">
-                    {orderedQueueNames(data.rq.queues).map((name) => {
-                      const q = data.rq.queues[name];
-                      if (!q) return null;
-                      const c = q.counts;
-                      const busy = c.queued + c.started + c.failed;
-                      if (busy === 0) return null;
-                      return (
-                        <Badge
-                          key={name}
-                          variant={c.failed > 0 ? "destructive" : "secondary"}
-                          className="text-[10px] font-normal tabular-nums capitalize"
-                        >
-                          {name}: {c.queued}q {c.started}▶
-                          {c.failed > 0 ? ` ${c.failed}✕` : ""}
-                        </Badge>
-                      );
-                    })}
-                  </div>
                 )}
               </div>
             ) : null}
