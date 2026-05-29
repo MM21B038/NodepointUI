@@ -54,6 +54,8 @@ function formatPhaseLabel(phase: PreprocessPhase): string {
   switch (phase) {
     case "idle":
       return "Idle";
+    case "needs_prepare":
+      return "Needs prepare";
     case "queued":
       return "Queued";
     case "processing":
@@ -83,6 +85,8 @@ function PhaseBadge({ phase }: { phase: PreprocessPhase }) {
       return <Badge>{label}</Badge>;
     case "kg_ready":
       return <Badge variant="secondary">{label}</Badge>;
+    case "needs_prepare":
+      return <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-400">{label}</Badge>;
     case "queued":
       return <Badge variant="outline">{label}</Badge>;
     case "idle":

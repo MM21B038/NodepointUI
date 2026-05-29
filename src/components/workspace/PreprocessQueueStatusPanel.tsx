@@ -27,18 +27,25 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getPreprocessQueueStatus,
-  type PreprocessMonitoredQueueName,
+  PREPROCESS_QUEUE_DISPLAY_ORDER,
   type PreprocessQueueStatusResponse,
 } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5000;
-const QUEUE_ORDER: PreprocessMonitoredQueueName[] = [
-  "orchestrator",
-  "chunk",
-  "vector",
-  "default",
-];
+
+function orderedQueueNames(
+  queues: PreprocessQueueStatusResponse["rq"]["queues"]
+): string[] {
+  const keys = Object.keys(queues);
+  const ordered = PREPROCESS_QUEUE_DISPLAY_ORDER.filter((name) =>
+    keys.includes(name)
+  );
+  for (const name of keys) {
+    if (!ordered.includes(name)) ordered.push(name);
+  }
+  return ordered;
+}
 
 function formatTimestamp(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -57,7 +64,7 @@ function formatTtl(seconds: number | null | undefined): string {
 
 function queueActivityTotal(data: PreprocessQueueStatusResponse): number {
   let n = 0;
-  for (const name of QUEUE_ORDER) {
+  for (const name of orderedQueueNames(data.rq.queues)) {
     const c = data.rq.queues[name]?.counts;
     if (c) n += c.queued + c.started + c.failed;
   }
@@ -247,7 +254,7 @@ const PreprocessQueueStatusPanel = ({
           <span className="text-xs text-destructive">{error}</span>
         ) : data ? (
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-            {QUEUE_ORDER.map((name) => {
+            {orderedQueueNames(data.rq.queues).map((name) => {
               const q = data.rq.queues[name];
               if (!q) return null;
               return (
@@ -490,7 +497,7 @@ const PreprocessQueueStatusPanel = ({
                 </section>
               )}
 
-              {QUEUE_ORDER.map((queueName) => {
+              {orderedQueueNames(data.rq.queues).map((queueName) => {
                 const q = data.rq.queues[queueName];
                 if (!q) return null;
                 const hasJobs =

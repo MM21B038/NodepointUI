@@ -694,9 +694,9 @@ export async function deleteFile(
 // --- Preprocess ---
 
 export interface StartPreprocessOptions {
-  /** When true (default), clicked workspace uses the high-priority RQ queue. */
+  /** When true, enqueue on the high RQ queue; default false (orchestrator). */
   priority?: boolean;
-  /** When true, also queue every other workspace that is not overall.ready. */
+  /** When true, also queue other workspaces that are not overall.ready. */
   includeOtherWorkspaces?: boolean;
 }
 
@@ -704,7 +704,7 @@ export interface PreprocessPipelineResult {
   message?: string;
   steps: string[];
   jobs: Record<string, string>;
-  coalesced: boolean;
+  coalesced?: boolean;
 }
 
 export interface OtherWorkspacePreprocessResult {
@@ -723,10 +723,33 @@ export interface StartPreprocessResponse {
   pipeline?: PreprocessPipelineResult;
 }
 
+function normalizeStartPreprocessResponse(
+  workspaceName: string,
+  raw: Record<string, unknown>
+): StartPreprocessResponse {
+  const priorityPipeline = (raw.priority_pipeline ?? raw.pipeline) as
+    | PreprocessPipelineResult
+    | undefined;
+  const otherWorkspaces = Array.isArray(raw.other_workspaces)
+    ? (raw.other_workspaces as OtherWorkspacePreprocessResult[])
+    : [];
+
+  return {
+    message: String(raw.message ?? "Preprocess queued."),
+    priority_workspace: String(raw.priority_workspace ?? workspaceName),
+    priority_pipeline: priorityPipeline ?? {
+      steps: [],
+      jobs: {},
+    },
+    other_workspaces: otherWorkspaces,
+    pipeline: raw.pipeline as PreprocessPipelineResult | undefined,
+  };
+}
+
 export function summarizePreprocessStart(res: StartPreprocessResponse): string {
   const lines = [res.message];
   if (res.priority_pipeline.coalesced) {
-    lines.push("Priority pipeline coalesced with an existing run.");
+    lines.push("Pipeline coalesced with an existing run.");
   }
   const queuedOthers = res.other_workspaces.filter((w) => w.queued);
   if (queuedOthers.length > 0) {
@@ -752,27 +775,32 @@ export async function startPreprocess(
   workspaceName: string,
   options: StartPreprocessOptions = {}
 ): Promise<StartPreprocessResponse> {
-  const priority = options.priority ?? true;
+  const priority = options.priority ?? false;
   const includeOtherWorkspaces = options.includeOtherWorkspaces ?? false;
+
+  const requestInit: RequestInit = { method: "POST" };
+  if (priority || includeOtherWorkspaces) {
+    requestInit.headers = { "Content-Type": "application/json" };
+    requestInit.body = JSON.stringify({
+      priority,
+      include_other_workspaces: includeOtherWorkspaces,
+    });
+  }
+
   const response = await fetch(
     `${API_ROOT}/workspace/preprocess/${encodeURIComponent(workspaceName)}/`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        priority,
-        include_other_workspaces: includeOtherWorkspaces,
-      }),
-    }
+    requestInit
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
-  return response.json();
+  const raw = (await response.json()) as Record<string, unknown>;
+  return normalizeStartPreprocessResponse(workspaceName, raw);
 }
 
 export type PreprocessPhase =
   | "idle"
+  | "needs_prepare"
   | "queued"
   | "processing"
   | "embedding"
@@ -814,6 +842,8 @@ export interface PreprocessFileStatus {
   file_name: string;
   document_status: DocumentStatus;
   content: boolean;
+  /** Pre-migration KG with no DocumentChunk rows yet. */
+  legacy?: boolean;
   phase: PreprocessPhase;
   uploaded_at: string;
   chunks: ChunkPipelineCounts;
@@ -876,11 +906,23 @@ export interface PreprocessQueueSnapshot {
   failed_sample: PreprocessQueueFailedJob[];
 }
 
-export type PreprocessMonitoredQueueName =
-  | "orchestrator"
+export type PreprocessPipelineQueueName = "high" | "orchestrator" | "low";
+
+export type PreprocessWorkerQueueName =
+  | PreprocessPipelineQueueName
   | "chunk"
   | "vector"
   | "default";
+
+/** Preferred display order for known RQ queues from queue-status. */
+export const PREPROCESS_QUEUE_DISPLAY_ORDER: PreprocessWorkerQueueName[] = [
+  "high",
+  "orchestrator",
+  "low",
+  "chunk",
+  "vector",
+  "default",
+];
 
 export interface PreprocessWorkerSnapshot {
   name: string;
@@ -932,7 +974,8 @@ export interface PreprocessQueueStatusResponse {
   generated_at: string;
   workspace_filter: string | null;
   rq: {
-    queues: Record<PreprocessMonitoredQueueName, PreprocessQueueSnapshot>;
+    queues: Partial<Record<PreprocessWorkerQueueName, PreprocessQueueSnapshot>> &
+      Record<string, PreprocessQueueSnapshot>;
     workers: PreprocessWorkerSnapshot[];
   };
   redis: {
