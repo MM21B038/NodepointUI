@@ -13,9 +13,20 @@ import {
   GitGraph,
   Link,
   Play,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FLAGGED_GROUP_NAME, type WorkspaceCounts } from "@/database/workspaceStorage";
+import {
+  FLAGGED_GROUP_NAME,
+  type PreprocessStartMode,
+  type WorkspaceCounts,
+} from "@/database/workspaceStorage";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import WorkspaceGroupMembership from "@/components/workspace/WorkspaceGroupMembership";
 
@@ -27,7 +38,7 @@ interface WorkspaceCardProps {
   isDeleting: boolean;
   deletingWorkspaceName: string | null;
   counts: WorkspaceCounts;
-  onExtract: (workspaceName: string) => void;
+  onExtract: (workspaceName: string, mode?: PreprocessStartMode) => void;
   isExtracting: boolean;
   groups?: string[];
   onGroupsChanged?: () => void;
@@ -127,23 +138,50 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           disabled={isDisabled}
         />
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onExtract(workspaceName);
-          }}
-          disabled={isDisabled}
-          className="w-full flex items-center justify-center gap-2 text-primary hover:bg-primary/10"
+        <div
+          className="flex w-full gap-0"
+          onClick={(e) => e.stopPropagation()}
         >
-          {isExtracting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          <span>{isExtracting ? "Extracting..." : "Extract"}</span>
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onExtract(workspaceName, "default")}
+            disabled={isDisabled}
+            className="flex-1 rounded-r-none flex items-center justify-center gap-2 text-primary hover:bg-primary/10"
+          >
+            {isExtracting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            <span>{isExtracting ? "Extracting..." : "Extract"}</span>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isDisabled}
+                className="rounded-l-none border-l-0 px-2 text-primary hover:bg-primary/10"
+                aria-label="Extract options"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => onExtract(workspaceName, "this_workspace_only")}
+              >
+                This workspace only
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onExtract(workspaceName, "legacy")}
+              >
+                Legacy (orchestrator, this workspace)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center">

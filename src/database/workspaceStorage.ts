@@ -693,10 +693,92 @@ export async function deleteFile(
 
 // --- Preprocess ---
 
-export async function startPreprocess(workspaceName: string): Promise<{ message: string }> {
+export interface StartPreprocessOptions {
+  /** When true (default), clicked workspace uses the high-priority RQ queue. */
+  priority?: boolean;
+  /** When true (default), also queue every other workspace that is not overall.ready. */
+  includeOtherWorkspaces?: boolean;
+}
+
+export interface PreprocessPipelineResult {
+  message?: string;
+  steps: string[];
+  jobs: Record<string, string>;
+  coalesced: boolean;
+}
+
+export interface OtherWorkspacePreprocessResult {
+  workspace: string;
+  queued: boolean;
+  coalesced: boolean;
+  skipped_reason: string | null;
+}
+
+export interface StartPreprocessResponse {
+  message: string;
+  priority_workspace: string;
+  priority_pipeline: PreprocessPipelineResult;
+  other_workspaces: OtherWorkspacePreprocessResult[];
+  /** Present on older API responses. */
+  pipeline?: PreprocessPipelineResult;
+}
+
+export type PreprocessStartMode = "default" | "this_workspace_only" | "legacy";
+
+export function preprocessOptionsForMode(
+  mode: PreprocessStartMode
+): Required<StartPreprocessOptions> {
+  switch (mode) {
+    case "this_workspace_only":
+      return { priority: true, includeOtherWorkspaces: false };
+    case "legacy":
+      return { priority: false, includeOtherWorkspaces: false };
+    default:
+      return { priority: true, includeOtherWorkspaces: true };
+  }
+}
+
+export function summarizePreprocessStart(res: StartPreprocessResponse): string {
+  const lines = [res.message];
+  if (res.priority_pipeline.coalesced) {
+    lines.push("Priority pipeline coalesced with an existing run.");
+  }
+  const queuedOthers = res.other_workspaces.filter((w) => w.queued);
+  if (queuedOthers.length > 0) {
+    lines.push(
+      `Also queued: ${queuedOthers.map((w) => w.workspace).join(", ")}.`
+    );
+  }
+  const skipped = res.other_workspaces.filter((w) => !w.queued);
+  if (skipped.length > 0) {
+    const detail = skipped
+      .map((w) =>
+        w.skipped_reason
+          ? `${w.workspace} (${w.skipped_reason})`
+          : w.workspace
+      )
+      .join(", ");
+    lines.push(`Skipped: ${detail}.`);
+  }
+  return lines.join(" ");
+}
+
+export async function startPreprocess(
+  workspaceName: string,
+  options: StartPreprocessOptions = {}
+): Promise<StartPreprocessResponse> {
+  const priority = options.priority ?? true;
+  const includeOtherWorkspaces = options.includeOtherWorkspaces ?? true;
   const response = await fetch(
     `${API_ROOT}/workspace/preprocess/${encodeURIComponent(workspaceName)}/`,
-    { method: "POST" }
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        priority,
+        include_other_workspaces: includeOtherWorkspaces,
+      }),
+    }
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -773,6 +855,124 @@ export async function getWorkspacePreprocessStatus(
 ): Promise<WorkspacePreprocessStatusResponse> {
   const response = await fetch(
     `${API_ROOT}/workspace/${encodeURIComponent(workspaceName)}/preprocess-status/`
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
+}
+
+/** RQ job sample from GET /api/preprocess/queue-status/ */
+export interface PreprocessQueueJob {
+  id: string;
+  function: string;
+  status: string;
+  created_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  origin_queue: string;
+  args_summary: Record<string, string | number | null>;
+}
+
+export interface PreprocessQueueFailedJob extends PreprocessQueueJob {
+  error: string;
+}
+
+export interface PreprocessQueueCounts {
+  queued: number;
+  started: number;
+  failed: number;
+  deferred: number;
+}
+
+export interface PreprocessQueueSnapshot {
+  counts: PreprocessQueueCounts;
+  jobs: PreprocessQueueJob[];
+  failed_sample: PreprocessQueueFailedJob[];
+}
+
+export type PreprocessMonitoredQueueName =
+  | "orchestrator"
+  | "chunk"
+  | "vector"
+  | "default";
+
+export interface PreprocessWorkerSnapshot {
+  name: string;
+  state: string;
+  queues: string[];
+  current_job_id: string | null;
+  birth_date: string | null;
+  last_heartbeat: string | null;
+}
+
+export interface PreprocessPipelineLock {
+  workspace: string;
+  key: string;
+  ttl_seconds: number | null;
+}
+
+export interface PreprocessStatusCountMap {
+  PENDING?: number;
+  QUEUED?: number;
+  INPROGRESS?: number;
+  COMPLETED?: number;
+  FAILED?: number;
+  total: number;
+  [key: string]: number | undefined;
+}
+
+export interface PreprocessVectorBacklog {
+  pending: number;
+  failed: number;
+  completed: number;
+  total: number;
+}
+
+export interface PreprocessWorkspaceIncomplete {
+  workspace: string;
+  phase: PreprocessPhase;
+  documents_total: number;
+  documents_failed: number;
+}
+
+export interface PreprocessActivePipeline {
+  workspace: string;
+  lock_held: boolean;
+  lock_ttl_seconds: number | null;
+  orchestrator_jobs: PreprocessQueueJob[];
+}
+
+export interface PreprocessQueueStatusResponse {
+  generated_at: string;
+  workspace_filter: string | null;
+  rq: {
+    queues: Record<PreprocessMonitoredQueueName, PreprocessQueueSnapshot>;
+    workers: PreprocessWorkerSnapshot[];
+  };
+  redis: {
+    pipeline_locks: PreprocessPipelineLock[];
+  };
+  database: {
+    documents: PreprocessStatusCountMap;
+    chunks: PreprocessStatusCountMap;
+    vectors: {
+      entities: PreprocessVectorBacklog;
+      relations: PreprocessVectorBacklog;
+      chunks: PreprocessVectorBacklog;
+    };
+    workspaces_incomplete?: PreprocessWorkspaceIncomplete[];
+  };
+  active_pipelines: PreprocessActivePipeline[];
+}
+
+export async function getPreprocessQueueStatus(
+  workspaceName?: string
+): Promise<PreprocessQueueStatusResponse> {
+  const response = await fetch(
+    buildApiUrl("/preprocess/queue-status/", {
+      workspace: workspaceName,
+    })
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));

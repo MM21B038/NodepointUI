@@ -148,8 +148,9 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | POST | `document/upload/` | Upload `.txt`/`.md`; queue preprocess pipeline |
 | GET | `document/<workspace_name>/` | List documents in workspace |
 | DELETE | `document/delete/<workspace_name>/<file_name>/` | Delete one document |
+| GET | `preprocess/queue-status/` | Global RQ queues, workers, locks, DB backlog |
 | GET | `workspace/<workspace_name>/preprocess-status/` | Pipeline / vector / chunk status |
-| POST | `workspace/preprocess/<workspace_name>/` | Queue full workspace preprocess |
+| POST | `workspace/preprocess/<workspace_name>/` | Queue full workspace preprocess (priority + optional background workspaces) |
 | GET | `knowledge-graph/entity-types/` | Distinct entity types + counts |
 | GET | `knowledge-graph/` | Filtered KG subgraph (`entity_type`, `depth`, `limit`) |
 | GET | `knowledge/entities/search/` | Fuzzy name search + subgraph |
@@ -401,18 +402,16 @@ Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#prepr
 {
   "message": "File uploaded successfully",
   "pipeline": {
-    "message": "Preprocess pipeline queued: prepare document → chunk KG (parallel) → embeddings → mongo repair",
+    "message": "Preprocess pipeline queued: prepare document → chunk KG (document-scoped) → coalesced workspace embeddings/repair",
     "steps": [
       "prepare_document",
       "chunk_preprocess",
-      "vector_preprocess",
-      "chunk_mongo_repair"
+      "workspace_tail"
     ],
     "jobs": {
       "prepare_document": "rq-job-id-1",
       "chunk_preprocess": "rq-job-id-2",
-      "vector_preprocess": "rq-job-id-3",
-      "chunk_mongo_repair": "rq-job-id-4"
+      "workspace_tail": "rq-job-id-3"
     }
   },
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -485,29 +484,50 @@ Deletes the Postgres row, related KG rows (cascade), and the file on disk when p
 
 Queues the **full workspace preprocess pipeline** for the named workspace (no single-document upload). One call runs **prepare legacy → chunk KG (parallel workers) → embeddings → mongo repair** — no separate manual preprocess needed to migrate old documents.
 
-**Pipeline steps (RQ orchestrator)**
+**Request** — query string or JSON body:
+
+| Param | Default | Meaning |
+|-------|---------|---------|
+| `priority` | `true` | `true` → clicked workspace on the **high** RQ queue; `false` → **orchestrator** (legacy single-workspace routing) |
+| `include_other_workspaces` | `true` | `true` → also queue every other workspace that is not `overall.ready`; `false` → only the clicked workspace |
+
+Examples:
+
+- Default (prioritize clicked workspace + background others): `POST /api/workspace/preprocess/PRAJNA/`
+- Legacy (orchestrator, this workspace only): `POST /api/workspace/preprocess/PRAJNA/?priority=false&include_other_workspaces=false`
+- Prioritize clicked workspace only: `POST /api/workspace/preprocess/PRAJNA/?include_other_workspaces=false`
+
+**RQ routing:** priority workspace → **high**; other incomplete workspaces → **low** when `priority=true`, else **orchestrator** when `priority=false`. Upload path is unchanged → **orchestrator**. Per-workspace Redis pipeline locks are unchanged; coalesced workspaces return `skipped_reason: "pipeline_already_queued"`.
+
+**Stuck / failed retry:** document rows in `INPROGRESS` are included in chunk re-queue (worker-loss recovery). Chunks: `PENDING` / `FAILED` / `QUEUED`. Vectors: `PENDING` / `FAILED`.
+
+**Pipeline steps (RQ orchestrator / high / low queues)**
 
 | Step | Job | What it does |
 |------|-----|----------------|
 | 1 (upload only) | `run_prepare_document` | Split the new file → Postgres `DocumentChunk` rows + Mongo `chunk_content` |
 | 1 (POST only) | `run_prepare_legacy_batch` | For documents in this workspace with zero chunks or `content=false`, run `prepare_document` (chunk migration) |
-| 2 | `run_chunk_preprocess_batch` | Enqueue `process_chunk` (5 min timeout) for incomplete chunks in the workspace |
-| 3 | `run_vector_preprocess_batch` | Enqueue embeddings for entities, relations, and **chunks** (PENDING/FAILED vectors) in the workspace |
+| 2 | `run_chunk_preprocess_batch` | Enqueue `process_chunk` on the **chunk** queue for incomplete chunks (document-scoped on upload; workspace-scoped on POST). Does **not** block waiting for chunk jobs. |
+| 3 | `run_vector_preprocess_batch` / `schedule_workspace_pipeline_tail` | Catch-up sweep on the **vector** queue for any PENDING/FAILED embeddings. Uploads use a coalesced workspace tail (one per workspace at a time). |
 | 4 | `run_chunk_mongo_repair_batch` | Rebuild Mongo chunk text for `content=false` or missing chunk bodies in the workspace |
 
-**Order (sequential steps, parallel workers inside step 2):** prepare → chunk batch → **vectors after chunk batch** → mongo repair. Vectors no longer run in parallel with chunk KG.
+**Order:** prepare → chunk enqueue (non-blocking) → vector catch-up → mongo repair. Embeddings for entities/relations/chunks are also enqueued **per chunk** as soon as KG extraction completes (`process_chunk` on the **chunk** queue).
+
+**Coalescing:** Repeated uploads or POST preprocess calls for the same workspace share one workspace tail (vector sweep + mongo repair) via a Redis lock. Upload always runs prepare + document-scoped chunk enqueue immediately.
+
+**RQ queues:** `orchestrator` (pipeline steps), `chunk` (`process_chunk`), `vector` (`process_vector`). Docker Compose runs a dedicated `worker-orchestrator` service plus `worker` services on `chunk` and `vector`.
 
 **Legacy documents:** Files uploaded before chunk migration may show `document_status: COMPLETED` with **no** `DocumentChunk` rows and `chunk_id=null` on KG rows. POST preprocess backfills chunks; poll preprocess-status until `overall.ready` is true.
 
-**Per chunk:** Mongo stores chunk text; KG extraction runs in parallel RQ workers (`process_chunk`). A document is marked `COMPLETED` only when **all** its chunks reach `COMPLETED`.
+**Per chunk:** Mongo stores chunk text; KG extraction runs in parallel RQ workers (`process_chunk` on the **chunk** queue). Embeddings enqueue immediately after each chunk completes KG ingest (`process_vector` on the **vector** queue). A document is marked `COMPLETED` only when **all** its chunks reach `COMPLETED`.
 
 **Response `200`**
 
 ```json
 {
-  "message": "Preprocess pipeline queued: prepare legacy → chunk KG (parallel) → embeddings → mongo repair (workspace=PRAJNA)",
-  "pipeline": {
-    "message": "Preprocess pipeline queued: prepare legacy → chunk KG (parallel) → embeddings → mongo repair (workspace=PRAJNA)",
+  "message": "Preprocess pipeline queued for PRAJNA (priority=high)",
+  "priority_workspace": "PRAJNA",
+  "priority_pipeline": {
     "steps": [
       "prepare_legacy",
       "chunk_preprocess",
@@ -519,10 +539,128 @@ Queues the **full workspace preprocess pipeline** for the named workspace (no si
       "chunk_preprocess": "rq-job-id-2",
       "vector_preprocess": "rq-job-id-3",
       "chunk_mongo_repair": "rq-job-id-4"
-    }
-  }
+    },
+    "coalesced": false
+  },
+  "other_workspaces": [
+    { "workspace": "OTHER", "queued": true, "coalesced": false, "skipped_reason": null },
+    { "workspace": "BUSY", "queued": false, "coalesced": true, "skipped_reason": "pipeline_already_queued" }
+  ]
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `priority_workspace` | Workspace from the URL path |
+| `priority_pipeline` | Pipeline queued for that workspace (`coalesced: true` if merged with an in-flight run) |
+| `other_workspaces` | Background workspaces when `include_other_workspaces=true` (empty when `false`) |
+| `other_workspaces[].skipped_reason` | e.g. `pipeline_already_queued` when a lock/coalesce skip applies |
+
+---
+
+### `GET /api/preprocess/queue-status/`
+
+Read-only **operations snapshot** for preprocess workers: RQ queue depths and job samples, registered workers, Redis pipeline locks, Postgres/Mongo backlog, and workspaces with an active orchestrator pipeline.
+
+Use this to debug idle workers, stuck `nodepoint:preprocess:pipeline:{workspace}` locks, jobs on the wrong queue, or DB work waiting behind empty queues.
+
+**Query**
+
+| Param | Meaning |
+|-------|---------|
+| `workspace` | Optional. Filters RQ job lists and database counts to one workspace; `active_pipelines` only includes that workspace when it has a lock and/or orchestrator jobs. Pipeline lock scan is also limited to that workspace. |
+
+**Response `200`**
+
+```json
+{
+  "generated_at": "2026-05-29T12:00:00.123456+00:00",
+  "workspace_filter": null,
+  "rq": {
+    "queues": {
+      "orchestrator": {
+        "counts": { "queued": 1, "started": 0, "failed": 0, "deferred": 0 },
+        "jobs": [
+          {
+            "id": "abc123",
+            "function": "run_chunk_preprocess_batch",
+            "status": "queued",
+            "created_at": "2026-05-29T11:59:00+00:00",
+            "started_at": null,
+            "ended_at": null,
+            "origin_queue": "orchestrator",
+            "args_summary": { "workspace": "PRAJNA" }
+          }
+        ],
+        "failed_sample": []
+      },
+      "chunk": { "counts": { "queued": 12, "started": 2, "failed": 0, "deferred": 0 }, "jobs": [], "failed_sample": [] },
+      "vector": { "counts": { "queued": 50, "started": 1, "failed": 1, "deferred": 0 }, "jobs": [], "failed_sample": [] },
+      "default": { "counts": { "queued": 0, "started": 0, "failed": 0, "deferred": 0 }, "jobs": [], "failed_sample": [] }
+    },
+    "workers": [
+      {
+        "name": "orchestrator-worker-1",
+        "state": "busy",
+        "queues": ["orchestrator"],
+        "current_job_id": "abc123",
+        "birth_date": "2026-05-29T08:00:00+00:00",
+        "last_heartbeat": "2026-05-29T12:00:01+00:00"
+      }
+    ]
+  },
+  "redis": {
+    "pipeline_locks": [
+      {
+        "workspace": "PRAJNA",
+        "key": "nodepoint:preprocess:pipeline:PRAJNA",
+        "ttl_seconds": 14300
+      }
+    ]
+  },
+  "database": {
+    "documents": { "PENDING": 0, "QUEUED": 1, "INPROGRESS": 0, "COMPLETED": 5, "FAILED": 0, "total": 6 },
+    "chunks": { "PENDING": 0, "QUEUED": 3, "INPROGRESS": 1, "COMPLETED": 20, "FAILED": 0, "total": 24 },
+    "vectors": {
+      "entities": { "pending": 4, "failed": 0, "completed": 0, "total": 4 },
+      "relations": { "pending": 2, "failed": 0, "completed": 0, "total": 2 },
+      "chunks": { "pending": 10, "failed": 1, "completed": 0, "total": 11 }
+    },
+    "workspaces_incomplete": [
+      {
+        "workspace": "PRAJNA",
+        "phase": "embedding",
+        "documents_total": 6,
+        "documents_failed": 0
+      }
+    ]
+  },
+  "active_pipelines": [
+    {
+      "workspace": "PRAJNA",
+      "lock_held": true,
+      "lock_ttl_seconds": 14300,
+      "orchestrator_jobs": []
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `generated_at` | UTC timestamp when the snapshot was built |
+| `workspace_filter` | Echo of `?workspace=` or `null` for global view |
+| `rq.queues.*.counts` | RQ registry sizes: waiting (`queued`), in-flight (`started`), `failed`, `deferred` |
+| `rq.queues.*.jobs` | Sample of queued, started, and deferred jobs (up to 40 per queue), with parsed `args_summary` |
+| `rq.queues.*.failed_sample` | Last failed jobs with truncated `error` |
+| `rq.workers` | `Worker.all()` — which queue names each worker listens on and optional `current_job_id` |
+| `redis.pipeline_locks` | Keys `nodepoint:preprocess:pipeline:{workspace}` and TTL seconds (`-1` / missing → `null`) |
+| `database.documents` / `chunks` | Row counts by `status` (global or filtered workspace) |
+| `database.vectors.*` | Rows with vector status `PENDING` or `FAILED` only (embedding backlog) |
+| `database.workspaces_incomplete` | Omitted when `?workspace=` is set; otherwise workspaces where per-workspace preprocess is not `ready` |
+| `active_pipelines` | Workspaces with a pipeline lock and/or matching orchestrator queue jobs |
+
+Monitored queues: `orchestrator`, `chunk`, `vector`, `default` (from `RQ_QUEUES`).
 
 ---
 
@@ -1642,6 +1780,7 @@ Alphabetical by path segment. See sections above for full request/response bodie
 | GET | `/api/workspace/list/` | [Workspace](#get-apiworkspacelist) |
 | GET | `/api/workspace/page/` | [Workspace](#get-apiworkspacepage) |
 | GET | `/api/workspace/stats/` | [Workspace](#get-apiworkspacestats) |
+| GET | `/api/preprocess/queue-status/` | [Preprocess](#get-apipreprocessqueue-status) |
 | GET | `/api/workspace/<workspace_name>/preprocess-status/` | [Preprocess](#get-apiworkspaceworkspace_namepreprocess-status) |
 | POST | `/api/workspace/preprocess/<workspace_name>/` | [Preprocess](#post-apiworkspacepreprocessworkspace_name) |
 

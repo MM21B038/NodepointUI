@@ -9,6 +9,7 @@ import {
   getPerFileGraphCounts,
   listFiles,
   startPreprocess,
+  summarizePreprocessStart,
   type GraphEdge,
   type GraphNode,
 } from "@/database/workspaceStorage";
@@ -123,9 +124,9 @@ const Documents = () => {
     setIsPreprocessing(true);
     const preprocessToastId = showLoading(`Starting preprocessing for ${currentWorkspace}…`);
     try {
-      await startPreprocess(currentWorkspace);
+      const result = await startPreprocess(currentWorkspace);
       dismissToast(preprocessToastId);
-      showSuccess(`Preprocessing started for ${currentWorkspace}`);
+      showSuccess(summarizePreprocessStart(result));
       wasReadyRef.current = false;
       setPreprocessRefreshToken((t) => t + 1);
       fetchKnowledgeGraphData(currentWorkspace);

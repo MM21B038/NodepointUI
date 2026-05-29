@@ -11,6 +11,9 @@ import {
   addWorkspaceToGroup,
   deleteWorkspace,
   startPreprocess,
+  summarizePreprocessStart,
+  preprocessOptionsForMode,
+  type PreprocessStartMode,
   WorkspaceCreateError,
   type WorkspacePageItem,
   type WorkspaceStats,
@@ -20,6 +23,7 @@ import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import WorkspaceCard from "@/components/WorkspaceCard";
 import WorkspaceCardSkeleton from "@/components/workspace/WorkspaceCardSkeleton";
 import WorkspaceManagementToolbar from "@/components/workspace/WorkspaceManagementToolbar";
+import PreprocessQueueStatusPanel from "@/components/workspace/PreprocessQueueStatusPanel";
 import CreateWorkspaceDialog from "@/components/workspace/CreateWorkspaceDialog";
 import ManageGroupsDialog from "@/components/workspace/ManageGroupsDialog";
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
@@ -253,15 +257,18 @@ const WorkspaceManagement = () => {
   }, [workspaceToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
 
   const handleExtract = useCallback(
-    async (workspaceName: string) => {
+    async (workspaceName: string, mode: PreprocessStartMode = "default") => {
       setIsExtractingMap((prev) => new Map(prev).set(workspaceName, true));
       const loadingToastId = toast.loading(
         `Starting extraction for workspace "${workspaceName}"...`
       );
 
       try {
-        await startPreprocess(workspaceName);
-        toast.success(`Extraction started for "${workspaceName}"!`, {
+        const result = await startPreprocess(
+          workspaceName,
+          preprocessOptionsForMode(mode)
+        );
+        toast.success(summarizePreprocessStart(result), {
           id: loadingToastId,
         });
         await refreshAfterMutation();
@@ -319,6 +326,8 @@ const WorkspaceManagement = () => {
           onNextPage={handleNextPage}
           isSearchActive={isSearchActive}
         />
+
+        <PreprocessQueueStatusPanel />
 
         <CreateWorkspaceDialog
           open={createDialogOpen}
