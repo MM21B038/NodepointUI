@@ -402,16 +402,18 @@ Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#prepr
 {
   "message": "File uploaded successfully",
   "pipeline": {
-    "message": "Preprocess pipeline queued: prepare document → chunk KG (document-scoped) → coalesced workspace embeddings/repair",
+    "message": "Preprocess pipeline queued: prepare document → chunk KG (document-scoped) → failed catch-up (all workspaces) → coalesced workspace embeddings/repair",
     "steps": [
       "prepare_document",
       "chunk_preprocess",
+      "failed_catchup",
       "workspace_tail"
     ],
     "jobs": {
       "prepare_document": "rq-job-id-1",
       "chunk_preprocess": "rq-job-id-2",
-      "workspace_tail": "rq-job-id-3"
+      "failed_catchup": "rq-job-id-3",
+      "workspace_tail": "rq-job-id-4"
     }
   },
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -504,16 +506,19 @@ Accepts parameters in the query string or JSON body (`priority`, `include_other_
 | 1 (upload only) | `run_prepare_document` | Split the new file → Postgres `DocumentChunk` rows + Mongo `chunk_content` |
 | 1 (POST only) | `run_prepare_legacy_batch` | For documents in this workspace with zero chunks or `content=false`, run `prepare_document` (chunk migration) |
 | 2 | `run_chunk_preprocess_batch` | Enqueue `process_chunk` on the **chunk** queue for incomplete chunks (document-scoped on upload; workspace-scoped on POST). Does **not** block waiting for chunk jobs. |
+| 2b (upload only) | `run_upload_failed_catchup_batch` | Re-prepare documents with `FAILED` status and zero chunks, then re-enqueue **failed** chunks in **all workspaces** (excluding the new upload). Moves those files back to **processing** in preprocess-status. |
 | 3 | `run_vector_preprocess_batch` / `schedule_workspace_pipeline_tail` | Catch-up sweep on the **vector** queue for any PENDING/FAILED embeddings. Uploads use a coalesced workspace tail (one per workspace at a time). |
 | 4 | `run_chunk_mongo_repair_batch` | Rebuild Mongo chunk text for `content=false` or missing chunk bodies in the workspace |
 
 **Order:** prepare → chunk enqueue (non-blocking) → vector catch-up → mongo repair. Embeddings for entities/relations/chunks are also enqueued **per chunk** as soon as KG extraction completes (`process_chunk` on the **chunk** queue).
 
-**Coalescing:** Repeated uploads or POST preprocess calls for the same workspace share one workspace tail (vector sweep + mongo repair) via a Redis lock. Upload always runs prepare + document-scoped chunk enqueue immediately.
+**Coalescing:** Repeated uploads or POST preprocess calls for the same workspace share one workspace tail (vector sweep + mongo repair) via a Redis lock. Upload always runs prepare + document-scoped chunk enqueue immediately, plus a global failed catch-up step so previously failed files in any workspace are retried.
 
 **RQ queues:** `high` / `orchestrator` / `low` (pipeline steps; POST uses **`orchestrator`** by default), `chunk` (`process_chunk`), `vector` (`process_vector`). Docker Compose runs a dedicated `worker-orchestrator` service (`high orchestrator low`) plus `worker` on `chunk` and `vector`.
 
-**Stuck / failed retry:** Chunk enqueue includes documents in `INPROGRESS` (stuck after worker loss) and chunks in `PENDING` / `FAILED` / `QUEUED`. Vector sweep includes `PENDING` and `FAILED` embeddings.
+**Stuck / failed retry:** Chunk enqueue only submits `process_chunk` for chunks in `PENDING` or `FAILED` (not `COMPLETED`, `QUEUED`, or `INPROGRESS`, so clicking preprocess again does not reset finished work). Prepare legacy only runs for documents with **zero** chunks (not merely `content=false`). Vector sweep includes `PENDING` and `FAILED` embeddings.
+
+**Startup recovery (after `docker compose` restart):** When `worker-orchestrator` starts, it runs a one-shot recovery (Redis lock `nodepoint:preprocess:recovery:startup`) that resets orphaned `QUEUED`/`INPROGRESS` chunks to `PENDING`, then re-enqueues global chunk and vector backlog. Disable with `PREPROCESS_RECOVERY_ON_STARTUP=0`. Manual run: `python manage.py recover_preprocess` (`--force` skips the lock). Poll `database.chunks_orphaned` on queue-status; it should drop to `0` after recovery.
 
 **Legacy documents:** Files uploaded before chunk migration may show `document_status: COMPLETED` with **no** `DocumentChunk` rows and `chunk_id=null` on KG rows. POST preprocess backfills chunks; poll preprocess-status until `overall.ready` is true.
 
@@ -611,6 +616,7 @@ Use this to debug idle workers, stuck `nodepoint:preprocess:pipeline:{workspace}
   "database": {
     "documents": { "PENDING": 0, "QUEUED": 1, "INPROGRESS": 0, "COMPLETED": 5, "FAILED": 0, "total": 6 },
     "chunks": { "PENDING": 0, "QUEUED": 3, "INPROGRESS": 1, "COMPLETED": 20, "FAILED": 0, "total": 24 },
+    "chunks_orphaned": 4,
     "vectors": {
       "entities": { "pending": 4, "failed": 0, "completed": 0, "total": 4 },
       "relations": { "pending": 2, "failed": 0, "completed": 0, "total": 2 },
@@ -646,6 +652,7 @@ Use this to debug idle workers, stuck `nodepoint:preprocess:pipeline:{workspace}
 | `rq.workers` | `Worker.all()` — which queue names each worker listens on and optional `current_job_id` |
 | `redis.pipeline_locks` | Keys `nodepoint:preprocess:pipeline:{workspace}` and TTL seconds (`-1` / missing → `null`) |
 | `database.documents` / `chunks` | Row counts by `status` (global or filtered workspace) |
+| `database.chunks_orphaned` | Chunks in `QUEUED` or `INPROGRESS` while the **chunk** RQ queue has no `queued` or `started` jobs (stale after restart; `worker-orchestrator` startup recovery resets and re-enqueues these) |
 | `database.vectors.*` | Rows with vector status `PENDING` or `FAILED` only (embedding backlog) |
 | `database.workspaces_incomplete` | Omitted when `?workspace=` is set; otherwise workspaces where per-workspace preprocess is not `ready` |
 | `active_pipelines` | Workspaces with a pipeline lock and/or matching orchestrator queue jobs |
@@ -1403,7 +1410,7 @@ One JSON object per text frame.
 { "type": "chat.reconnect" }
 ```
 
-Use after a drop **or** rely on auto-attach: `chat.ready` with `agent_busy: true` already subscribes to the in-flight turn.
+Use after a drop **or** rely on auto-attach: `chat.ready` always includes **`agent_busy`** (`true` when a turn is still running — live stream auto-attaches).
 
 **Response (turn running):**
 
@@ -1594,7 +1601,10 @@ Tools and control events are **single frames** (full payload per event):
 ```json
 {
   "type": "chat.ready",
-  "workspace": "PRAJNA"
+  "workspace": "PRAJNA",
+  "conversation_id": "...",
+  "active_branch_id": "...",
+  "agent_busy": false
 }
 ```
 
@@ -1613,6 +1623,10 @@ Tools and control events are **single frames** (full payload per event):
 | `workspace` | Per-workspace mode only |
 | `group` | Group-scope mode only |
 | `workspaces` | Workspaces included in `Knowledge.search_graph` for this connection |
+| `conversation_id` | Chat thread UUID |
+| `active_branch_id` | Current branch for compression / agent context |
+| `agent_busy` | Always present: `true` if a turn is in progress (Redis-backed; consistent across uvicorn workers) |
+| `turn_id`, `turn_started_at`, `reconnect_hint` | Present when `agent_busy` is `true` |
 
 Close codes: `4000` invalid URL; `4004` unknown workspace (per-workspace mode).
 
@@ -1733,6 +1747,7 @@ Returns matches with `score` (fuzzy mode), outgoing/incoming relations (relation
 | `CHAT_COMPRESS_TEMPERATURE` | `0.2` | Compression LLM temperature |
 | `CHAT_COMPRESS_MAX_MESSAGES` | `30` | Max thread messages sent to compression |
 | `CHAT_MAX_CONCURRENT_SEARCHES` | `8` | Max parallel Knowledge tool runs per web worker |
+| `CHAT_TURN_REDIS_TTL` | `3600` | Active chat turn metadata TTL in Redis (crash safety) |
 | `WEB_WORKERS` | `4` | Uvicorn worker processes for ASGI |
 | `DB_CONN_MAX_AGE` | `60` | Postgres connection reuse (seconds) |
 | `CHAT_DEFAULT_SYSTEM` | (see settings) | New conversation system prompt |

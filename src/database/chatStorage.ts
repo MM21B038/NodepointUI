@@ -86,7 +86,7 @@ export interface ChatSummaryGroupResponse {
 // --- WebSocket event types ---
 
 export type ChatStreamEvent =
-  | { type: "chat.ready"; workspace: string }
+  | ChatReadyEvent
   | { type: "pong" }
   | { type: "thinking_token"; token: string }
   | { type: "assistant_response_token"; token: string }
@@ -105,8 +105,8 @@ export type ChatStreamEvent =
   | { type: "chat.compress_started"; message?: string }
   | { type: "chat.compress_completed"; message?: string; summary_chars?: number }
   | { type: "chat.compress_failed"; message?: string }
-  | { type: "chat.reconnected"; agent_busy: boolean; turn_id?: string; hint?: string }
-  | { type: "chat.status"; agent_busy?: boolean; turn_id?: string }
+  | ChatReconnectedEvent
+  | ChatStatusEvent
   | { type: "chat.turn_started"; turn_id?: string }
   | { type: "chat.interrupted" }
   | { type: "chat.done" }
@@ -119,10 +119,29 @@ export interface ChatReadyEvent {
   workspace?: string;
   group?: string;
   workspaces?: string[];
-  agent_busy?: boolean;
   conversation_id?: string;
   active_branch_id?: string;
+  agent_busy?: boolean;
+  turn_id?: string;
+  turn_started_at?: string;
+  reconnect_hint?: string;
 }
+
+export interface ChatReconnectedEvent {
+  type: "chat.reconnected";
+  agent_busy: boolean;
+  turn_id?: string;
+  hint?: string;
+}
+
+export interface ChatStatusEvent {
+  type: "chat.status";
+  agent_busy?: boolean;
+  turn_id?: string;
+  turn_started_at?: string;
+}
+
+export type ChatLiveAttachEvent = ChatReadyEvent | ChatReconnectedEvent;
 
 export interface ChatStreamCallbacks {
   onReady?: (event: ChatReadyEvent) => void;

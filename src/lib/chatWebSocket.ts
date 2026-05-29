@@ -3,7 +3,14 @@ import {
   applyStreamEvent,
   finalizeAssistantBlocks,
 } from "@/lib/chatStreamReducer";
-import type { ChatStreamCallbacks, ChatStreamEvent } from "@/database/chatStorage";
+import type {
+  ChatLiveAttachEvent,
+  ChatReadyEvent,
+  ChatReconnectedEvent,
+  ChatStreamCallbacks,
+  ChatStreamEvent,
+  ChatStatusEvent,
+} from "@/database/chatStorage";
 import { chatWebSocketUrl } from "@/database/chatStorage";
 import { pickRicherBlocks } from "@/lib/chatStreamReducer";
 import { rafThrottle, type RafThrottled } from "@/lib/rafThrottle";
@@ -14,27 +21,14 @@ export type ChatConnectionState =
   | "connected"
   | "reconnecting";
 
-export interface ChatReadyEvent {
-  type: "chat.ready";
-  workspace?: string;
-  group?: string;
-  workspaces?: string[];
-  agent_busy?: boolean;
-  conversation_id?: string;
-  active_branch_id?: string;
-}
-
-export interface ChatReconnectedEvent {
-  type: "chat.reconnected";
-  agent_busy: boolean;
-  turn_id?: string;
-  hint?: string;
-}
+export type { ChatLiveAttachEvent, ChatReadyEvent, ChatReconnectedEvent };
 
 export interface ChatWebSocketCallbacks extends ChatStreamCallbacks {
   onConnectionStateChange?: (state: ChatConnectionState) => void;
   onAgentBusyChange?: (busy: boolean) => void;
   onReconnecting?: (attempt: number) => void;
+  /** Fired when `agent_busy` is true on `chat.ready` or `chat.reconnected` (live stream attach). */
+  onLiveAttach?: (event: ChatLiveAttachEvent) => void;
   onReconnected?: (event: ChatReconnectedEvent) => void;
   onInterrupted?: () => void;
   onTurnStarted?: (turnId?: string) => void;
@@ -378,11 +372,12 @@ export class ChatWebSocketClient {
     }
 
     if (data.type === "chat.status") {
-      const busy = Boolean(
-        "agent_busy" in data && (data as { agent_busy?: boolean }).agent_busy
-      );
+      const status = data as ChatStatusEvent;
+      const busy = Boolean(status.agent_busy);
       this.setAgentBusy(busy);
-      if (!busy && !this.activeTurn) {
+      if (!busy && !this.turnReject) {
+        this.activeTurn = false;
+        this.clearTurnTimeout();
         this.setConnectionState("connected");
       }
       return;
@@ -426,13 +421,12 @@ export class ChatWebSocketClient {
     if (busy) {
       this.activeTurn = true;
       this.armTurnTimeout();
+      this.callbacks.onLiveAttach?.(event);
     }
 
-    if (this.pendingReconnectHandshake || this.reconnectAttempts > 0) {
+    if (this.pendingReconnectHandshake) {
       this.ws?.send(JSON.stringify({ type: "chat.reconnect" }));
       this.pendingReconnectHandshake = false;
-    } else if (busy) {
-      this.ws?.send(JSON.stringify({ type: "chat.reconnect" }));
     }
   }
 
@@ -447,6 +441,7 @@ export class ChatWebSocketClient {
       this.armTurnTimeout();
       this.ws?.send(JSON.stringify({ type: "chat.status" }));
       this.flushBlockEmit();
+      this.callbacks.onLiveAttach?.(event);
     } else {
       this.activeTurn = false;
       this.clearTurnTimeout();

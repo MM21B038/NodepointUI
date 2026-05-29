@@ -69,6 +69,7 @@ const StreamPage: React.FC = () => {
   const syncGenRef = useRef(0);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingLiveBlocksRef = useRef<ChatBlock[] | undefined>(undefined);
+  const showReconnectToastRef = useRef(false);
   const [visibleFromIndex, setVisibleFromIndex] = useState(0);
   const scrollOnStreamRef = useRef<ReturnType<typeof throttle<() => void>> | null>(
     null
@@ -309,7 +310,25 @@ const StreamPage: React.FC = () => {
     return [];
   }, []);
 
+  const attachLiveTurn = useCallback((client: ChatWebSocketClient) => {
+    setIsStreaming(true);
+    setAgentBusy(true);
+    const uiBlocks = getUiAssistantBlocks();
+    client.hydrateBlocks(pickRicherBlocks(uiBlocks, client.getBlocks()));
+    client.flushBlockEmit();
+    scheduleReconnectSync(client.getBlocks());
+  }, [getUiAssistantBlocks, scheduleReconnectSync]);
+
+  const detachLiveTurn = useCallback(() => {
+    setIsStreaming(false);
+    setAgentBusy(false);
+    toast.dismiss("chat-reconnect");
+    void syncChatFromServer(undefined, { fullReplace: true });
+  }, [syncChatFromServer]);
+
   const streamHandlersRef = useRef({
+    attachLiveTurn,
+    detachLiveTurn,
     applyStreamBlocks,
     scheduleReconnectSync,
     syncChatFromServer,
@@ -325,6 +344,8 @@ const StreamPage: React.FC = () => {
     scheduleReconnectSync,
     syncChatFromServer,
     getUiAssistantBlocks,
+    attachLiveTurn,
+    detachLiveTurn,
     setResolvedWorkspace,
     setIsStreaming,
     setAgentBusy,
@@ -340,25 +361,25 @@ const StreamPage: React.FC = () => {
         if (ready.workspace) {
           streamHandlersRef.current.setResolvedWorkspace(ready.workspace);
         }
-        if (ready.agent_busy) {
-          streamHandlersRef.current.setIsStreaming(true);
-          streamHandlersRef.current.setAgentBusy(true);
+      },
+      onLiveAttach: () => {
+        streamHandlersRef.current.attachLiveTurn(client);
+      },
+      onReconnected: (event) => {
+        const hadReconnect = showReconnectToastRef.current;
+        showReconnectToastRef.current = false;
+        if (event.agent_busy) {
+          if (hadReconnect) {
+            toast.success("Reconnected — resuming live stream", {
+              id: "chat-reconnect",
+            });
+          }
+        } else {
+          streamHandlersRef.current.detachLiveTurn();
         }
       },
-      onReconnected: () => {
-        toast.success("Reconnected — resuming live stream", {
-          id: "chat-reconnect",
-        });
-        streamHandlersRef.current.setIsStreaming(true);
-        streamHandlersRef.current.setAgentBusy(true);
-        const uiBlocks = streamHandlersRef.current.getUiAssistantBlocks();
-        client.hydrateBlocks(
-          pickRicherBlocks(uiBlocks, client.getBlocks())
-        );
-        client.flushBlockEmit();
-        streamHandlersRef.current.scheduleReconnectSync(client.getBlocks());
-      },
       onReconnecting: (attempt) => {
+        showReconnectToastRef.current = true;
         streamHandlersRef.current.setReconnectAttempt(attempt);
         toast.loading(`Reconnecting (${attempt})…`, { id: "chat-reconnect" });
       },
@@ -460,6 +481,7 @@ const StreamPage: React.FC = () => {
       setConnectionState("disconnected");
       setAgentBusy(false);
       setReconnectAttempt(0);
+      showReconnectToastRef.current = false;
     };
   }, [workspaceKey, isLoadingHistory]);
 
