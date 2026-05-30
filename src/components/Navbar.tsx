@@ -4,7 +4,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import WorkspaceControl from "./WorkspaceControl";
 import ThemeSwitcher from "./ThemeSwitcher";
-import { GitGraph } from "lucide-react";
+import { NodepointLogo } from "@/components/brand/NodepointLogo";
 import { cn } from "@/lib/utils";
 
 const Navbar = () => {
@@ -22,9 +22,10 @@ const Navbar = () => {
         <div className="flex items-center space-x-4">
           <Link
             to="/"
-            className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors"
+            className="flex items-center space-x-2.5 text-lg font-bold text-foreground hover:text-primary transition-colors"
+            aria-label="Nodepoint home"
           >
-            <GitGraph className="h-6 w-6" />
+            <NodepointLogo size={24} />
             <span>Nodepoint</span>
           </Link>
           <WorkspaceControl />

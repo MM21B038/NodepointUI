@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
+  ArrowDown,
   Bot,
   Loader2,
   Trash2,
@@ -101,18 +102,53 @@ const StreamPage: React.FC = () => {
 
   const SCROLL_NEAR_BOTTOM_PX = 96;
   const userScrolledAwayRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
+  const suppressScrollAwayRef = useRef(false);
   const prevTurnsLengthRef = useRef(0);
+  const prevLoadingHistoryRef = useRef(true);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = messagesRef.current;
     if (el) {
       el.scrollTo({ top: el.scrollHeight, behavior });
-      lastScrollTopRef.current = el.scrollTop;
       return;
     }
     scrollEndRef.current?.scrollIntoView({ behavior, block: "end" });
   }, []);
+
+  const updateScrollAffordances = useCallback(() => {
+    if (suppressScrollAwayRef.current) return;
+    const el = messagesRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const awayFromBottom = distanceFromBottom > SCROLL_NEAR_BOTTOM_PX;
+    userScrolledAwayRef.current = awayFromBottom;
+    setShowScrollToBottom(awayFromBottom);
+  }, []);
+
+  const scrollToBottomAfterLayout = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (behavior === "smooth") {
+            suppressScrollAwayRef.current = true;
+            window.setTimeout(() => {
+              suppressScrollAwayRef.current = false;
+              updateScrollAffordances();
+            }, 500);
+          }
+          scrollMessagesToBottom(behavior);
+        });
+      });
+    },
+    [scrollMessagesToBottom, updateScrollAffordances]
+  );
+
+  const handleScrollToBottom = useCallback(() => {
+    userScrolledAwayRef.current = false;
+    setShowScrollToBottom(false);
+    scrollToBottomAfterLayout("smooth");
+  }, [scrollToBottomAfterLayout]);
 
   useEffect(() => {
     scrollOnStreamRef.current = throttle(() => {
@@ -123,35 +159,46 @@ const StreamPage: React.FC = () => {
   }, [scrollMessagesToBottom]);
 
   const onMessagesScroll = useCallback(() => {
-    const el = messagesRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-    if (scrollTop < lastScrollTopRef.current - 2) {
-      userScrolledAwayRef.current = distanceFromBottom > SCROLL_NEAR_BOTTOM_PX;
-    } else if (distanceFromBottom <= SCROLL_NEAR_BOTTOM_PX) {
-      userScrolledAwayRef.current = false;
-    }
-
-    lastScrollTopRef.current = scrollTop;
-  }, []);
+    updateScrollAffordances();
+  }, [updateScrollAffordances]);
 
   useEffect(() => {
-    const el = messagesRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", onMessagesScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onMessagesScroll);
-  }, [onMessagesScroll]);
+    const container = messagesRef.current;
+    const content = container?.firstElementChild;
+    if (!container || !content) return;
+
+    const ro = new ResizeObserver(() => {
+      if (userScrolledAwayRef.current || suppressScrollAwayRef.current) return;
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distanceFromBottom > 4) {
+        scrollMessagesToBottom("auto");
+      }
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [scrollMessagesToBottom, workspaceKey, turns.length]);
 
   useEffect(() => {
     const prevLen = prevTurnsLengthRef.current;
     prevTurnsLengthRef.current = turns.length;
-    if (turns.length > prevLen) {
-      userScrolledAwayRef.current = false;
-      scrollMessagesToBottom("smooth");
+    if (turns.length > prevLen && !userScrolledAwayRef.current) {
+      scrollToBottomAfterLayout("smooth");
     }
-  }, [turns.length, scrollMessagesToBottom]);
+  }, [turns.length, scrollToBottomAfterLayout]);
+
+  useEffect(() => {
+    if (isLoadingHistory) {
+      prevLoadingHistoryRef.current = true;
+      return;
+    }
+    if (!prevLoadingHistoryRef.current) return;
+    prevLoadingHistoryRef.current = false;
+    if (turns.length === 0) return;
+    userScrolledAwayRef.current = false;
+    setShowScrollToBottom(false);
+    scrollToBottomAfterLayout("smooth");
+  }, [isLoadingHistory, turns.length, scrollToBottomAfterLayout]);
 
   useEffect(() => {
     const next = Math.max(0, turns.length - INITIAL_VISIBLE_TURNS);
@@ -523,6 +570,9 @@ const StreamPage: React.FC = () => {
     setVisibleFromIndex(0);
     setWorkspaceKey(null);
     setResolvedWorkspace(null);
+    userScrolledAwayRef.current = false;
+    setShowScrollToBottom(false);
+    prevLoadingHistoryRef.current = true;
     void loadChat(requestId);
   }, [scopeMode, currentWorkspace, activeGroup, loadChat]);
 
@@ -567,6 +617,8 @@ const StreamPage: React.FC = () => {
     };
 
     const assistantTurn = createEmptyAssistantTurn();
+    userScrolledAwayRef.current = false;
+    setShowScrollToBottom(false);
     setTurns((prev) => [...prev, userTurn, assistantTurn]);
     setVisibleFromIndex((prev) =>
       Math.max(0, turns.length + 2 - INITIAL_VISIBLE_TURNS, prev)
@@ -696,7 +748,7 @@ const StreamPage: React.FC = () => {
               <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
               <Badge
                 variant="secondary"
-                className="max-w-[min(100%,12rem)] truncate border border-border/60 font-normal"
+                className="max-w-[min(100%,18rem)] truncate border border-border/60 font-normal"
               >
                 {scopeMode === "group" ? (
                   <>
@@ -795,9 +847,11 @@ const StreamPage: React.FC = () => {
         </CitationChatAlign>
       )}
 
+        <div className="relative min-h-0 flex-1">
         <div
           ref={messagesRef}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4"
+          onScroll={onMessagesScroll}
+          className="h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4"
         >
           <CitationChatAlign
             maxWidthClass={CHAT_THREAD_MAX_CLASS}
@@ -882,6 +936,23 @@ const StreamPage: React.FC = () => {
 
           <div ref={scrollEndRef} className="h-px" />
           </CitationChatAlign>
+        </div>
+
+        {showScrollToBottom && emptyState === "ready" ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="pointer-events-auto h-9 w-9 rounded-full border border-border/60 bg-background/95 shadow-md backdrop-blur-sm hover:bg-background"
+              onClick={handleScrollToBottom}
+              aria-label="Scroll to latest messages"
+              title="Jump to latest"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
         </div>
 
       <footer className="z-10 shrink-0  border-border/40 bg-background px-4 pb-3 pt-2">

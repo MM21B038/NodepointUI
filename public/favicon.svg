@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Nodepoint">
+  <defs>
+    <linearGradient id="np-bg" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="np-glow" x1="16" y1="8" x2="16" y2="14" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#BFDBFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#np-bg)"/>
+  <path d="M16 9.5 10.5 20.5" stroke="#FFFFFF" stroke-width="1.75" stroke-linecap="round" opacity="0.88"/>
+  <path d="M16 9.5 21.5 20.5" stroke="#FFFFFF" stroke-width="1.75" stroke-linecap="round" opacity="0.88"/>
+  <path d="M16 9.5V23.5" stroke="#FFFFFF" stroke-width="1.75" stroke-linecap="round" opacity="0.92"/>
+  <path d="M10.5 20.5H21.5" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+  <circle cx="16" cy="9.5" r="3.25" fill="url(#np-glow)"/>
+  <circle cx="10.5" cy="20.5" r="2.35" fill="#FFFFFF" opacity="0.96"/>
+  <circle cx="21.5" cy="20.5" r="2.35" fill="#FFFFFF" opacity="0.96"/>
+  <circle cx="16" cy="23.5" r="1.85" fill="#E0E7FF"/>
+</svg>

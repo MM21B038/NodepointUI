@@ -47,6 +47,7 @@ import {
   KB_DEFAULT_LIMIT,
   KB_MAX_LIMIT,
   KB_MAX_GROUP_GRAPH_WORKSPACES,
+  KB_DEFAULT_GROUP_SELECTION,
   kbDefaultLimitForGroup,
   kbMaxLimitForGroup,
   groupLimitDivisor,
@@ -477,21 +478,13 @@ const KnowledgeBase = () => {
           };
           setGraphLoadParams(loadParams);
 
-          if (large) {
-            if (requestId !== scopeLoadRequestIdRef.current) return;
-            setAvailableSourceFiles([]);
-            setSelectedSourceFiles(new Set());
-            setAllNodes([]);
-            setAllEdges([]);
-            setTruncated(false);
-            return;
-          }
-
           let files: string[] = [];
+          const graphTargets = kgMeta.isWorkspaceTagGroup ? initialSelection : [];
+
           if (kgMeta.tag === "files" && kgMeta.memberFileNames.length > 0) {
             files = kgMeta.memberFileNames;
-          } else if (kgMeta.isWorkspaceTagGroup && apiWorkspaces.length > 0) {
-            files = await listFilesForWorkspaces(apiWorkspaces);
+          } else if (kgMeta.isWorkspaceTagGroup && graphTargets.length > 0) {
+            files = await listFilesForWorkspaces(graphTargets);
           }
           if (requestId !== scopeLoadRequestIdRef.current) return;
           setAvailableSourceFiles(files);
@@ -507,7 +500,7 @@ const KnowledgeBase = () => {
               files,
               new Set(files),
               kgMeta.isWorkspaceTagGroup
-                ? { groupMemberTotal: apiWorkspaces.length, groupTargets: apiWorkspaces }
+                ? { groupMemberTotal: apiWorkspaces.length, groupTargets: graphTargets }
                 : { groupMemberTotal: memberCount }
             );
           }
@@ -1251,7 +1244,7 @@ const KnowledgeBase = () => {
     ) {
       return null;
     }
-    return `This group has ${groupMemberNamesFromApi.length} workspaces. Select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then Load graph. Workspace filter changes require Apply.`;
+    return `This group has ${groupMemberNamesFromApi.length} workspaces. Showing the first ${KB_DEFAULT_GROUP_SELECTION} by default — open Workspaces to change selection, then Apply.`;
   }, [scopeMode, activeGroupTag, groupMemberNamesFromApi.length]);
 
   const entityTypeLegendItems = useMemo(() => {
@@ -1290,7 +1283,7 @@ const KnowledgeBase = () => {
       scopeMode === "group" &&
       activeGroupTag === "workspace" &&
       isLargeGroup(groupMemberNamesFromApi.length)
-        ? `This group has ${groupMemberNamesFromApi.length} workspaces. Open Workspaces or Overview, select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then click Load graph in Graph load.`
+        ? `This group has ${groupMemberNamesFromApi.length} workspaces. The first ${KB_DEFAULT_GROUP_SELECTION} load automatically — open Workspaces to change selection, then Apply in Graph load.`
         : scopeMode === "group"
           ? groupKgEmptyMessage(activeGroupTag)
           : "No knowledge graph data for this workspace. Upload documents and complete preprocessing.";
@@ -1361,7 +1354,7 @@ const KnowledgeBase = () => {
               Search results
             </Badge>
           )}
-          <Badge variant="secondary" className="max-w-[min(100%,16rem)] truncate font-normal">
+          <Badge variant="secondary" className="max-w-[min(100%,22rem)] truncate font-normal">
             {scopeMode === "group" ? (
               <>
                 <Users className="mr-1 inline h-3 w-3" />

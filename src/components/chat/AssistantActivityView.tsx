@@ -508,7 +508,10 @@ function StatusIcon({ status }: { status: "running" | "completed" | "failed" | "
   return <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />;
 }
 
-function activitySummary(activitySegments: ActivitySegmentOnly[]) {
+function activitySummary(
+  activitySegments: ActivitySegmentOnly[],
+  streamingLayout = false
+) {
   const rounds = activityRounds(activitySegments);
   const thinkingCount = rounds.filter((r) =>
     r.some((s) => s.kind === "thinking")
@@ -528,13 +531,15 @@ function activitySummary(activitySegments: ActivitySegmentOnly[]) {
   }
   const toolCalls = toolIds.size;
   const parts: string[] = [];
-  if (rounds.length > 1) {
-    parts.push(`${rounds.length} rounds`);
-  } else if (thinkingCount > 0) {
-    parts.push(`${thinkingCount} thinking`);
+  if (!streamingLayout) {
+    if (rounds.length > 1) {
+      parts.push(`${rounds.length} rounds`);
+    } else if (thinkingCount > 0) {
+      parts.push(`${thinkingCount} thinking`);
+    }
   }
   if (toolCalls > 0) {
-    if (perRound.length > 1) {
+    if (!streamingLayout && perRound.length > 1) {
       parts.push(`${toolCalls} tools (${perRound.join(" + ")})`);
     } else {
       parts.push(`${toolCalls} tool${toolCalls === 1 ? "" : "s"}`);
@@ -567,36 +572,6 @@ interface ActivityTreeProps {
   onMergedThinkingChange?: (count: number) => void;
 }
 
-function CompactActivityRound({
-  roundIndex,
-  segments,
-}: {
-  roundIndex: number;
-  segments: ActivitySegmentOnly[];
-}) {
-  const toolCount = segments
-    .filter((s): s is Extract<ActivitySegmentOnly, { kind: "tools" }> => s.kind === "tools")
-    .reduce((n, s) => n + s.tools.length, 0);
-  const preview = segments
-    .filter((s): s is Extract<ActivitySegmentOnly, { kind: "thinking" }> => s.kind === "thinking")
-    .map((s) => s.content.trim())
-    .find(Boolean);
-
-  return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
-      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-      <span className="font-medium text-foreground/80">Round {roundIndex + 1}</span>
-      <span className="text-border/80">·</span>
-      <span>
-        {toolCount} tool{toolCount === 1 ? "" : "s"}
-      </span>
-      {preview ? (
-        <span className="min-w-0 truncate italic opacity-75">{preview}</span>
-      ) : null}
-    </div>
-  );
-}
-
 function ActivityTree({
   segments,
   activeId,
@@ -611,16 +586,16 @@ function ActivityTree({
   const [mergedBySegment, setMergedBySegment] = useState<Record<string, number>>({});
   const hideMainTimelineRail = Boolean(turnStreaming && activityPhaseStreaming);
   const rounds = activityRounds(segments);
-  const showRoundLabels = rounds.length > 1;
+  const showRoundLabels = rounds.length > 1 && !activityPhaseStreaming;
   const lastRoundIndex = rounds.length - 1;
 
-  const renderSegment = (seg: ActivitySegmentOnly, roundThinkingItems: ThinkingItem[]) => {
+  const renderSegment = (
+    seg: ActivitySegmentOnly,
+    roundThinkingItems: ThinkingItem[],
+    useThinkingPipeline: boolean
+  ) => {
     const open = isExpanded(seg);
     const isActive = seg.id === activeId;
-    const useThinkingPipeline =
-      activityPhaseStreaming &&
-      roundThinkingItems.length > 0 &&
-      rounds.length === 1;
     const latestThinkingId = roundThinkingItems[roundThinkingItems.length - 1]?.id ?? null;
 
     if (seg.kind === "thinking") {
@@ -749,20 +724,13 @@ function ActivityTree({
       <div className="space-y-2">
         {rounds.map((roundSegs, roundIndex) => {
           const isLastRound = roundIndex === lastRoundIndex;
-          const showCompact =
-            activityPhaseStreaming && showRoundLabels && !isLastRound;
-
-          if (showCompact) {
-            return (
-              <CompactActivityRound
-                key={`round-compact-${roundIndex}`}
-                roundIndex={roundIndex}
-                segments={roundSegs}
-              />
-            );
+          if (activityPhaseStreaming && !isLastRound) {
+            return null;
           }
 
           const roundThinkingItems = thinkingItemsFromSegments(roundSegs);
+          const useThinkingPipeline =
+            activityPhaseStreaming && isLastRound && roundThinkingItems.length > 0;
 
           return (
             <div key={`round-${roundIndex}`} className="min-w-0 space-y-1">
@@ -771,7 +739,9 @@ function ActivityTree({
                   Round {roundIndex + 1}
                 </p>
               ) : null}
-              {roundSegs.map((seg) => renderSegment(seg, roundThinkingItems))}
+              {roundSegs.map((seg) =>
+                renderSegment(seg, roundThinkingItems, useThinkingPipeline)
+              )}
             </div>
           );
         })}
@@ -944,20 +914,9 @@ function AssistantActivityViewInner({
       let changed = false;
       for (const item of displayItems) {
         if (item.kind !== "activity") continue;
-        const thinkingSegs = item.segments.filter(
-          (s): s is Extract<ActivitySegmentOnly, { kind: "thinking" }> =>
-            s.kind === "thinking"
-        );
-        const latestThinkingId = thinkingSegs[thinkingSegs.length - 1]?.id;
         for (const seg of item.segments) {
           if (seg.kind === "thinking") {
-            if (activityPhaseStreaming && latestThinkingId === seg.id) {
-              const wantOpen = Boolean(seg.isStreaming || seg.content);
-              if (next[seg.id] !== wantOpen) {
-                next[seg.id] = wantOpen;
-                changed = true;
-              }
-            } else if (next[seg.id] === undefined) {
+            if (next[seg.id] === undefined) {
               next[seg.id] = false;
               changed = true;
             }
@@ -984,24 +943,6 @@ function AssistantActivityViewInner({
           }
         }
       }
-      return changed ? next : prev;
-    });
-
-    setActivityOpen((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      displayItems.forEach((item, index) => {
-        if (item.kind !== "activity") return;
-        if (!shouldUseBundledActivity(displayItems, index, activityPhaseStreaming)) {
-          return;
-        }
-
-        const isActiveGroup = item.id === activeActivityGroupId;
-        if (isActiveGroup && activityPhaseStreaming && next[item.id] !== true) {
-          next[item.id] = true;
-          changed = true;
-        }
-      });
       return changed ? next : prev;
     });
   }, [
@@ -1094,7 +1035,6 @@ function AssistantActivityViewInner({
           activityPhaseStreaming
         );
         const mergedEarlierThinking = mergedThinkingByActivity[item.id] ?? 0;
-        const summary = activitySummary(item.segments);
         const activityStillRunning = item.segments.some(
           (s) =>
             (s.kind === "thinking" && s.isStreaming) ||
@@ -1109,11 +1049,12 @@ function AssistantActivityViewInner({
         const groupInActivityPhase = Boolean(
           activityPhaseStreaming && isActiveGroup && !followingResponseStreaming
         );
+        const summary = activitySummary(item.segments, groupInActivityPhase);
         const groupOpen =
           activityOpen[item.id] ??
           (useBundledActivity &&
             (isActiveGroup ||
-              activityPhaseStreaming ||
+              groupInActivityPhase ||
               (!followingResponseStreaming && activityStillRunning)));
 
         if (useBundledActivity) {
