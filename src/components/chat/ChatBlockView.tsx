@@ -37,23 +37,23 @@ function ThinkingBlock({ block }: { block: Extract<ChatBlock, { kind: "thinking"
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="mb-2">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-left text-sm hover:bg-violet-500/10 transition-colors">
+      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-brand-chat/20 bg-brand-chat/5 px-3 py-2 text-left text-sm hover:bg-brand-chat/10 transition-colors">
         {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-violet-600" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-brand-chat" />
         ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-violet-600" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-brand-chat" />
         )}
-        <Brain className="h-4 w-4 shrink-0 text-violet-600" />
-        <span className="font-medium text-violet-700 dark:text-violet-300">Thinking</span>
+        <Brain className="h-4 w-4 shrink-0 text-brand-chat" />
+        <span className="font-medium text-brand-chat dark:text-brand-chat">Thinking</span>
         {block.isStreaming && (
-          <Loader2 className="ml-auto h-3 w-3 animate-spin text-violet-500" />
+          <Loader2 className="ml-auto h-3 w-3 animate-spin text-brand-chat" />
         )}
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 rounded-lg border border-violet-500/10 bg-muted/40 px-3 py-2">
+      <CollapsibleContent className="mt-1 rounded-lg border border-brand-chat/10 bg-muted/40 px-3 py-2">
         <pre className="whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground max-h-48 overflow-y-auto">
           {block.content}
           {block.isStreaming && (
-            <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-violet-500/60 animate-pulse align-middle" />
+            <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-brand-chat/60 animate-pulse align-middle" />
           )}
         </pre>
       </CollapsibleContent>
@@ -114,8 +114,8 @@ export function ChatBlockView({ block }: ChatBlockViewProps) {
 
     case "tool_calls":
       return (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-          <Search className="h-4 w-4 shrink-0 text-amber-600" />
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-brand-warning/25 bg-brand-warning/5 px-3 py-2 text-sm text-brand-warning dark:text-brand-warning">
+          <Search className="h-4 w-4 shrink-0 text-brand-warning" />
           <span>Searching knowledge graph…</span>
         </div>
       );

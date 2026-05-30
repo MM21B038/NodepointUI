@@ -9,6 +9,7 @@ import Layout from "./components/Layout";
 import Documents from "./pages/Documents";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import WorkspaceManagement from "./pages/WorkspaceManagement";
+import GroupManagement from "./pages/GroupManagement";
 import Stream from "./pages/Stream";
 import NotFound from "./pages/NotFound";
 
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/documents" element={<Layout><Documents /></Layout>} />
               <Route path="/knowledge-base" element={<Layout><KnowledgeBase /></Layout>} />
               <Route path="/workspace-management" element={<Layout><WorkspaceManagement /></Layout>} />
+              <Route path="/group-management" element={<Layout><GroupManagement /></Layout>} />
               <Route path="/chatin" element={<Navigate to="/chat" replace />} />
               <Route path="/stream" element={<Navigate to="/chat" replace />} />
               <Route path="/chat" element={<Layout><Stream /></Layout>} />

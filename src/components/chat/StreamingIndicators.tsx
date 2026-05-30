@@ -10,10 +10,10 @@ import { PrajnaStreamGlyph } from "@/components/chat/PrajnaStreamGlyph";
 /** Sparkles + ping for connecting / analysing (pre-token only). */
 function PreStreamSparklesMark() {
   return (
-    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
-      <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-chat/30 bg-brand-chat/10">
+      <Sparkles className="h-4 w-4 text-brand-chat dark:text-brand-chat" />
       <span
-        className="absolute inset-0 rounded-full bg-violet-500/20 animate-ping"
+        className="absolute inset-0 rounded-full bg-brand-chat/20 animate-ping"
         style={{ animationDuration: "2.4s" }}
         aria-hidden
       />
@@ -139,8 +139,8 @@ export function PreStreamPlaceholder({ statusDetail, className }: PreStreamPlace
       </div>
 
       <div className="relative h-1 overflow-hidden rounded-full bg-muted/50">
-        <div className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-violet-500/35 animate-pulse" />
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-violet-500/25 to-transparent bg-[length:200%_100%] animate-shimmer" />
+        <div className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-brand-chat/35 animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-chat/25 to-transparent bg-[length:200%_100%] animate-shimmer" />
       </div>
 
       <div className="space-y-2" aria-hidden>

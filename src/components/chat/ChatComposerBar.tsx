@@ -39,7 +39,7 @@ export function ChatComposerBar({
     <div className={cn("space-y-2", className)}>
       {isStreaming && (
         <div
-          className="flex items-center justify-between gap-3 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-chat/20 bg-brand-chat/[0.06] px-3 py-2"
           role="status"
           aria-live="polite"
         >
@@ -87,7 +87,7 @@ export function ChatComposerBar({
         className={cn(
           "flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-[border-color,box-shadow] duration-300",
           isStreaming
-            ? "border-violet-500/25 shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
+            ? "border-brand-chat/25 shadow-[0_0_0_1px_hsl(var(--brand-chat)/0.12)]"
             : "border-border"
         )}
       >

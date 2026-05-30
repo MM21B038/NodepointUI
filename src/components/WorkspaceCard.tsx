@@ -1,27 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Loader2,
-  Trash2,
-  CheckCircle2,
   FolderCog,
   FileStack,
   Layers,
   GitGraph,
   Link,
   Play,
+  Loader2,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLAGGED_GROUP_NAME, type WorkspaceCounts } from "@/database/workspaceStorage";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { DirectoryCardFrame } from "@/components/directory/DirectoryCardFrame";
+import {
+  directoryActionsClass,
+  directoryCardAccentActionClass,
+  directoryStatGridClass,
+} from "@/components/directory/directoryCardStyles";
+import { statTone } from "@/lib/brandColors";
 import WorkspaceGroupMembership from "@/components/workspace/WorkspaceGroupMembership";
 
 interface WorkspaceCardProps {
   workspaceName: string;
+  tag?: string | null;
+  description?: string | null;
   isCurrent: boolean;
   onSelect: (workspaceName: string) => void;
   onDelete: (workspaceName: string) => void;
@@ -35,10 +40,22 @@ interface WorkspaceCardProps {
   isExtracting: boolean;
   groups?: string[];
   onGroupsChanged?: () => void;
+  onEdit?: (workspaceName: string) => void;
 }
+
+const statItems = (
+  counts: WorkspaceCounts
+): { label: string; value: number; icon: typeof FileStack; tone: string }[] => [
+  { label: "Files", value: counts.files, icon: FileStack, tone: statTone.files },
+  { label: "Chunks", value: counts.chunks, icon: Layers, tone: statTone.chunks },
+  { label: "Entities", value: counts.entities, icon: GitGraph, tone: statTone.entities },
+  { label: "Relations", value: counts.relations, icon: Link, tone: statTone.relations },
+];
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   workspaceName,
+  tag,
+  description,
   isCurrent,
   onSelect,
   onDelete,
@@ -52,147 +69,98 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   isExtracting,
   groups = [],
   onGroupsChanged,
+  onEdit,
 }) => {
   const customGroups = groups.filter((g) => g !== FLAGGED_GROUP_NAME);
-  const [isHovered, setIsHovered] = useState(false);
-
   const isThisWorkspaceDeleting =
     isDeleting && deletingWorkspaceName === workspaceName;
   const isDisabled = isDeleting || isExtracting;
 
   return (
-    <Card
-      className={cn(
-        "relative flex flex-col justify-between p-4 rounded-lg shadow-md transition-all duration-200 ease-in-out min-h-[280px]",
-        "cursor-pointer h-full w-full",
-        isCurrent
-          ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
-          : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
-        isSelected && "ring-2 ring-destructive/40"
-      )}
-      onClick={() => onSelect(workspaceName)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <CardHeader className="p-0 flex flex-col space-y-2">
-        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0 gap-2">
-          {showSelection && onSelectionChange && (
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={(checked) => onSelectionChange(checked === true)}
-              onClick={(event) => event.stopPropagation()}
-              aria-label={`Select ${workspaceName}`}
+    <div className="h-full">
+      <DirectoryCardFrame
+        accent="workspace"
+        name={workspaceName}
+        tag={tag}
+        description={description}
+        isActive={isCurrent}
+        isSelected={isSelected}
+        showSelection={showSelection}
+        isDeleting={isDeleting}
+        isDisabled={isDisabled}
+        isThisDeleting={isThisWorkspaceDeleting}
+        onSelect={() => onSelect(workspaceName)}
+        onDelete={() => onDelete(workspaceName)}
+        onSelectionChange={onSelectionChange}
+        activeLabel="Current"
+        icon={<FolderCog className="h-5 w-5" />}
+        footer={
+          <div className={directoryActionsClass()}>
+            <WorkspaceGroupMembership
+              workspaceName={workspaceName}
+              memberGroups={customGroups}
+              onMembershipChanged={onGroupsChanged}
               disabled={isDisabled}
-              className="shrink-0"
             />
-          )}
-          <FolderCog
-            className={cn(
-              "h-6 w-6 mr-3 shrink-0",
-              isCurrent ? "text-primary" : "text-muted-foreground"
-            )}
-          />
-          <span
-            className={cn(
-              "break-words",
-              isCurrent ? "text-primary" : "text-foreground"
-            )}
-          >
-            {workspaceName}
-          </span>
-          {isCurrent && (
-            <CheckCircle2 className="h-5 w-5 ml-2 text-green-500 flex-shrink-0" />
-          )}
-          <Button
-            variant="destructive"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(workspaceName);
-            }}
-            disabled={isDisabled}
-            className={cn(
-              "ml-auto transition-all duration-200",
-              "pointer-events-none",
-              isHovered || isThisWorkspaceDeleting
-                ? "opacity-100 pointer-events-auto"
-                : "opacity-0"
-            )}
-          >
-            {isThisWorkspaceDeleting ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <Trash2 className="h-6 w-6" />
-            )}
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 flex flex-col gap-2 mt-4">
-        {customGroups.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {customGroups.map((g) => (
-              <Badge key={g} variant="outline" className="text-xs font-normal">
-                {g}
-              </Badge>
-            ))}
-          </div>
-        )}
 
-        <WorkspaceGroupMembership
-          workspaceName={workspaceName}
-          memberGroups={customGroups}
-          onMembershipChanged={onGroupsChanged}
-          disabled={isDisabled}
-        />
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onExtract(workspaceName);
-          }}
-          disabled={isDisabled}
-          className="w-full flex items-center justify-center gap-2 text-primary hover:bg-primary/10"
-        >
-          {isExtracting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          <span>{isExtracting ? "Extracting..." : "Extract"}</span>
-        </Button>
-
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center">
-            <FileStack className="h-4 w-4 mr-1" />
-            <span>Files</span>
+            <div className="grid grid-cols-2 gap-2">
+              {onEdit ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(workspaceName);
+                  }}
+                  disabled={isDisabled}
+                  className="h-9 gap-2 border-border/60"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span>Edit</span>
+                </Button>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExtract(workspaceName);
+                }}
+                disabled={isDisabled}
+                className={cn(
+                  directoryCardAccentActionClass("workspace"),
+                  !onEdit && "col-span-2"
+                )}
+              >
+              {isExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              <span>{isExtracting ? "Extracting…" : "Run extract"}</span>
+            </Button>
+            </div>
           </div>
-          <span className="font-medium text-foreground">{counts.files}</span>
+        }
+      >
+        <div className={directoryStatGridClass()}>
+          {statItems(counts).map(({ label, value, icon: Icon, tone }) => (
+            <div
+              key={label}
+              className="flex items-center justify-between gap-2 rounded-md bg-background/60 px-2 py-1.5"
+            >
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Icon className={cn("h-3.5 w-3.5 shrink-0", tone)} />
+                <span className="truncate">{label}</span>
+              </div>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                {value}
+              </span>
+            </div>
+          ))}
         </div>
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center">
-            <Layers className="h-4 w-4 mr-1" />
-            <span>Chunks</span>
-          </div>
-          <span className="font-medium text-foreground">{counts.chunks}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center">
-            <GitGraph className="h-4 w-4 mr-1" />
-            <span>Entities</span>
-          </div>
-          <span className="font-medium text-foreground">{counts.entities}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center">
-            <Link className="h-4 w-4 mr-1" />
-            <span>Relations</span>
-          </div>
-          <span className="font-medium text-foreground">{counts.relations}</span>
-        </div>
-      </CardContent>
-    </Card>
+      </DirectoryCardFrame>
+    </div>
   );
 };
 

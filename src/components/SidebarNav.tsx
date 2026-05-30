@@ -28,12 +28,12 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
   return (
     <div
       className={cn(
-        "fixed left-0 z-40 bg-card border-r border-t-4 border-b-4 shadow-lg transition-all duration-300 ease-in-out flex flex-col py-4",
-        "rounded-tr-lg rounded-br-lg", // Only round top-right and bottom-right
-        "w-[var(--sidebar-collapsed-width)]", // Always use collapsed width
-        "top-1/2 -translate-y-1/2", // Vertically center the sidebar
-        "max-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 2rem)]", // Adjust max height to leave space top/bottom
-        "border-t-[color:hsl(var(--sidebar-accent-border))] border-b-[color:hsl(var(--sidebar-accent-border))]" // Apply custom color
+        "fixed left-0 z-40 flex flex-col border border-border/60 bg-card/95 py-4 shadow-lg backdrop-blur-sm transition-all duration-300 ease-in-out",
+        "rounded-tr-lg rounded-br-lg",
+        "w-[var(--sidebar-collapsed-width)]",
+        "top-1/2 -translate-y-1/2",
+        "max-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 2rem)]",
+        "border-l-0 border-t-primary/30 border-b-primary/30"
       )}
     >
       <nav className="flex-grow px-2">
@@ -45,11 +45,12 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-center h-auto py-2.5 px-3 rounded-md",
-                "bg-secondary shadow-sm", // Use bg-secondary for distinct block, add shadow
-                "text-secondary-foreground hover:shadow-md", // Removed hover:bg-secondary/80
-                isActive ? "bg-card text-card-foreground font-semibold hover:bg-card" : "", // Active state: bg-card, text-card-foreground, and explicitly hover:bg-card
-                "transition-all duration-150 active:scale-[0.96] active:shadow-none" // Enhanced active state: scale down more, remove shadow
+                "h-auto w-full justify-center rounded-lg px-3 py-2.5 transition-all duration-150",
+                "border border-transparent",
+                isActive
+                  ? "border-primary/25 bg-primary/10 text-primary shadow-sm hover:bg-primary/10 hover:text-primary"
+                  : "bg-secondary/80 text-muted-foreground hover:border-border/60 hover:bg-accent hover:text-foreground",
+                "active:scale-[0.96]"
               )}
             >
               <Icon className="h-5 w-5 min-w-[20px]" />

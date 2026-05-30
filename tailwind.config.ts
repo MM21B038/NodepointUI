@@ -56,6 +56,20 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          workspace: "hsl(var(--brand-workspace) / <alpha-value>)",
+          group: "hsl(var(--brand-group) / <alpha-value>)",
+          chat: "hsl(var(--brand-chat) / <alpha-value>)",
+          success: "hsl(var(--brand-success) / <alpha-value>)",
+          warning: "hsl(var(--brand-warning) / <alpha-value>)",
+          info: "hsl(var(--brand-info) / <alpha-value>)",
+        },
+        "group-tag": {
+          workspace: "hsl(var(--group-tag-workspace) / <alpha-value>)",
+          files: "hsl(var(--group-tag-files) / <alpha-value>)",
+          entity: "hsl(var(--group-tag-entity) / <alpha-value>)",
+          relation: "hsl(var(--group-tag-relation) / <alpha-value>)",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

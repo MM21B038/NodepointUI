@@ -10,6 +10,7 @@ import {
   createWorkspace,
   addWorkspaceToGroup,
   deleteWorkspaces,
+  updateWorkspace,
   startPreprocess,
   summarizePreprocessStart,
   WorkspaceCreateError,
@@ -22,8 +23,17 @@ import WorkspaceCard from "@/components/WorkspaceCard";
 import WorkspaceCardSkeleton from "@/components/workspace/WorkspaceCardSkeleton";
 import WorkspaceManagementToolbar from "@/components/workspace/WorkspaceManagementToolbar";
 import PreprocessQueueStatusPanel from "@/components/workspace/PreprocessQueueStatusPanel";
-import CreateWorkspaceDialog from "@/components/workspace/CreateWorkspaceDialog";
-import ManageGroupsDialog from "@/components/workspace/ManageGroupsDialog";
+import CreateWorkspaceDialog, {
+  type CreateWorkspaceFormValues,
+} from "@/components/workspace/CreateWorkspaceDialog";
+import EditWorkspaceDialog, {
+  type EditWorkspaceFormValues,
+} from "@/components/workspace/EditWorkspaceDialog";
+import {
+  directoryPageGridClass,
+  directoryPagePanelClass,
+  directoryPageScrollClass,
+} from "@/components/directory/directoryPageStyles";
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
 import { useWorkspaceDirectory } from "@/hooks/useWorkspaceDirectory";
 
@@ -37,7 +47,9 @@ const WorkspaceManagement = () => {
   );
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editWorkspaceName, setEditWorkspaceName] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -207,23 +219,26 @@ const WorkspaceManagement = () => {
       (g) => g !== "flagged"
     );
 
-  const handleCreateWorkspace = async (name: string, groupNames: string[]) => {
+  const handleCreateWorkspace = async (values: CreateWorkspaceFormValues) => {
     setIsCreating(true);
-    const loadingToastId = toast.loading(`Creating workspace "${name}"...`);
+    const loadingToastId = toast.loading(`Creating workspace "${values.name}"...`);
 
     try {
-      await createWorkspace(name);
-      for (const groupName of groupNames) {
+      await createWorkspace(values.name, {
+        tag: values.tag,
+        description: values.description,
+      });
+      for (const groupName of values.groupNames) {
         try {
-          await addWorkspaceToGroup(groupName, name);
+          await addWorkspaceToGroup(groupName, values.name);
         } catch (err) {
-          console.warn(`Failed to add ${name} to group ${groupName}:`, err);
+          console.warn(`Failed to add ${values.name} to group ${groupName}:`, err);
           toast.error(
             `Workspace created but could not add to group "${groupName}".`
           );
         }
       }
-      toast.success(`Workspace "${name}" created successfully!`, {
+      toast.success(`Workspace "${values.name}" created successfully!`, {
         id: loadingToastId,
       });
       setCreateDialogOpen(false);
@@ -233,7 +248,7 @@ const WorkspaceManagement = () => {
       await refreshGroups();
       invalidateCache();
       reload();
-      setCurrentWorkspace(name);
+      setCurrentWorkspace(values.name);
     } catch (error) {
       const errorMessage =
         error instanceof WorkspaceCreateError
@@ -253,6 +268,45 @@ const WorkspaceManagement = () => {
   const handleSelectWorkspace = (workspaceName: string) => {
     setCurrentWorkspace(workspaceName);
     toast.success(`Switched to workspace: ${workspaceName}`);
+  };
+
+  const editWorkspaceMeta = useMemo(
+    () => displayedWorkspaces.find((w) => w.name === editWorkspaceName) ?? null,
+    [displayedWorkspaces, editWorkspaceName]
+  );
+
+  const handleEditClick = (workspaceName: string) => {
+    setEditWorkspaceName(workspaceName);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveWorkspaceEdit = async (values: EditWorkspaceFormValues) => {
+    if (!editWorkspaceName) return;
+    setIsSavingEdit(true);
+    try {
+      const patch: Parameters<typeof updateWorkspace>[1] = {};
+      if (values.name !== editWorkspaceName) patch.name = values.name;
+      if (values.clearTag) patch.tag = null;
+      else if (values.tag !== editWorkspaceMeta?.tag) patch.tag = values.tag;
+      if (values.clearDescription) patch.description = null;
+      else if (values.description !== editWorkspaceMeta?.description) {
+        patch.description = values.description;
+      }
+
+      const result = await updateWorkspace(editWorkspaceName, patch);
+      const newName = result.workspace.name;
+      if (currentWorkspace === editWorkspaceName) {
+        setCurrentWorkspace(newName);
+      }
+      toast.success(`Workspace "${newName}" updated.`);
+      setEditDialogOpen(false);
+      setEditWorkspaceName(null);
+      await refreshAfterMutation();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update workspace.");
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const handleDeleteClick = (workspaceName: string) => {
@@ -355,19 +409,13 @@ const WorkspaceManagement = () => {
 
   const skeletonCount = Math.max(4, pageSize);
 
-  const allWorkspaceNames = useMemo(
-    () => Object.keys(groupsByWorkspace).sort((a, b) => a.localeCompare(b)),
-    [groupsByWorkspace]
-  );
-
   const groupNames = useMemo(() => groups.map((g) => g.name), [groups]);
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col w-full">
-      <div className="flex flex-1 min-h-0 flex-col rounded-xl border shadow-lg bg-card overflow-hidden">
+      <div className={directoryPagePanelClass}>
         <WorkspaceManagementToolbar
           onOpenCreateWorkspace={() => setCreateDialogOpen(true)}
-          onOpenManageGroups={() => setGroupsDialogOpen(true)}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
           groupFilter={groupFilter}
@@ -400,16 +448,19 @@ const WorkspaceManagement = () => {
           isCreating={isCreating}
         />
 
-        <ManageGroupsDialog
-          open={groupsDialogOpen}
-          onOpenChange={setGroupsDialogOpen}
-          workspaceNames={allWorkspaceNames}
-          onChanged={() => void refreshAfterMutation()}
+        <EditWorkspaceDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          workspaceName={editWorkspaceName ?? ""}
+          initialTag={editWorkspaceMeta?.tag}
+          initialDescription={editWorkspaceMeta?.description}
+          onSave={handleSaveWorkspaceEdit}
+          isSaving={isSavingEdit}
         />
 
         <div
           ref={gridRef}
-          className="relative flex-1 min-h-0 overflow-y-auto p-4"
+          className={directoryPageScrollClass}
         >
           {isPaging && !isInitialGridLoad ? (
             <div
@@ -421,7 +472,7 @@ const WorkspaceManagement = () => {
           ) : null}
 
           {isInitialGridLoad ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className={directoryPageGridClass}>
               {Array.from({ length: skeletonCount }).map((_, i) => (
                 <WorkspaceCardSkeleton key={i} />
               ))}
@@ -443,7 +494,7 @@ const WorkspaceManagement = () => {
             </div>
           ) : (
             <div
-              className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr transition-opacity duration-150 ${
+              className={`${directoryPageGridClass} transition-opacity duration-150 ${
                 isPaging ? "opacity-90" : ""
               }`}
             >
@@ -451,6 +502,8 @@ const WorkspaceManagement = () => {
                 <WorkspaceCard
                   key={workspace.name}
                   workspaceName={workspace.name}
+                  tag={workspace.tag}
+                  description={workspace.description}
                   isCurrent={currentWorkspace === workspace.name}
                   onSelect={handleSelectWorkspace}
                   onDelete={handleDeleteClick}
@@ -470,6 +523,7 @@ const WorkspaceManagement = () => {
                   }
                   groups={groupsForCard(workspace)}
                   onGroupsChanged={refreshAfterMutation}
+                  onEdit={handleEditClick}
                 />
               ))}
             </div>

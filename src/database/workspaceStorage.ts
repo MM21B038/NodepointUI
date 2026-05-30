@@ -33,15 +33,70 @@ export function flaggedGroupScope(): KgApiScope {
 }
 
 export async function listSelectableGroups(): Promise<WorkspaceGroupSummary[]> {
-  const all = await listWorkspaceGroups();
+  const all = await listAllWorkspaceGroups();
   return all.filter(
     (g) => g.name !== FLAGGED_GROUP_NAME && !g.is_system
   );
 }
 
 export async function getGroupMemberNames(groupName: string): Promise<string[]> {
-  const detail = await getGroup(groupName);
-  return detail.workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b));
+  const meta = await resolveGroupKgScopeMeta(groupName);
+  return meta.graphWorkspaceNames;
+}
+
+export interface GroupKgScopeMeta {
+  name: string;
+  tag: GroupTag;
+  /** Workspaces, files, entities, or relations — per group tag */
+  memberCount: number;
+  /** Workspaces that appear in group-scoped KG responses */
+  graphWorkspaceNames: string[];
+  /** Member document file names for files-tag groups */
+  memberFileNames: string[];
+  isWorkspaceTagGroup: boolean;
+}
+
+export async function resolveGroupKgScopeMeta(groupName: string): Promise<GroupKgScopeMeta> {
+  const detail = await getGroup(groupName, { page: 1, page_size: 1 });
+  const tag = detail.tag;
+  const memberCount = detail.member_count;
+
+  if (isWorkspaceGroupTag(tag)) {
+    const graphWorkspaceNames = await getGroupWorkspaceNames(groupName);
+    return {
+      name: groupName,
+      tag,
+      memberCount,
+      graphWorkspaceNames,
+      memberFileNames: [],
+      isWorkspaceTagGroup: true,
+    };
+  }
+
+  const entityTypesResult = await getKnowledgeGraphEntityTypes(groupScope(groupName));
+  const graphWorkspaceNames = (entityTypesResult.workspaces ?? [])
+    .map((w) => w.workspace)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  let memberFileNames: string[] = [];
+  if (tag === "files") {
+    const members = (await getAllGroupMembers(groupName, {
+      expectedTag: "files",
+    })) as GroupFileMember[];
+    memberFileNames = [
+      ...new Set(members.map((m) => m.file_name).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b));
+  }
+
+  return {
+    name: groupName,
+    tag,
+    memberCount,
+    graphWorkspaceNames,
+    memberFileNames,
+    isWorkspaceTagGroup: false,
+  };
 }
 
 export function scopeToQueryParams(scope: KgApiScope): Record<string, string> {
@@ -51,6 +106,8 @@ export function scopeToQueryParams(scope: KgApiScope): Record<string, string> {
 
 export interface WorkspaceEntry {
   name: string;
+  tag?: string | null;
+  description?: string | null;
   is_flag: boolean;
   groups?: string[];
   created_at: string;
@@ -66,12 +123,16 @@ export interface WorkspaceListResponse {
 function normalizeWorkspaceEntry(raw: {
   name: string;
   created_at: string;
+  tag?: string | null;
+  description?: string | null;
   is_flag?: boolean;
   groups?: string[];
 }): WorkspaceEntry {
   const groups = Array.isArray(raw.groups) ? raw.groups : [];
   return {
     name: raw.name,
+    tag: raw.tag ?? null,
+    description: raw.description ?? null,
     created_at: raw.created_at,
     is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
     groups,
@@ -206,6 +267,8 @@ export interface WorkspaceCounts {
 
 export interface WorkspacePageItem {
   name: string;
+  tag?: string | null;
+  description?: string | null;
   is_flag: boolean;
   created_at: string;
   counts: WorkspaceCounts;
@@ -245,6 +308,8 @@ function normalizeWorkspacePageItem(
   const groups = Array.isArray(raw.groups) ? raw.groups : [];
   return {
     name: raw.name,
+    tag: raw.tag ?? null,
+    description: raw.description ?? null,
     is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
     created_at: raw.created_at,
     counts: normalizeWorkspaceCounts(raw.counts),
@@ -338,18 +403,34 @@ export class WorkspaceCreateError extends Error {
   }
 }
 
-export async function createWorkspace(name: string): Promise<void> {
+export interface CreateWorkspaceOptions {
+  tag?: string | null;
+  description?: string | null;
+}
+
+export async function createWorkspace(
+  name: string,
+  options?: CreateWorkspaceOptions
+): Promise<void> {
   const normalizedName = name.trim();
   if (!normalizedName) {
     throw new WorkspaceCreateError("Workspace name cannot be empty.", "empty");
   }
+
+  const body: { name: string; tag?: string; description?: string } = {
+    name: normalizedName,
+  };
+  const tag = options?.tag?.trim();
+  const description = options?.description?.trim();
+  if (tag) body.tag = tag;
+  if (description) body.description = description;
 
   let response: Response;
   try {
     response = await fetch(`${API_ROOT}/workspace/create/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: normalizedName }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     const hint =
@@ -387,6 +468,55 @@ export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
     console.error(`Error deleting workspace ${workspaceName}:`, error);
     throw error;
   }
+}
+
+export interface UpdateWorkspaceOptions {
+  name?: string | null;
+  tag?: string | null;
+  description?: string | null;
+}
+
+export interface UpdateWorkspaceResult {
+  message?: string;
+  previous_name?: string;
+  workspace: {
+    name: string;
+    tag?: string | null;
+    description?: string | null;
+    created_at?: string;
+  };
+}
+
+export async function updateWorkspace(
+  workspaceName: string,
+  options: UpdateWorkspaceOptions
+): Promise<UpdateWorkspaceResult> {
+  const body: Record<string, string | null> = {};
+  if (options.name !== undefined) {
+    const trimmed = options.name?.trim();
+    if (!trimmed) throw new Error("Workspace name cannot be empty.");
+    body.name = trimmed;
+  }
+  if (options.tag !== undefined) body.tag = options.tag?.trim() || null;
+  if (options.description !== undefined) {
+    body.description = options.description?.trim() || null;
+  }
+  if (Object.keys(body).length === 0) {
+    throw new Error("No fields to update.");
+  }
+
+  const response = await fetch(
+    buildApiUrl(`/workspace/update/${encodeURIComponent(workspaceName)}/`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
 }
 
 export interface FlagStatusResponse {
@@ -484,66 +614,454 @@ export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountR
 
 // --- Workspace groups ---
 
+export type GroupTag = "workspace" | "files" | "entity" | "relation";
+
+export const GROUP_TAGS: GroupTag[] = ["workspace", "files", "entity", "relation"];
+
+export function normalizeGroupTag(raw: unknown): GroupTag {
+  if (raw === "files" || raw === "entity" || raw === "relation") return raw;
+  return "workspace";
+}
+
+export interface GroupWorkspaceMember {
+  name: string;
+  created_at: string;
+  is_flag?: boolean;
+}
+
+export interface GroupFileMember {
+  document_id: string;
+  workspace: string;
+  file_name: string;
+  created_at?: string;
+}
+
+export interface GroupEntityMember {
+  entity_id: string;
+  name: string;
+  entity_type: string;
+  workspace: string;
+  created_at?: string;
+}
+
+export interface GroupRelationMember {
+  relation_id: string;
+  source: string;
+  target: string;
+  workspace: string;
+  created_at?: string;
+}
+
+export type GroupMember =
+  | GroupWorkspaceMember
+  | GroupFileMember
+  | GroupEntityMember
+  | GroupRelationMember;
+
 export interface WorkspaceGroupSummary {
   name: string;
-  workspace_count: number;
+  tag: GroupTag;
+  description?: string | null;
+  member_count: number;
   created_at: string;
   is_system?: boolean;
+  /** @deprecated Use member_count */
+  workspace_count?: number;
 }
 
-export interface WorkspaceGroupMember {
+export interface GroupMembersPage {
   name: string;
-  is_flag: boolean;
-  created_at: string;
+  tag: GroupTag;
+  description?: string | null;
+  member_count: number;
+  pagination: WorkspacePagePagination;
+  members: GroupMember[];
 }
 
-export interface WorkspaceGroupDetail {
-  name: string;
-  workspace_count: number;
+export interface WorkspaceGroupDetail extends GroupMembersPage {
   is_system?: boolean;
-  workspaces: WorkspaceGroupMember[];
+  /** @deprecated Use members */
+  workspaces: GroupWorkspaceMember[];
 }
 
-export async function createWorkspaceGroup(name: string): Promise<WorkspaceGroupSummary> {
+export interface GroupListResponse {
+  groups: WorkspaceGroupSummary[];
+  pagination: WorkspacePagePagination;
+}
+
+export interface CreateGroupOptions {
+  tag?: GroupTag | null;
+  description?: string | null;
+}
+
+export interface UpdateGroupOptions {
+  name?: string | null;
+  description?: string | null;
+}
+
+export interface UpdateGroupResult {
+  message?: string;
+  previous_name?: string;
+  group: WorkspaceGroupSummary;
+}
+
+function inferGroupTagFromMemberRow(row: Record<string, unknown>): GroupTag | null {
+  if (row.document_id != null) return "files";
+  if (row.entity_id != null || (row.id != null && row.entity_type != null)) return "entity";
+  if (row.relation_id != null) return "relation";
+  if (row.name != null) return "workspace";
+  return null;
+}
+
+function inferGroupTagFromMembers(rawMembers: unknown[]): GroupTag | null {
+  for (const member of rawMembers) {
+    if (!member || typeof member !== "object") continue;
+    const inferred = inferGroupTagFromMemberRow(member as Record<string, unknown>);
+    if (inferred) return inferred;
+  }
+  return null;
+}
+
+function resolveGroupMembersTag(
+  data: Record<string, unknown>,
+  rawMembers: unknown[],
+  expectedTag?: GroupTag
+): GroupTag {
+  const declared = data.tag != null ? normalizeGroupTag(data.tag) : null;
+  const inferred = inferGroupTagFromMembers(rawMembers);
+  if (expectedTag) {
+    if (declared && declared === expectedTag) return declared;
+    if (inferred && inferred === expectedTag) return expectedTag;
+    return expectedTag;
+  }
+  if (declared && declared !== "workspace") return declared;
+  if (inferred) return inferred;
+  return declared ?? "workspace";
+}
+
+function normalizeGroupPagination(
+  raw: Partial<WorkspacePagePagination> | undefined,
+  fallback: { page?: number; page_size?: number; total_items?: number }
+): WorkspacePagePagination {
+  const total_items = raw?.total_items ?? fallback.total_items ?? 0;
+  const page_size = raw?.page_size ?? fallback.page_size ?? 20;
+  const total_pages =
+    raw?.total_pages ??
+    (total_items === 0 ? 0 : Math.max(1, Math.ceil(total_items / page_size)));
+  const page = raw?.page ?? fallback.page ?? 1;
+  return {
+    page,
+    page_size,
+    total_items,
+    total_pages,
+    has_next: raw?.has_next ?? page < total_pages,
+    has_previous: raw?.has_previous ?? page > 1,
+  };
+}
+
+export function normalizeGroupSummary(raw: Record<string, unknown>): WorkspaceGroupSummary {
+  const memberCount =
+    typeof raw.member_count === "number"
+      ? raw.member_count
+      : typeof raw.workspace_count === "number"
+        ? raw.workspace_count
+        : Array.isArray(raw.members)
+          ? raw.members.length
+          : Array.isArray(raw.workspaces)
+            ? raw.workspaces.length
+            : 0;
+  const summary: WorkspaceGroupSummary = {
+    name: String(raw.name),
+    tag: normalizeGroupTag(raw.tag),
+    description: raw.description != null ? String(raw.description) : null,
+    member_count: memberCount,
+    created_at: String(raw.created_at ?? ""),
+    is_system: Boolean(raw.is_system),
+  };
+  summary.workspace_count = summary.member_count;
+  return summary;
+}
+
+function normalizeWorkspaceGroupMember(raw: Record<string, unknown>): GroupWorkspaceMember {
+  return {
+    name: String(raw.name),
+    created_at: String(raw.created_at ?? ""),
+    is_flag: Boolean(raw.is_flag),
+  };
+}
+
+function normalizeGroupMembers(rawMembers: unknown[], tag: GroupTag): GroupMember[] {
+  if (tag === "workspace") {
+    return rawMembers.map((m) =>
+      normalizeWorkspaceGroupMember(m as Record<string, unknown>)
+    );
+  }
+  if (tag === "files") {
+    return rawMembers.map((m) => {
+      const row = m as Record<string, unknown>;
+      return {
+        document_id: String(row.document_id),
+        workspace: String(row.workspace),
+        file_name: String(row.file_name),
+        created_at: row.created_at ? String(row.created_at) : undefined,
+      } satisfies GroupFileMember;
+    });
+  }
+  if (tag === "entity") {
+    return rawMembers.map((m) => {
+      const row = m as Record<string, unknown>;
+      return {
+        entity_id: String(row.entity_id ?? row.id ?? ""),
+        name: String(row.name ?? ""),
+        entity_type: String(row.entity_type ?? ""),
+        workspace: String(row.workspace ?? ""),
+        created_at: row.created_at ? String(row.created_at) : undefined,
+      } satisfies GroupEntityMember;
+    });
+  }
+  return rawMembers.map((m) => {
+    const row = m as Record<string, unknown>;
+    return {
+      relation_id: String(row.relation_id),
+      source: String(row.source),
+      target: String(row.target),
+      workspace: String(row.workspace),
+      created_at: row.created_at ? String(row.created_at) : undefined,
+    } satisfies GroupRelationMember;
+  });
+}
+
+function normalizeGroupMembersPage(
+  data: Record<string, unknown>,
+  fallback: { page?: number; page_size?: number; expectedTag?: GroupTag }
+): GroupMembersPage {
+  const rawMembers = Array.isArray(data.members)
+    ? data.members
+    : normalizeGroupTag(data.tag ?? fallback.expectedTag) === "workspace" &&
+        Array.isArray(data.workspaces)
+      ? data.workspaces
+      : [];
+  const tag = resolveGroupMembersTag(data, rawMembers, fallback.expectedTag);
+  const member_count =
+    typeof data.member_count === "number"
+      ? data.member_count
+      : typeof data.workspace_count === "number"
+        ? data.workspace_count
+        : rawMembers.length;
+  return {
+    name: String(data.name ?? data.group ?? ""),
+    tag,
+    description: data.description != null ? String(data.description) : null,
+    member_count,
+    pagination: normalizeGroupPagination(
+      data.pagination as Partial<WorkspacePagePagination> | undefined,
+      { ...fallback, total_items: member_count }
+    ),
+    members: normalizeGroupMembers(rawMembers, tag),
+  };
+}
+
+export function isWorkspaceGroupTag(tag: GroupTag | string | null | undefined): boolean {
+  return normalizeGroupTag(tag) === "workspace";
+}
+
+export function isWorkspaceGroup(group: Pick<WorkspaceGroupSummary, "tag">): boolean {
+  return isWorkspaceGroupTag(group.tag);
+}
+
+export async function createWorkspaceGroup(
+  name: string,
+  options?: CreateGroupOptions
+): Promise<WorkspaceGroupSummary> {
   const normalized = name.trim();
+  const body: { name: string; tag?: GroupTag; description?: string } = {
+    name: normalized,
+    tag: options?.tag ?? "workspace",
+  };
+  const normalizedDescription = options?.description?.trim();
+  if (normalizedDescription) body.description = normalizedDescription;
   const response = await fetch(buildApiUrl("/group/create/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: normalized }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
   const data = await response.json();
-  return data.group as WorkspaceGroupSummary;
+  return normalizeGroupSummary((data.group ?? data) as Record<string, unknown>);
 }
 
-export async function listWorkspaceGroups(): Promise<WorkspaceGroupSummary[]> {
-  const response = await fetch(buildApiUrl("/group/list/"));
+export async function listWorkspaceGroups(params?: {
+  page?: number;
+  page_size?: number;
+  tag?: GroupTag;
+  signal?: AbortSignal;
+}): Promise<GroupListResponse> {
+  const query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  if (params?.tag) query.tag = params.tag;
+
+  const response = await fetch(buildApiUrl("/group/list/", query), {
+    signal: params?.signal,
+  });
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
   const data = await response.json();
-  return (data.groups ?? []) as WorkspaceGroupSummary[];
+  const groups = (data.groups ?? []).map((g: Record<string, unknown>) =>
+    normalizeGroupSummary(g)
+  );
+  return {
+    groups,
+    pagination: normalizeGroupPagination(data.pagination, {
+      page: params?.page,
+      page_size: params?.page_size,
+      total_items: groups.length,
+    }),
+  };
 }
 
-export async function getGroup(groupName: string): Promise<WorkspaceGroupDetail> {
+export async function listAllWorkspaceGroups(params?: {
+  tag?: GroupTag;
+  signal?: AbortSignal;
+}): Promise<WorkspaceGroupSummary[]> {
+  const all: WorkspaceGroupSummary[] = [];
+  let page = 1;
+  const page_size = 100;
+  for (;;) {
+    const res = await listWorkspaceGroups({ page, page_size, tag: params?.tag, signal: params?.signal });
+    all.push(...res.groups);
+    if (!res.pagination.has_next) break;
+    page += 1;
+  }
+  return all;
+}
+
+/** @deprecated Prefer listAllWorkspaceGroups or listWorkspaceGroups */
+export async function listWorkspaceGroupsLegacy(): Promise<WorkspaceGroupSummary[]> {
+  return listAllWorkspaceGroups();
+}
+
+export async function getGroup(
+  groupName: string,
+  params?: { page?: number; page_size?: number; signal?: AbortSignal }
+): Promise<WorkspaceGroupDetail> {
+  const query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+
   const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`)
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`, query),
+    { signal: params?.signal }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  const page = normalizeGroupMembersPage(data, {
+    page: params?.page,
+    page_size: params?.page_size,
+  });
+  const workspaces =
+    page.tag === "workspace"
+      ? (page.members as GroupWorkspaceMember[])
+      : [];
+  return {
+    ...page,
+    is_system: Boolean(data.is_system),
+    workspaces,
+  };
+}
+
+export async function getGroupMembers(
+  groupName: string,
+  params?: {
+    page?: number;
+    page_size?: number;
+    signal?: AbortSignal;
+    expectedTag?: GroupTag;
+  }
+): Promise<GroupMembersPage> {
+  const query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/members/`, query),
+    { signal: params?.signal }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  return normalizeGroupMembersPage(data, {
+    page: params?.page,
+    page_size: params?.page_size,
+    expectedTag: params?.expectedTag,
+  });
+}
+
+const GROUP_MEMBERS_MAX_PAGE_SIZE = 100;
+
+/** Fetch every group member, paginating at the API max page size (100). */
+export async function getAllGroupMembers(
+  groupName: string,
+  options?: { expectedTag?: GroupTag; signal?: AbortSignal }
+): Promise<GroupMember[]> {
+  const members: GroupMember[] = [];
+  let page = 1;
+  let hasNext = true;
+
+  while (hasNext) {
+    const pageData = await getGroupMembers(groupName, {
+      page,
+      page_size: GROUP_MEMBERS_MAX_PAGE_SIZE,
+      expectedTag: options?.expectedTag,
+      signal: options?.signal,
+    });
+    members.push(...pageData.members);
+    hasNext = pageData.pagination.has_next;
+    page += 1;
+  }
+
+  return members;
+}
+
+export async function updateGroup(
+  groupName: string,
+  options: UpdateGroupOptions
+): Promise<UpdateGroupResult> {
+  const body: Record<string, string | null> = {};
+  if (options.name !== undefined) {
+    const trimmed = options.name?.trim();
+    if (!trimmed) throw new Error("Group name cannot be empty.");
+    body.name = trimmed;
+  }
+  if (options.description !== undefined) {
+    body.description = options.description?.trim() || null;
+  }
+  if (Object.keys(body).length === 0) {
+    throw new Error("No fields to update.");
+  }
+
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
   const data = await response.json();
   return {
-    name: data.name,
-    workspace_count: data.workspace_count ?? data.workspaces?.length ?? 0,
-    is_system: Boolean(data.is_system),
-    workspaces: (data.workspaces ?? []).map((w: WorkspaceGroupMember) => ({
-      name: w.name,
-      is_flag: Boolean(w.is_flag),
-      created_at: w.created_at,
-    })),
+    message: data.message,
+    previous_name: data.previous_name,
+    group: normalizeGroupSummary((data.group ?? data) as Record<string, unknown>),
   };
 }
 
@@ -589,9 +1107,107 @@ export async function removeWorkspaceFromGroup(
   }
 }
 
+export async function addFileToGroup(
+  groupName: string,
+  documentId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/files/`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_id: documentId }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function removeFileFromGroup(
+  groupName: string,
+  documentId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(
+      `/group/${encodeURIComponent(groupName)}/files/${encodeURIComponent(documentId)}/`
+    ),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function addEntityToGroup(
+  groupName: string,
+  entityId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/entities/`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entity_id: entityId }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function removeEntityFromGroup(
+  groupName: string,
+  entityId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(
+      `/group/${encodeURIComponent(groupName)}/entities/${encodeURIComponent(entityId)}/`
+    ),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function addRelationToGroup(
+  groupName: string,
+  relationId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(`/group/${encodeURIComponent(groupName)}/relations/`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relation_id: relationId }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function removeRelationFromGroup(
+  groupName: string,
+  relationId: string
+): Promise<void> {
+  const response = await fetch(
+    buildApiUrl(
+      `/group/${encodeURIComponent(groupName)}/relations/${encodeURIComponent(relationId)}/`
+    ),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
 export async function getGroupWorkspaceNames(groupName: string): Promise<string[]> {
-  const detail = await getGroup(groupName);
-  return detail.workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b));
+  const members = await getAllGroupMembers(groupName, { expectedTag: "workspace" });
+  return (members as GroupWorkspaceMember[])
+    .map((w) => w.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 // --- Documents ---
@@ -753,6 +1369,27 @@ export async function deleteWorkspaces(
     } catch (error) {
       failed.push({
         name: workspaceName,
+        error: error instanceof Error ? error.message : "Delete failed",
+      });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+export async function deleteWorkspaceGroups(
+  groupNames: string[]
+): Promise<BulkFileOperationResult> {
+  const succeeded: string[] = [];
+  const failed: BulkFileOperationResult["failed"] = [];
+
+  for (const groupName of groupNames) {
+    try {
+      await deleteWorkspaceGroup(groupName);
+      succeeded.push(groupName);
+    } catch (error) {
+      failed.push({
+        name: groupName,
         error: error instanceof Error ? error.message : "Delete failed",
       });
     }
@@ -1354,6 +1991,7 @@ export async function getKnowledgeGraphEntityTypes(
 ): Promise<{
   workspace?: string;
   group?: string;
+  tag?: GroupTag;
   entityTypes: EntityTypeEntry[];
   workspaces?: GroupWorkspaceEntitySummary[];
 }> {
@@ -1367,6 +2005,22 @@ export async function getKnowledgeGraphEntityTypes(
   const data = await response.json();
 
   if (isGroupScope(scope)) {
+    const tag = normalizeGroupTag(data.tag);
+    if (Array.isArray(data.entity_types) && (!Array.isArray(data.workspaces) || data.workspaces.length === 0)) {
+      const entityTypes: EntityTypeEntry[] = (data.entity_types ?? [])
+        .map((et: { type: string; count?: number }) => ({
+          type: et.type,
+          count: et.count ?? 0,
+        }))
+        .sort((a: EntityTypeEntry, b: EntityTypeEntry) => b.count - a.count);
+      return {
+        group: data.group ?? scope.group,
+        tag,
+        entityTypes,
+        workspaces: [],
+      };
+    }
+
     const merged = new Map<string, number>();
     const workspaces: GroupWorkspaceEntitySummary[] = [];
     for (const ws of data.workspaces ?? []) {
@@ -1391,6 +2045,7 @@ export async function getKnowledgeGraphEntityTypes(
       .sort((a, b) => b.count - a.count);
     return {
       group: data.group ?? scope.group,
+      tag,
       entityTypes,
       workspaces: workspaces.filter((w) => w.workspace),
     };
@@ -1618,7 +2273,7 @@ export async function searchKnowledgeEntities(
   const data: EntitySearchResponse = await response.json();
 
   let graphPayload: KnowledgeGraphPayload;
-  if (isGroupScope(scope) && data.workspaces) {
+  if (isGroupScope(scope) && Array.isArray(data.workspaces)) {
     graphPayload = mergeGroupGraphPayloads(
       data.workspaces.map((w) => ({
         workspace: w.workspace,
@@ -1633,6 +2288,22 @@ export async function searchKnowledgeEntities(
       (w.matches ?? []).map((m) => ({ ...m, workspace: w.workspace }))
     );
     return { ...data, matches, graphPayload };
+  }
+
+  if (isGroupScope(scope) && data.graph) {
+    graphPayload = mergeGroupGraphPayloads(
+      [
+        {
+          workspace: data.graph.workspace ?? scope.group,
+          nodes: data.graph.nodes,
+          edges: data.graph.edges,
+          truncated: data.graph.truncated,
+          filters: data.graph.filters,
+        },
+      ],
+      scope.group
+    );
+    return { ...data, matches: data.matches ?? [], graphPayload };
   }
 
   const graph = data.graph;

@@ -5,14 +5,15 @@ import Navbar from "./Navbar";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import SidebarNav from "./SidebarNav";
-import { FileStack, BookOpen, FolderCog, MessageCircle } from "lucide-react";
+import { FileStack, BookOpen, FolderCog, FolderKanban, MessageCircle } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const pages = [
-  { path: "/workspace-management", name: "Workspace Management", icon: FolderCog },
+  { path: "/workspace-management", name: "Workspaces", icon: FolderCog },
+  { path: "/group-management", name: "Groups", icon: FolderKanban },
   { path: "/documents", name: "Documents", icon: FileStack },
   { path: "/knowledge-base", name: "Knowledge Base", icon: BookOpen },
   { path: "/chat", name: "Chat", icon: MessageCircle },
@@ -25,8 +26,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       ? location.pathname.replace(/\/+$/, "")
       : location.pathname;
   const isFullBleed = path === "/knowledge-base" || path === "/chat";
-  const isWorkspacePage =
-    path === "/workspace-management" || path === "/";
+  const isDirectoryPage =
+    path === "/workspace-management" ||
+    path === "/group-management" ||
+    path === "/";
 
   return (
     <div className="flex flex-col h-screen">
@@ -43,7 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <main
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col hide-scrollbar",
-            isFullBleed || isWorkspacePage
+            isFullBleed || isDirectoryPage
               ? "h-full overflow-hidden"
               : "overflow-y-auto"
           )}
@@ -56,7 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex h-full min-h-0 flex-1 flex-col w-full overflow-hidden bg-background">
               {children}
             </div>
-          ) : isWorkspacePage ? (
+          ) : isDirectoryPage ? (
             <div className="flex h-full min-h-0 flex-1 flex-col w-full overflow-hidden px-4 py-3">
               {children}
             </div>

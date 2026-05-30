@@ -10,6 +10,7 @@ import { normalizeChatMarkdown } from "@/lib/normalizeChatMarkdown";
 import { normalizeCitationsInMarkdown, resolveCitation } from "@/lib/chatCitations";
 import { splitStreamingBlocks } from "@/lib/splitStreamingBlocks";
 import { CitationTag } from "@/components/chat/CitationTag";
+import { brand } from "@/lib/brandColors";
 import { cn } from "@/lib/utils";
 import { useThrottledStreamContent } from "@/hooks/useThrottledStreamContent";
 import {
@@ -72,31 +73,31 @@ const ALERT_STYLES: Record<
 > = {
   note: {
     label: "Note",
-    border: "border-sky-500/40",
-    bg: "bg-sky-500/10",
-    title: "text-sky-700 dark:text-sky-300",
-    icon: "text-sky-600",
+    border: brand.info.border,
+    bg: brand.info.bg,
+    title: brand.info.text,
+    icon: brand.info.text,
   },
   tip: {
     label: "Tip",
-    border: "border-emerald-500/40",
-    bg: "bg-emerald-500/10",
-    title: "text-emerald-700 dark:text-emerald-300",
-    icon: "text-emerald-600",
+    border: brand.success.border,
+    bg: brand.success.bg,
+    title: brand.success.text,
+    icon: brand.success.text,
   },
   important: {
     label: "Important",
-    border: "border-violet-500/40",
-    bg: "bg-violet-500/10",
-    title: "text-violet-700 dark:text-violet-300",
-    icon: "text-violet-600",
+    border: brand.group.border,
+    bg: brand.group.bg,
+    title: brand.group.text,
+    icon: brand.group.text,
   },
   warning: {
     label: "Warning",
-    border: "border-amber-500/40",
-    bg: "bg-amber-500/10",
-    title: "text-amber-800 dark:text-amber-200",
-    icon: "text-amber-600",
+    border: brand.warning.border,
+    bg: brand.warning.bg,
+    title: brand.warning.text,
+    icon: brand.warning.text,
   },
   caution: {
     label: "Caution",

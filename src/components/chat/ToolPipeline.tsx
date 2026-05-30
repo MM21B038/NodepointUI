@@ -268,7 +268,7 @@ export function ToolPipeline({
           aria-hidden
         >
           {anyRunning && usePipeline ? (
-            <div className="absolute inset-0 w-full bg-gradient-to-b from-transparent via-violet-500/50 to-transparent animate-tool-rail-flow motion-reduce:animate-none" />
+            <div className="absolute inset-0 w-full bg-gradient-to-b from-transparent via-brand-chat/50 to-transparent animate-tool-rail-flow motion-reduce:animate-none" />
           ) : null}
         </div>
       ) : null}

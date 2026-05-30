@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PreprocessQueueStatusResponse } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
+import { brand } from "@/lib/brandColors";
 import {
   computePreprocessSummary,
   formatArgsSummary,
@@ -55,7 +56,7 @@ function StatCard({
     <Card
       className={cn(
         "shadow-none",
-        variant === "warn" && "border-amber-500/40 bg-amber-500/5",
+        variant === "warn" && cn(brand.warning.border, brand.warning.bg, "border"),
         variant === "danger" && "border-destructive/40 bg-destructive/5",
         variant === "ok" && "border-green-500/30 bg-green-500/5"
       )}

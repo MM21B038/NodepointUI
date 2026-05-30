@@ -8,6 +8,7 @@ import {
   getCitationDisplayLabel,
 } from "@/lib/chatCitations";
 import { useCitationModalOptional } from "@/components/chat/CitationModalContext";
+import { brand } from "@/lib/brandColors";
 import { cn } from "@/lib/utils";
 
 const CITATION_STYLES: Record<
@@ -15,28 +16,28 @@ const CITATION_STYLES: Record<
   { bg: string; border: string; text: string; badge: string }
 > = {
   entity: {
-    bg: "bg-violet-500/12",
-    border: "border-violet-500/35",
-    text: "text-violet-900 dark:text-violet-100",
-    badge: "text-violet-600 dark:text-violet-300",
+    bg: brand.group.bg,
+    border: brand.group.border,
+    text: "text-foreground",
+    badge: brand.group.text,
   },
   relation: {
-    bg: "bg-emerald-500/12",
-    border: "border-emerald-500/35",
-    text: "text-emerald-900 dark:text-emerald-100",
-    badge: "text-emerald-600 dark:text-emerald-300",
+    bg: brand.success.bg,
+    border: brand.success.border,
+    text: "text-foreground",
+    badge: brand.success.text,
   },
   chunk: {
-    bg: "bg-amber-500/12",
-    border: "border-amber-500/35",
-    text: "text-amber-950 dark:text-amber-50",
-    badge: "text-amber-700 dark:text-amber-300",
+    bg: brand.info.bg,
+    border: brand.info.border,
+    text: "text-foreground",
+    badge: brand.info.text,
   },
   doc: {
-    bg: "bg-sky-500/12",
-    border: "border-sky-500/35",
-    text: "text-sky-900 dark:text-sky-100",
-    badge: "text-sky-600 dark:text-sky-300",
+    bg: brand.workspace.bg,
+    border: brand.workspace.border,
+    text: "text-foreground",
+    badge: brand.workspace.text,
   },
 };
 

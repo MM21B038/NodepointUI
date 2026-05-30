@@ -242,14 +242,14 @@ export function ThinkingPipeline({
                       "animate-tool-lane-merge motion-reduce:animate-none pointer-events-none"
                     )}
                   >
-                    <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600/40 dark:text-violet-400/40" />
+                    <Brain className="h-3.5 w-3.5 shrink-0 text-brand-chat/40 dark:text-brand-chat/40" />
                     <span className="text-xs text-muted-foreground/40">Thinking</span>
                   </div>
                 ) : slot.segment.id === latest?.id ? (
                   <div
                     className={cn(
                       "relative min-w-0",
-                      isActive && "rounded-md bg-violet-500/[0.06] -mx-1 px-1",
+                      isActive && "rounded-md bg-brand-chat/[0.06] -mx-1 px-1",
                       slot.phase === "enter" &&
                         "animate-tool-lane-enter motion-reduce:animate-none"
                     )}
@@ -265,7 +265,7 @@ export function ThinkingPipeline({
                           open && "rotate-90"
                         )}
                       />
-                      <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                      <Brain className="h-3.5 w-3.5 shrink-0 text-brand-chat dark:text-brand-chat" />
                       <span className="text-xs text-muted-foreground">Thinking</span>
                       {mergedCount > 0 ? (
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground animate-in fade-in duration-200">

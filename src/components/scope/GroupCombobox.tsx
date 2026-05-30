@@ -17,10 +17,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import type { GroupTag } from "@/database/workspaceStorage";
+import {
+  formatGroupLabel,
+  formatGroupTag,
+  groupSearchText,
+  groupTagTone,
+} from "@/lib/groupTag";
+import { metaDescription } from "@/lib/resourceMeta";
 
 export interface GroupOption {
   name: string;
-  workspace_count: number;
+  tag: GroupTag;
+  description?: string | null;
+  member_count: number;
 }
 
 interface GroupComboboxProps {
@@ -29,10 +39,6 @@ interface GroupComboboxProps {
   onSelect: (name: string) => void;
   disabled?: boolean;
   className?: string;
-}
-
-function formatGroupLabel(name: string, count: number) {
-  return `${name}(${count})`;
 }
 
 export default function GroupCombobox({
@@ -68,7 +74,9 @@ export default function GroupCombobox({
           <span className="flex min-w-0 items-center gap-1 truncate">
             <Users className="h-3 w-3 shrink-0 opacity-70" />
             {active ? (
-              <span className="truncate">{formatGroupLabel(active.name, active.workspace_count)}</span>
+              <span className="truncate">
+                {formatGroupLabel(active.name, active.member_count, active.tag)}
+              </span>
             ) : (
               <span className="text-muted-foreground">Select group</span>
             )}
@@ -80,7 +88,9 @@ export default function GroupCombobox({
         <Command
           filter={(itemValue, search) => {
             if (!search) return 1;
-            return itemValue.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
+            const group = groups.find((g) => g.name === itemValue);
+            const haystack = group ? groupSearchText(group) : itemValue.toLowerCase();
+            return haystack.includes(search.toLowerCase()) ? 1 : 0;
           }}
         >
           <CommandInput placeholder="Search group…" className="h-8 text-xs" />
@@ -104,9 +114,17 @@ export default function GroupCombobox({
                       selected === g.name ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <span className="truncate">{g.name}</span>
-                  <span className="ml-1 shrink-0 text-muted-foreground">
-                    ({g.workspace_count})
+                  <span className="min-w-0 truncate">{g.name}</span>
+                  <span className={cn("shrink-0", groupTagTone(g.tag).text)}>
+                    · {formatGroupTag(g.tag)}
+                  </span>
+                  {metaDescription(g) && (
+                    <span className="hidden min-w-0 truncate text-muted-foreground sm:inline">
+                      · {metaDescription(g)}
+                    </span>
+                  )}
+                  <span className="ml-auto shrink-0 text-muted-foreground">
+                    ({g.member_count})
                   </span>
                 </CommandItem>
               ))}

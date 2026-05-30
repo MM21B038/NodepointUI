@@ -24,6 +24,7 @@ import {
   type WorkspacePreprocessStatusResponse,
 } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
+import { brand } from "@/lib/brandColors";
 import { showError } from "@/utils/toast";
 import DocumentsPageSkeleton from "@/components/documents/DocumentsPageSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,7 +90,7 @@ function PhaseBadge({ phase }: { phase: PreprocessPhase }) {
     case "kg_ready":
       return <Badge variant="secondary">{label}</Badge>;
     case "needs_prepare":
-      return <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-400">{label}</Badge>;
+      return <Badge variant="outline" className={cn(brand.warning.border, brand.warning.text, "border")}>{label}</Badge>;
     case "queued":
       return <Badge variant="outline">{label}</Badge>;
     case "idle":

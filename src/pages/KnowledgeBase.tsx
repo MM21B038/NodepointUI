@@ -35,13 +35,14 @@ import {
   getKnowledgeGraphEntityTypes,
   getFilteredKnowledgeGraph,
   fetchKnowledgeGraphForWorkspaces,
-  getGroupMemberNames,
+  resolveGroupKgScopeMeta,
   groupScope,
   listFiles,
   listFilesForWorkspaces,
   resolveGraphFileNamesParam,
   searchKnowledgeEntities,
   topEntityTypesByCount,
+  type GroupTag,
   KB_DEFAULT_DEPTH,
   KB_DEFAULT_LIMIT,
   KB_MAX_LIMIT,
@@ -65,6 +66,8 @@ import type { ViewScopeMode } from "@/lib/viewScope";
 import { showError } from "@/utils/toast";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { brand } from "@/lib/brandColors";
+import { formatGroupMemberCount, formatGroupTag, groupKgEmptyMessage } from "@/lib/groupTag";
 
 type ActiveFilterPanel = "none" | "sourceFiles" | "workspaces" | "overview";
 
@@ -115,6 +118,7 @@ const KnowledgeBase = () => {
   const [graphLoadOpen, setGraphLoadOpen] = useState(false);
   const [graphControlsOpen, setGraphControlsOpen] = useState(false);
   const [groupMemberCount, setGroupMemberCount] = useState(0);
+  const [activeGroupTag, setActiveGroupTag] = useState<GroupTag>("workspace");
   const [groupMemberNamesFromApi, setGroupMemberNamesFromApi] = useState<string[]>([]);
   const [groupWorkspaceSummaries, setGroupWorkspaceSummaries] = useState<
     GroupWorkspaceEntitySummary[]
@@ -130,6 +134,9 @@ const KnowledgeBase = () => {
   groupMemberCountRef.current = groupMemberCount;
   const groupMemberNamesFromApiRef = useRef(groupMemberNamesFromApi);
   groupMemberNamesFromApiRef.current = groupMemberNamesFromApi;
+  const groupIsWorkspaceTagRef = useRef(true);
+  const activeGroupTagRef = useRef(activeGroupTag);
+  activeGroupTagRef.current = activeGroupTag;
 
   const scopeLoadKey = useMemo(
     () =>
@@ -149,26 +156,35 @@ const KnowledgeBase = () => {
   const workspaceFilterActive = useMemo(
     () =>
       scopeMode === "group" &&
-      groupMemberCount > 0 &&
+      activeGroupTag === "workspace" &&
+      groupMemberNamesFromApi.length > 0 &&
       selectedGroupWorkspaces.size > 0 &&
-      selectedGroupWorkspaces.size < groupMemberCount &&
+      selectedGroupWorkspaces.size < groupMemberNamesFromApi.length &&
       hasFiltersBeenInteracted,
     [
       scopeMode,
-      groupMemberCount,
+      activeGroupTag,
+      groupMemberNamesFromApi.length,
       selectedGroupWorkspaces.size,
       hasFiltersBeenInteracted,
     ]
   );
 
+  const groupWorkspaceCount = Math.max(1, groupMemberNamesFromApi.length);
+
   const limitDivisor = useMemo(() => {
     if (scopeMode !== "group") return 1;
     return groupLimitDivisor(
-      groupMemberCount,
-      selectedGroupWorkspaces.size,
+      groupWorkspaceCount,
+      selectedGroupWorkspaces.size || groupWorkspaceCount,
       workspaceFilterActive
     );
-  }, [scopeMode, groupMemberCount, selectedGroupWorkspaces.size, workspaceFilterActive]);
+  }, [
+    scopeMode,
+    groupWorkspaceCount,
+    selectedGroupWorkspaces.size,
+    workspaceFilterActive,
+  ]);
 
   const selectedGroupWorkspacesKey = useMemo(
     () => [...selectedGroupWorkspaces].sort().join("\0"),
@@ -232,6 +248,8 @@ const KnowledgeBase = () => {
     setTruncated(false);
     setSearchThreshold(KB_DEFAULT_SEARCH_THRESHOLD);
     setGroupMemberCount(0);
+    setActiveGroupTag("workspace");
+    groupIsWorkspaceTagRef.current = true;
     setGroupMemberNamesFromApi([]);
     setGraphLoadParams({ depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT });
     setSelectedNodeTypes(new Set());
@@ -246,7 +264,7 @@ const KnowledgeBase = () => {
     names: string[];
     error?: string;
   } => {
-    if (scopeMode !== "group") {
+    if (scopeMode !== "group" || !groupIsWorkspaceTagRef.current) {
       return { names: [] };
     }
     const names = [...selectedGroupWorkspaces].sort((a, b) => a.localeCompare(b));
@@ -326,6 +344,9 @@ const KnowledgeBase = () => {
 
         let data;
         if (mode === "group" && groupName) {
+          if (!groupIsWorkspaceTagRef.current) {
+            data = await getFilteredKnowledgeGraph(groupScope(groupName), fetchParams);
+          } else {
           const memberTotal = options?.groupMemberTotal ?? groupMemberCountRef.current;
           const sel = selectedGroupWorkspacesRef.current;
           const apiNames = groupMemberNamesFromApiRef.current;
@@ -354,6 +375,7 @@ const KnowledgeBase = () => {
             }
           } else {
             data = await getFilteredKnowledgeGraph(groupScope(groupName), fetchParams);
+          }
           }
         } else {
           data = await getFilteredKnowledgeGraph(
@@ -406,34 +428,38 @@ const KnowledgeBase = () => {
           if (!groupName?.trim()) {
             if (requestId !== scopeLoadRequestIdRef.current) return;
             setGroupMemberCount(0);
+            setActiveGroupTag("workspace");
+            groupIsWorkspaceTagRef.current = true;
             setGroupMemberNamesFromApi([]);
             setEntityTypeCatalog([]);
             return;
           }
-          const [entityTypesResult, membersResult] = await Promise.allSettled([
+          const [entityTypesResult, kgMetaResult] = await Promise.allSettled([
             getKnowledgeGraphEntityTypes(groupScope(groupName)),
-            getGroupMemberNames(groupName),
+            resolveGroupKgScopeMeta(groupName),
           ]);
           if (requestId !== scopeLoadRequestIdRef.current) return;
           if (entityTypesResult.status === "rejected") {
             throw entityTypesResult.reason;
           }
-          const { entityTypes, workspaces: wsSummaries } = entityTypesResult.value;
-          const apiWorkspaces =
-            membersResult.status === "fulfilled" ? membersResult.value : [];
-          if (membersResult.status === "rejected") {
-            console.warn(
-              "KnowledgeBase: group members unavailable",
-              membersResult.reason
-            );
+          if (kgMetaResult.status === "rejected") {
+            throw kgMetaResult.reason;
           }
-          const count = apiWorkspaces.length;
-          const large = isLargeGroup(count);
+          const { entityTypes, workspaces: wsSummaries } = entityTypesResult.value;
+          const kgMeta = kgMetaResult.value;
+          const apiWorkspaces = kgMeta.graphWorkspaceNames;
+          const memberCount = kgMeta.memberCount;
+          const workspaceCount = Math.max(1, apiWorkspaces.length);
+          const large =
+            kgMeta.isWorkspaceTagGroup && isLargeGroup(apiWorkspaces.length);
           const initialSelection = large
             ? defaultGroupWorkspaceSelection(apiWorkspaces)
             : apiWorkspaces;
 
-          setGroupMemberCount(count);
+          setActiveGroupTag(kgMeta.tag);
+          activeGroupTagRef.current = kgMeta.tag;
+          groupIsWorkspaceTagRef.current = kgMeta.isWorkspaceTagGroup;
+          setGroupMemberCount(memberCount);
           setGroupMemberNamesFromApi(apiWorkspaces);
           setGroupWorkspaceSummaries(wsSummaries ?? []);
           setSelectedGroupWorkspaces(new Set(initialSelection));
@@ -441,8 +467,8 @@ const KnowledgeBase = () => {
           const initialTypes = new Set(topEntityTypesByCount(entityTypes, KB_INITIAL_TYPE_COUNT));
           setApiSelectedEntityTypes(initialTypes);
           const divisor = groupLimitDivisor(
-            count,
-            initialSelection.length,
+            workspaceCount,
+            initialSelection.length || workspaceCount,
             large
           );
           const loadParams = {
@@ -461,12 +487,17 @@ const KnowledgeBase = () => {
             return;
           }
 
-          const files = await listFilesForWorkspaces(apiWorkspaces);
+          let files: string[] = [];
+          if (kgMeta.tag === "files" && kgMeta.memberFileNames.length > 0) {
+            files = kgMeta.memberFileNames;
+          } else if (kgMeta.isWorkspaceTagGroup && apiWorkspaces.length > 0) {
+            files = await listFilesForWorkspaces(apiWorkspaces);
+          }
           if (requestId !== scopeLoadRequestIdRef.current) return;
           setAvailableSourceFiles(files);
           setSelectedSourceFiles(new Set(files));
 
-          if (initialTypes.size > 0 && count > 0) {
+          if (initialTypes.size > 0 && memberCount > 0) {
             await loadBrowseGraph(
               mode,
               workspaceName,
@@ -475,7 +506,9 @@ const KnowledgeBase = () => {
               loadParams,
               files,
               new Set(files),
-              { groupMemberTotal: count, groupTargets: apiWorkspaces }
+              kgMeta.isWorkspaceTagGroup
+                ? { groupMemberTotal: apiWorkspaces.length, groupTargets: apiWorkspaces }
+                : { groupMemberTotal: memberCount }
             );
           }
           return;
@@ -597,23 +630,37 @@ const KnowledgeBase = () => {
 
   const handleClearSearch = useCallback(() => {
     resetBrowseUiFilters();
+    const wsCount = Math.max(1, groupMemberNamesFromApi.length);
     const apiDivisor =
       scopeMode === "group"
-        ? groupLimitDivisor(groupMemberCount, groupMemberCount, false)
+        ? groupLimitDivisor(wsCount, wsCount, false)
         : 1;
     const loadParams = {
       depth: KB_DEFAULT_DEPTH,
       limit:
         scopeMode === "group" ? kbDefaultLimitForGroup(apiDivisor) : KB_DEFAULT_LIMIT,
     };
+    setGraphLoadParams(loadParams);
+    if (scopeMode === "group" && !groupIsWorkspaceTagRef.current) {
+      void loadBrowseGraph(
+        scopeMode,
+        currentWorkspace ?? null,
+        activeGroup,
+        apiSelectedEntityTypes,
+        loadParams,
+        availableSourceFiles,
+        selectedSourceFiles,
+        { groupMemberTotal: groupMemberCount }
+      );
+      return;
+    }
     let groupTargets: string[] | undefined;
     if (scopeMode === "group" && groupMemberNamesFromApi.length > 0) {
-      groupTargets = isLargeGroup(groupMemberCount)
+      groupTargets = isLargeGroup(groupMemberNamesFromApi.length)
         ? defaultGroupWorkspaceSelection(groupMemberNamesFromApi)
         : [...groupMemberNamesFromApi];
       setSelectedGroupWorkspaces(new Set(groupTargets));
     }
-    setGraphLoadParams(loadParams);
     if (scopeMode === "group" && groupTargets) {
       if (groupTargets.length === 0 || groupTargets.length > KB_MAX_GROUP_GRAPH_WORKSPACES) {
         showError(
@@ -631,7 +678,7 @@ const KnowledgeBase = () => {
           loadParams,
           files,
           new Set(files),
-          { groupMemberTotal: groupMemberCount, groupTargets }
+          { groupMemberTotal: groupMemberNamesFromApi.length, groupTargets }
         );
       })();
       return;
@@ -661,25 +708,40 @@ const KnowledgeBase = () => {
 
   const handleClearAllFilters = useCallback(() => {
     const initialTypes = new Set(topEntityTypesByCount(entityTypeCatalog, KB_INITIAL_TYPE_COUNT));
+    const wsCount = Math.max(1, groupMemberNamesFromApi.length);
     const apiDivisor =
       scopeMode === "group"
-        ? groupLimitDivisor(groupMemberCount, groupMemberCount, false)
+        ? groupLimitDivisor(wsCount, wsCount, false)
         : 1;
     const loadParams = {
       depth: KB_DEFAULT_DEPTH,
       limit:
         scopeMode === "group" ? kbDefaultLimitForGroup(apiDivisor) : KB_DEFAULT_LIMIT,
     };
+    setApiSelectedEntityTypes(initialTypes);
+    setGraphLoadParams(loadParams);
+    resetBrowseUiFilters();
+    if (scopeMode === "group" && !groupIsWorkspaceTagRef.current) {
+      setSelectedSourceFiles(new Set(availableSourceFiles));
+      void loadBrowseGraph(
+        scopeMode,
+        currentWorkspace ?? null,
+        activeGroup,
+        initialTypes,
+        loadParams,
+        availableSourceFiles,
+        new Set(availableSourceFiles),
+        { groupMemberTotal: groupMemberCount }
+      );
+      return;
+    }
     let groupTargets: string[] | undefined;
     if (scopeMode === "group" && groupMemberNamesFromApi.length > 0) {
-      groupTargets = isLargeGroup(groupMemberCount)
+      groupTargets = isLargeGroup(groupMemberNamesFromApi.length)
         ? defaultGroupWorkspaceSelection(groupMemberNamesFromApi)
         : [...groupMemberNamesFromApi];
       setSelectedGroupWorkspaces(new Set(groupTargets));
     }
-    setApiSelectedEntityTypes(initialTypes);
-    setGraphLoadParams(loadParams);
-    resetBrowseUiFilters();
     if (scopeMode === "group" && groupTargets) {
       if (groupTargets.length === 0 || groupTargets.length > KB_MAX_GROUP_GRAPH_WORKSPACES) {
         showError(
@@ -697,7 +759,7 @@ const KnowledgeBase = () => {
           loadParams,
           files,
           new Set(files),
-          { groupMemberTotal: groupMemberCount, groupTargets }
+          { groupMemberTotal: groupMemberNamesFromApi.length, groupTargets }
         );
       })();
       return;
@@ -759,6 +821,23 @@ const KnowledgeBase = () => {
   const handleApplyGraphLoad = useCallback(async () => {
     setHasFiltersBeenInteracted(true);
     if (scopeMode === "group") {
+      if (!groupIsWorkspaceTagRef.current) {
+        if (isSearchMode) {
+          void runSearch();
+          return;
+        }
+        void loadBrowseGraph(
+          scopeMode,
+          currentWorkspace ?? null,
+          activeGroup,
+          apiSelectedEntityTypes,
+          graphLoadParams,
+          availableSourceFiles,
+          selectedSourceFiles,
+          { groupMemberTotal: groupMemberCount }
+        );
+        return;
+      }
       const { names, error } = resolveGroupGraphTargets();
       if (error) {
         showError(error);
@@ -777,7 +856,7 @@ const KnowledgeBase = () => {
         graphLoadParams,
         files,
         new Set(files),
-        { groupMemberTotal: groupMemberCount, groupTargets: names }
+        { groupMemberTotal: groupMemberNamesFromApi.length, groupTargets: names }
       );
       return;
     }
@@ -1140,11 +1219,14 @@ const KnowledgeBase = () => {
     if (scopeMode === "workspace") {
       return graphDisplayNodes.length <= 50 ? "detailed" : "default";
     }
-    if (isLargeGroup(groupMemberCount) || graphDisplayNodes.length > 100) {
+    if (
+      (activeGroupTag === "workspace" && isLargeGroup(groupMemberNamesFromApi.length)) ||
+      graphDisplayNodes.length > 100
+    ) {
       return "compact";
     }
     return graphDisplayNodes.length > 50 ? "default" : "detailed";
-  }, [scopeMode, groupMemberCount, graphDisplayNodes.length]);
+  }, [scopeMode, activeGroupTag, groupMemberNamesFromApi.length, graphDisplayNodes.length]);
 
   const graphLabelHint = useMemo(() => {
     const cfg = getStoredGraphConfig();
@@ -1162,11 +1244,15 @@ const KnowledgeBase = () => {
   );
 
   const groupGraphSelectionHint = useMemo(() => {
-    if (scopeMode !== "group" || groupMemberCount <= KB_MAX_GROUP_GRAPH_WORKSPACES) {
+    if (
+      scopeMode !== "group" ||
+      activeGroupTag !== "workspace" ||
+      groupMemberNamesFromApi.length <= KB_MAX_GROUP_GRAPH_WORKSPACES
+    ) {
       return null;
     }
-    return `This group has ${groupMemberCount} workspaces. Select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then Load graph. Workspace filter changes require Apply.`;
-  }, [scopeMode, groupMemberCount]);
+    return `This group has ${groupMemberNamesFromApi.length} workspaces. Select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then Load graph. Workspace filter changes require Apply.`;
+  }, [scopeMode, activeGroupTag, groupMemberNamesFromApi.length]);
 
   const entityTypeLegendItems = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1201,10 +1287,12 @@ const KnowledgeBase = () => {
     alertMessage = error;
   } else if (allNodes.length === 0 && allEdges.length === 0) {
     alertMessage =
-      scopeMode === "group" && isLargeGroup(groupMemberCount)
-        ? `This group has ${groupMemberCount} workspaces. Open Workspaces or Overview, select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then click Load graph in Graph load.`
+      scopeMode === "group" &&
+      activeGroupTag === "workspace" &&
+      isLargeGroup(groupMemberNamesFromApi.length)
+        ? `This group has ${groupMemberNamesFromApi.length} workspaces. Open Workspaces or Overview, select up to ${KB_MAX_GROUP_GRAPH_WORKSPACES}, then click Load graph in Graph load.`
         : scopeMode === "group"
-          ? "No knowledge graph data for this group. Add workspaces to the group and ensure documents are uploaded and preprocessing is complete."
+          ? groupKgEmptyMessage(activeGroupTag)
           : "No knowledge graph data for this workspace. Upload documents and complete preprocessing.";
   } else if (apiSelectedEntityTypes.size === 0 && entityTypeCatalog.length > 0) {
     alertMessage =
@@ -1215,10 +1303,14 @@ const KnowledgeBase = () => {
     hasFiltersBeenInteracted &&
     (selectedNodeTypes.size === 0 ||
       selectedSourceFiles.size === 0 ||
-      (scopeMode === "group" && selectedGroupWorkspaces.size === 0))
+      (scopeMode === "group" &&
+        activeGroupTag === "workspace" &&
+        selectedGroupWorkspaces.size === 0))
   ) {
     alertMessage =
-      scopeMode === "group" && selectedGroupWorkspaces.size === 0
+      scopeMode === "group" &&
+      activeGroupTag === "workspace" &&
+      selectedGroupWorkspaces.size === 0
         ? "Select at least one workspace in the group to display the graph."
         : "Please select node types and/or source files to display the graph.";
   } else if (
@@ -1234,7 +1326,7 @@ const KnowledgeBase = () => {
   } else if (filteredNodes.length === 0) {
     alertMessage =
       scopeMode === "group"
-        ? "No graph data for this group. Ensure documents are uploaded and preprocessing is complete."
+        ? groupKgEmptyMessage(activeGroupTag)
         : "No graph data for this workspace. Upload documents and complete preprocessing.";
   }
 
@@ -1260,7 +1352,7 @@ const KnowledgeBase = () => {
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="shrink-0 text-base font-semibold">Knowledge graph</h1>
           {truncated && (
-            <Badge variant="outline" className="shrink-0 border-amber-500/50 text-amber-700 dark:text-amber-300">
+            <Badge variant="outline" className={cn("shrink-0 border", brand.warning.border, brand.warning.text)}>
               Subgraph truncated
             </Badge>
           )}
@@ -1269,19 +1361,31 @@ const KnowledgeBase = () => {
               Search results
             </Badge>
           )}
-          <Badge variant="secondary" className="max-w-[200px] truncate font-normal">
+          <Badge variant="secondary" className="max-w-[min(100%,16rem)] truncate font-normal">
             {scopeMode === "group" ? (
               <>
                 <Users className="mr-1 inline h-3 w-3" />
-                {activeGroup
-                  ? workspaceFilterActive
-                    ? `${selectedGroupWorkspaces.size} of ${groupMemberCount} in ${activeGroup}`
-                    : groupMemberCount > 0
-                      ? selectedGroupWorkspaces.size >= groupMemberCount
-                        ? `All ${groupMemberCount} in ${activeGroup}`
-                        : `${selectedGroupWorkspaces.size} of ${groupMemberCount} in ${activeGroup}`
-                      : `Group: ${activeGroup} (empty)`
-                  : "No group selected"}
+                {activeGroup ? (
+                  <>
+                    {formatGroupTag(activeGroupTag)} · {activeGroup}
+                    {groupMemberCount > 0 ? (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {formatGroupMemberCount({ tag: activeGroupTag, member_count: groupMemberCount })}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground"> (empty)</span>
+                    )}
+                    {activeGroupTag === "workspace" && workspaceFilterActive ? (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {selectedGroupWorkspaces.size}/{groupMemberNamesFromApi.length} ws
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  "No group selected"
+                )}
               </>
             ) : (
               <>
@@ -1311,7 +1415,10 @@ const KnowledgeBase = () => {
             focusDepth={Math.min(3, Math.max(1, graphLoadParams.depth))}
             largeGraphMode={largeGraphLayout}
             labelProfile={graphLabelProfile}
-            showWorkspaceSublabel={scopeMode === "group"}
+            showWorkspaceSublabel={
+              scopeMode === "group" &&
+              (groupMemberNamesFromApi.length > 1 || activeGroupTag !== "workspace")
+            }
             onZoomChange={setGraphZoomK}
             bottomLeftOverlay={
               <GraphLoadControls
@@ -1418,7 +1525,9 @@ const KnowledgeBase = () => {
               className="pointer-events-auto absolute left-1/2 top-0 z-[100] flex h-9 -translate-x-1/2 items-center gap-2"
               onMouseDown={(e) => e.stopPropagation()}
             >
-              {scopeMode === "group" && groupMemberNamesFromApi.length > 0 && (
+              {scopeMode === "group" &&
+                activeGroupTag === "workspace" &&
+                groupMemberNamesFromApi.length > 0 && (
                 <>
                   <Button
                     variant="outline"
@@ -1512,7 +1621,9 @@ const KnowledgeBase = () => {
                 : "-translate-x-[calc(100%+0.75rem)] pointer-events-none opacity-0"
             )}
           >
-            {activeFilterPanel === "overview" && scopeMode === "group" && (
+            {activeFilterPanel === "overview" &&
+              scopeMode === "group" &&
+              activeGroupTag === "workspace" && (
               <KbGraphSidePanel
                 title="Group overview"
                 icon={<LayoutGrid className="h-4 w-4" />}
@@ -1525,7 +1636,9 @@ const KnowledgeBase = () => {
                 />
               </KbGraphSidePanel>
             )}
-            {activeFilterPanel === "workspaces" && scopeMode === "group" && (
+            {activeFilterPanel === "workspaces" &&
+              scopeMode === "group" &&
+              activeGroupTag === "workspace" && (
               <GroupWorkspacesPanel
                 nodes={allNodes}
                 workspaceNames={

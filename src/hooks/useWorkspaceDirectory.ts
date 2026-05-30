@@ -9,6 +9,7 @@ import {
   type WorkspacePageItem,
   type WorkspacePagePagination,
 } from "@/database/workspaceStorage";
+import { metaSearchText } from "@/lib/resourceMeta";
 
 const EMPTY_PAGINATION: WorkspacePagePagination = {
   page: 1,
@@ -28,12 +29,16 @@ const ZERO_COUNTS: WorkspaceCounts = {
 
 function entryToItem(entry: {
   name: string;
+  tag?: string | null;
+  description?: string | null;
   is_flag: boolean;
   created_at: string;
   groups?: string[];
 }): WorkspacePageItem {
   return {
     name: entry.name,
+    tag: entry.tag ?? null,
+    description: entry.description ?? null,
     is_flag: entry.is_flag,
     created_at: entry.created_at,
     counts: ZERO_COUNTS,
@@ -107,7 +112,7 @@ export function useWorkspaceDirectory({
         );
       }
       if (q) {
-        filtered = filtered.filter((w) => w.name.toLowerCase().includes(q));
+        filtered = filtered.filter((w) => metaSearchText(w).includes(q));
       }
       filtered.sort(
         (a, b) =>

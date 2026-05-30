@@ -383,6 +383,11 @@ export class ChatWebSocketClient {
       return;
     }
 
+    if (data.type === "chat.branch_updated") {
+      this.callbacks.onEvent?.(data);
+      return;
+    }
+
     const outcome = dispatchStreamEvent(data, this.callbacks, (evt) =>
       this.applyEventToBlocks(evt)
     );

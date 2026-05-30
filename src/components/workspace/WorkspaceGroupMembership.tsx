@@ -13,10 +13,13 @@ import {
 import { toast } from "sonner";
 import {
   addWorkspaceToGroup,
+  isWorkspaceGroup,
   removeWorkspaceFromGroup,
 } from "@/database/workspaceStorage";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { isSelectableGroup } from "@/lib/viewScope";
+import { formatGroupTag } from "@/lib/groupTag";
+import { metaDescription } from "@/lib/resourceMeta";
 import GroupAssignmentList from "@/components/workspace/GroupAssignmentList";
 
 interface WorkspaceGroupMembershipProps {
@@ -50,11 +53,21 @@ export default function WorkspaceGroupMembership({
 
   const groupItems = useMemo(
     () =>
-      groups.map((g) => ({
-        id: g.name,
-        label: g.name,
-        hint: `${g.workspace_count} ws`,
-      })),
+      groups
+        .filter(isWorkspaceGroup)
+        .map((g) => {
+          const desc = metaDescription(g);
+          const hintParts = [
+            formatGroupTag(g.tag),
+            desc ? "desc" : null,
+            `${g.member_count} ws`,
+          ].filter(Boolean);
+          return {
+            id: g.name,
+            label: g.name,
+            hint: hintParts.join(" · "),
+          };
+        }),
     [groups]
   );
 

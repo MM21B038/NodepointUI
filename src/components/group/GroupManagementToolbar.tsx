@@ -3,13 +3,11 @@
 import {
   ChevronLeft,
   ChevronRight,
-  FolderCog,
-  FolderKanban,
   FolderPlus,
   Search,
   Trash2,
+  FolderKanban,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,10 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { WorkspaceStats } from "@/database/workspaceStorage";
+import type { GroupTag } from "@/database/workspaceStorage";
+import { GROUP_TAGS } from "@/database/workspaceStorage";
+import { GroupTagDot } from "@/components/group/GroupTagBadge";
+import { formatGroupTag } from "@/lib/groupTag";
 import {
   directoryCreateActionClass,
-  directoryNavActionClass,
   directorySearchInputClass,
   directorySelectionBarClass,
   directoryTitleClass,
@@ -35,14 +35,12 @@ import {
   directoryToolbarTitleClusterClass,
 } from "@/components/directory/directoryPageStyles";
 
-interface WorkspaceManagementToolbarProps {
-  onOpenCreateWorkspace: () => void;
+interface GroupManagementToolbarProps {
+  onOpenCreateGroup: () => void;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
-  groupFilter: string;
-  onGroupFilterChange: (value: string) => void;
-  groupNames: string[];
-  workspaceStats: WorkspaceStats | null;
+  tagFilter: GroupTag | "all";
+  onTagFilterChange: (value: GroupTag | "all") => void;
   totalItems: number;
   page: number;
   totalPages: number;
@@ -60,14 +58,12 @@ interface WorkspaceManagementToolbarProps {
   isDeleting?: boolean;
 }
 
-const WorkspaceManagementToolbar = ({
-  onOpenCreateWorkspace,
+const GroupManagementToolbar = ({
+  onOpenCreateGroup,
   searchTerm,
   onSearchTermChange,
-  groupFilter,
-  onGroupFilterChange,
-  groupNames,
-  workspaceStats,
+  tagFilter,
+  onTagFilterChange,
   totalItems,
   page,
   totalPages,
@@ -83,8 +79,7 @@ const WorkspaceManagementToolbar = ({
   onBulkDelete,
   onClearSelection,
   isDeleting = false,
-}: WorkspaceManagementToolbarProps) => {
-  const navigate = useNavigate();
+}: GroupManagementToolbarProps) => {
   const showPagination = totalPages > 1;
   const selectionIndeterminate = someSelected && !allDisplayedSelected;
 
@@ -94,15 +89,19 @@ const WorkspaceManagementToolbar = ({
         <div className={directorySelectionBarClass}>
           {onToggleSelectAllDisplayed && (
             <Checkbox
-              checked={allDisplayedSelected ? true : selectionIndeterminate ? "indeterminate" : false}
+              checked={
+                allDisplayedSelected
+                  ? true
+                  : selectionIndeterminate
+                    ? "indeterminate"
+                    : false
+              }
               onCheckedChange={(checked) => onToggleSelectAllDisplayed(checked === true)}
-              aria-label="Select all workspaces on this page"
+              aria-label="Select all groups on this page"
               disabled={isDeleting}
             />
           )}
-          <span className="text-sm font-medium">
-            {selectedCount} selected
-          </span>
+          <span className="text-sm font-medium">{selectedCount} selected</span>
           <Button
             type="button"
             size="sm"
@@ -130,68 +129,56 @@ const WorkspaceManagementToolbar = ({
       )}
       <div className={directoryToolbarRowClass}>
         <div className={directoryToolbarTitleClusterClass}>
-          <span className={directoryTitleIconClass("workspace")}>
-            <FolderCog className="h-4 w-4" />
+          <span className={directoryTitleIconClass("group")}>
+            <FolderKanban className="h-4 w-4" />
           </span>
-          <h1 className={directoryTitleClass()}>Workspaces</h1>
+          <h1 className={directoryTitleClass()}>Groups</h1>
           <span className={directoryToolbarDividerClass} aria-hidden />
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className={directoryCreateActionClass("workspace")}
-            onClick={onOpenCreateWorkspace}
+            className={directoryCreateActionClass("group")}
+            onClick={onOpenCreateGroup}
           >
             <FolderPlus className="h-3.5 w-3.5" />
-            New workspace
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className={directoryNavActionClass("group")}
-            onClick={() => navigate("/group-management")}
-          >
-            <FolderKanban className="h-3.5 w-3.5" />
-            Groups
-            {groupNames.length > 0 && (
-              <span className="tabular-nums text-muted-foreground">
-                ({groupNames.length})
-              </span>
-            )}
+            New group
           </Button>
         </div>
 
         <div className="relative min-w-[12rem] flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Label htmlFor="search-workspace" className="sr-only">
-            Search workspaces
+          <Label htmlFor="search-group" className="sr-only">
+            Search groups
           </Label>
           <Input
-            id="search-workspace"
-            placeholder="Search by name, tag, or description…"
+            id="search-group"
+            placeholder="Search by name, type, or description…"
             value={searchTerm}
             onChange={(e) => onSearchTermChange(e.target.value)}
             className={directorySearchInputClass}
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Label htmlFor="group-filter" className="sr-only">
-            Filter by group
+        <div className="flex shrink-0 items-center gap-2">
+          <Label htmlFor="group-tag-filter" className="sr-only">
+            Filter by type
           </Label>
-          <Select value={groupFilter} onValueChange={onGroupFilterChange}>
-            <SelectTrigger id="group-filter" className="h-9 w-[11rem]">
-              <SelectValue placeholder="All workspaces" />
+          <Select
+            value={tagFilter}
+            onValueChange={(value) => onTagFilterChange(value as GroupTag | "all")}
+          >
+            <SelectTrigger id="group-tag-filter" className="h-9 w-[10rem]">
+              <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">
-                All workspaces
-                {workspaceStats != null ? ` (${workspaceStats.total})` : ""}
-              </SelectItem>
-              {groupNames.map((name) => (
-                <SelectItem key={name} value={name}>
-                  In group: {name}
+              <SelectItem value="all">All types</SelectItem>
+              {GROUP_TAGS.map((tag) => (
+                <SelectItem key={tag} value={tag}>
+                  <span className="flex items-center gap-2">
+                    <GroupTagDot tag={tag} />
+                    {formatGroupTag(tag)}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -200,7 +187,7 @@ const WorkspaceManagementToolbar = ({
 
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {totalItems} workspace{totalItems === 1 ? "" : "s"}
+            {totalItems} group{totalItems === 1 ? "" : "s"}
           </span>
           {showPagination && (
             <>
@@ -235,16 +222,11 @@ const WorkspaceManagementToolbar = ({
       </div>
       {isSearchActive && (
         <p className="text-xs text-muted-foreground pl-0.5">
-          Search filters all loaded workspace names.
-        </p>
-      )}
-      {groupFilter !== "all" && !isSearchActive && (
-        <p className="text-xs text-muted-foreground pl-0.5">
-          Showing workspaces in group &quot;{groupFilter}&quot;.
+          Search matches group name, tag, and description.
         </p>
       )}
     </div>
   );
 };
 
-export default WorkspaceManagementToolbar;
+export default GroupManagementToolbar;

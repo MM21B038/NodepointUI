@@ -28,6 +28,8 @@ import {
 } from "@/lib/chatStreamReducer";
 import { ChatComposerBar } from "@/components/chat/ChatComposerBar";
 import { ChatTurnRow } from "@/components/chat/ChatTurnRow";
+import { brand } from "@/lib/brandColors";
+import { cn } from "@/lib/utils";
 import { CitationTag } from "@/components/chat/CitationTag";
 import { createBlockId } from "@/lib/chatTypes";
 import { throttle } from "@/lib/rafThrottle";
@@ -35,6 +37,9 @@ import { toast } from "sonner";
 import { CitationModalProvider } from "@/components/chat/CitationModalContext";
 import { CitationChatAlign } from "@/components/chat/CitationChatAlign";
 import { CitationSplitLayout } from "@/components/chat/CitationSplitLayout";
+import { GroupTagBadge } from "@/components/group/GroupTagBadge";
+import { formatGroupMemberCount, formatGroupTag } from "@/lib/groupTag";
+import { metaDescription } from "@/lib/resourceMeta";
 
 const TEXTAREA_MAX_HEIGHT = 160;
 /** Message thread max width */
@@ -46,7 +51,7 @@ const INITIAL_VISIBLE_TURNS = 60;
 const LOAD_OLDER_TURNS_STEP = 40;
 
 const StreamPage: React.FC = () => {
-  const { currentWorkspace, scopeMode, activeGroup } = useWorkspace();
+  const { currentWorkspace, scopeMode, activeGroup, groups } = useWorkspace();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [resolvedWorkspace, setResolvedWorkspace] = useState<string | null>(null);
   const [workspaceKey, setWorkspaceKey] = useState<string | null>(null);
@@ -649,6 +654,20 @@ const StreamPage: React.FC = () => {
     }
   };
 
+  const activeGroupMeta = useMemo(
+    () => groups.find((g) => g.name === activeGroup) ?? null,
+    [groups, activeGroup]
+  );
+  const activeGroupTypeLabel = activeGroupMeta
+    ? formatGroupTag(activeGroupMeta.tag)
+    : null;
+  const activeGroupMemberLabel = activeGroupMeta
+    ? formatGroupMemberCount(activeGroupMeta)
+    : null;
+  const activeGroupDescription = activeGroupMeta
+    ? metaDescription(activeGroupMeta)
+    : null;
+
   const emptyState = useMemo(() => {
     if (scopeMode === "workspace" && !currentWorkspace?.trim()) return "no-workspace";
     if (scopeMode === "group" && !activeGroup?.trim()) return "no-group";
@@ -683,6 +702,25 @@ const StreamPage: React.FC = () => {
                   <>
                     <Users className="mr-1 inline h-3 w-3 shrink-0" />
                     {activeGroup ?? "No group"}
+                    {activeGroupMeta ? (
+                      <>
+                        <span className="text-muted-foreground"> · </span>
+                        <GroupTagBadge
+                          tag={activeGroupMeta.tag}
+                          size="xs"
+                          className="align-middle normal-case"
+                        />
+                      </>
+                    ) : null}
+                    {activeGroupMemberLabel ? (
+                      <span className="text-muted-foreground"> · {activeGroupMemberLabel}</span>
+                    ) : null}
+                    {activeGroupDescription ? (
+                      <span className="hidden text-muted-foreground sm:inline">
+                        {" "}
+                        — {activeGroupDescription}
+                      </span>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -734,7 +772,7 @@ const StreamPage: React.FC = () => {
 
       {connectionState === "reconnecting" && (
         <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS} className="px-4 pb-2">
-          <Alert className="border-amber-500/40 bg-amber-500/10 py-2">
+          <Alert className={cn(brand.warning.border, brand.warning.bg, "border py-2")}>
             <Loader2 className="h-4 w-4 animate-spin" />
             <AlertTitle className="text-sm">Reconnecting</AlertTitle>
             <AlertDescription className="text-xs">
@@ -868,11 +906,11 @@ const StreamPage: React.FC = () => {
           <p className="text-[10px] text-center text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
             <span>
               {scopeMode === "group"
-                ? `Group chat · searches workspaces in ${activeGroup ?? "group"}`
+                ? `Group chat · ${activeGroupTypeLabel ?? "group"} scope (${activeGroupMemberLabel ?? "members"})`
                 : `Workspace ${displayTarget} chat`}
             </span>
             {connectionState !== "connected" && connectionState !== "reconnecting" && (
-              <span className="text-amber-600 dark:text-amber-400">
+              <span className={brand.warning.text}>
                 · {connectionState === "connecting" ? "Connecting…" : "Offline"}
               </span>
             )}

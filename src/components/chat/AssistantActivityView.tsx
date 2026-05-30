@@ -649,7 +649,7 @@ function ActivityTree({
           key={seg.id}
           className={cn(
             "relative min-w-0",
-            isActive && !freezeToolsList && "rounded-md bg-violet-500/[0.06] -mx-1 px-1"
+            isActive && !freezeToolsList && "rounded-md bg-brand-chat/[0.06] -mx-1 px-1"
           )}
         >
           <button
@@ -663,7 +663,7 @@ function ActivityTree({
                 open && "rotate-90"
               )}
             />
-            <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+            <Brain className="h-3.5 w-3.5 shrink-0 text-brand-chat dark:text-brand-chat" />
             <span className="text-xs text-muted-foreground">Thinking</span>
             {!hasPreview && !seg.isStreaming ? (
               <span className="truncate text-[11px] italic text-muted-foreground/70">
@@ -1134,7 +1134,7 @@ function AssistantActivityViewInner({
                     isActiveGroup &&
                       activityStillRunning &&
                       !followingResponseStreaming &&
-                      "rounded-lg ring-1 ring-violet-500/20"
+                      "rounded-lg ring-1 ring-brand-chat/20"
                   )}
                 >
                   <CollapsibleTrigger asChild>
@@ -1144,7 +1144,7 @@ function AssistantActivityViewInner({
                         "flex w-full items-center gap-2 rounded-lg border border-border/60",
                         "bg-muted/25 px-3 py-2 text-left text-xs transition-colors duration-200",
                         "hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        isActiveGroup && "border-violet-500/25 bg-violet-500/[0.07]"
+                        isActiveGroup && "border-brand-chat/25 bg-brand-chat/[0.07]"
                       )}
                     >
                       <ChevronRight
@@ -1153,7 +1153,7 @@ function AssistantActivityViewInner({
                           groupOpen && "rotate-90"
                         )}
                       />
-                      <Brain className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                      <Brain className="h-3.5 w-3.5 shrink-0 text-brand-chat dark:text-brand-chat" />
                       <span className="font-medium text-foreground/90">Reasoning & tools</span>
                       {summary ? (
                         <span className="truncate text-muted-foreground">{summary}</span>
@@ -1213,12 +1213,12 @@ function AssistantActivityViewInner({
             <div
               ref={isActiveGroup ? activeGroupRef : undefined}
               className={cn(
-                "rounded-lg border border-violet-500/20 bg-violet-500/[0.05]",
+                "rounded-lg border border-brand-chat/20 bg-brand-chat/[0.05]",
                 !followingResponseStreaming && "transition-shadow duration-300",
                 isActiveGroup &&
                   activityStillRunning &&
                   !followingResponseStreaming &&
-                  "ring-1 ring-violet-500/25"
+                  "ring-1 ring-brand-chat/25"
               )}
             >
               <ActivityTree

@@ -15,7 +15,7 @@ import {
   type ViewScopeMode,
 } from "@/lib/viewScope";
 import {
-  listWorkspaceGroups,
+  listAllWorkspaceGroups,
   type WorkspaceGroupSummary,
 } from "@/database/workspaceStorage";
 
@@ -70,7 +70,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
   const refreshGroups = useCallback(async () => {
     setGroupsLoading(true);
     try {
-      const all = await listWorkspaceGroups();
+      const all = await listAllWorkspaceGroups();
       const selectable = filterSelectableGroups(all);
       setGroups(selectable);
       return selectable;

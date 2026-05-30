@@ -14,7 +14,7 @@ const Navbar = () => {
   return (
     <nav
       className={cn(
-        "fixed top-0 left-0 w-full z-50 py-4 shadow-md",
+        "fixed top-0 left-0 w-full z-50 border-b border-border/60 bg-background/95 py-3 shadow-sm backdrop-blur-md",
         isKnowledgeBase ? "navbar-translucent" : "navbar-opaque"
       )}
     >

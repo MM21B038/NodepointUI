@@ -52,7 +52,7 @@ export function PrajnaStreamGlyph({ className, size = "sm" }: PrajnaStreamGlyphP
                   className={cn(
                     "absolute bottom-1/2 left-1/2 block w-[2.5px] -translate-x-1/2",
                     "h-[44%] origin-bottom rounded-full",
-                    "bg-gradient-to-t from-violet-700 via-fuchsia-400 to-violet-300",
+                    "bg-gradient-to-t from-brand-chat via-brand-info to-brand-info",
                     "will-change-[transform,opacity]",
                     "animate-stream-ray motion-reduce:animate-none"
                   )}
@@ -66,7 +66,7 @@ export function PrajnaStreamGlyph({ className, size = "sm" }: PrajnaStreamGlyphP
           <span
             className={cn(
               "block h-full w-full rounded-full",
-              "bg-gradient-to-br from-violet-600 via-fuchsia-400 to-violet-300",
+              "bg-gradient-to-br from-brand-chat via-brand-info to-brand-info",
               "will-change-[transform,opacity]",
               "animate-stream-core motion-reduce:animate-none"
             )}

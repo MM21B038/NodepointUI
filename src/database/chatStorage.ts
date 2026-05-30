@@ -1,4 +1,4 @@
-import type { ChatMessage, ProvenanceEntry } from "@/database/workspaceStorage";
+import type { ChatMessage, GroupTag, ProvenanceEntry } from "@/database/workspaceStorage";
 import { buildApiUrl, wsBaseUrl } from "@/database/apiUrl";
 import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
@@ -79,7 +79,20 @@ export interface ChatSummaryEntry {
   message_count: number;
 }
 
+export interface ChatSummaryGroupChatBlock {
+  updated_at: string | null;
+  message_count: number;
+}
+
 export interface ChatSummaryGroupResponse {
+  group: string;
+  tag?: GroupTag;
+  member_count?: number;
+  group_chat?: ChatSummaryGroupChatBlock;
+  workspaces?: ChatSummaryEntry[];
+}
+
+export interface ChatSummaryGroupResponseLegacy {
   workspaces: ChatSummaryEntry[];
 }
 
@@ -107,6 +120,7 @@ export type ChatStreamEvent =
   | { type: "chat.compress_failed"; message?: string }
   | ChatReconnectedEvent
   | ChatStatusEvent
+  | { type: "chat.branch_updated"; active_branch_id?: string }
   | { type: "chat.turn_started"; turn_id?: string }
   | { type: "chat.interrupted" }
   | { type: "chat.done" }
@@ -118,6 +132,9 @@ export interface ChatReadyEvent {
   type: "chat.ready";
   workspace?: string;
   group?: string;
+  tag?: GroupTag;
+  members?: unknown[];
+  member_count?: number;
   workspaces?: string[];
   conversation_id?: string;
   active_branch_id?: string;

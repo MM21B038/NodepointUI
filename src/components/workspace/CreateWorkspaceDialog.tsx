@@ -13,13 +13,24 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { isWorkspaceGroup } from "@/database/workspaceStorage";
+import { formatGroupTag } from "@/lib/groupTag";
+import { metaDescription } from "@/lib/resourceMeta";
 import GroupAssignmentList from "@/components/workspace/GroupAssignmentList";
+
+export interface CreateWorkspaceFormValues {
+  name: string;
+  tag?: string | null;
+  description?: string | null;
+  groupNames: string[];
+}
 
 interface CreateWorkspaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (name: string, groupNames: string[]) => Promise<void>;
+  onCreate: (values: CreateWorkspaceFormValues) => Promise<void>;
   isCreating?: boolean;
 }
 
@@ -31,29 +42,48 @@ export default function CreateWorkspaceDialog({
 }: CreateWorkspaceDialogProps) {
   const { groups } = useWorkspace();
   const [name, setName] = useState("");
+  const [tag, setTag] = useState("");
+  const [description, setDescription] = useState("");
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) {
       setName("");
+      setTag("");
+      setDescription("");
       setSelectedGroups(new Set());
     }
   }, [open]);
 
   const groupItems = useMemo(
     () =>
-      groups.map((g) => ({
-        id: g.name,
-        label: g.name,
-        hint: `${g.workspace_count} ws`,
-      })),
+      groups
+        .filter(isWorkspaceGroup)
+        .map((g) => {
+          const desc = metaDescription(g);
+          const hintParts = [
+            formatGroupTag(g.tag),
+            desc ? "desc" : null,
+            `${g.member_count} ws`,
+          ].filter(Boolean);
+          return {
+            id: g.name,
+            label: g.name,
+            hint: hintParts.join(" · "),
+          };
+        }),
     [groups]
   );
 
   const handleSubmit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await onCreate(trimmed, Array.from(selectedGroups));
+    await onCreate({
+      name: trimmed,
+      tag: tag.trim() || null,
+      description: description.trim() || null,
+      groupNames: Array.from(selectedGroups),
+    });
   };
 
   return (
@@ -80,9 +110,28 @@ export default function CreateWorkspaceDialog({
               placeholder="e.g. research, legal, ops"
               disabled={isCreating}
               autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && name.trim()) void handleSubmit();
-              }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="workspace-create-tag">Tag (optional)</Label>
+            <Input
+              id="workspace-create-tag"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="e.g. notes"
+              disabled={isCreating}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="workspace-create-description">Description (optional)</Label>
+            <Textarea
+              id="workspace-create-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What this workspace is for"
+              disabled={isCreating}
+              rows={3}
+              className="resize-none"
             />
           </div>
 
