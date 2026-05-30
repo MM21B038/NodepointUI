@@ -6,10 +6,12 @@ import {
   FolderKanban,
   FolderPlus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -36,6 +38,13 @@ interface WorkspaceManagementToolbarProps {
   onPreviousPage: () => void;
   onNextPage: () => void;
   isSearchActive?: boolean;
+  selectedCount?: number;
+  allDisplayedSelected?: boolean;
+  someSelected?: boolean;
+  onToggleSelectAllDisplayed?: (checked: boolean) => void;
+  onBulkDelete?: () => void;
+  onClearSelection?: () => void;
+  isDeleting?: boolean;
 }
 
 const WorkspaceManagementToolbar = ({
@@ -55,11 +64,57 @@ const WorkspaceManagementToolbar = ({
   onPreviousPage,
   onNextPage,
   isSearchActive = false,
+  selectedCount = 0,
+  allDisplayedSelected = false,
+  someSelected = false,
+  onToggleSelectAllDisplayed,
+  onBulkDelete,
+  onClearSelection,
+  isDeleting = false,
 }: WorkspaceManagementToolbarProps) => {
   const showPagination = totalPages > 1;
+  const selectionIndeterminate = someSelected && !allDisplayedSelected;
 
   return (
     <div className="shrink-0 border-b border-border/60 px-4 py-3 space-y-1.5">
+      {someSelected && onBulkDelete && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+          {onToggleSelectAllDisplayed && (
+            <Checkbox
+              checked={allDisplayedSelected ? true : selectionIndeterminate ? "indeterminate" : false}
+              onCheckedChange={(checked) => onToggleSelectAllDisplayed(checked === true)}
+              aria-label="Select all workspaces on this page"
+              disabled={isDeleting}
+            />
+          )}
+          <span className="text-sm font-medium">
+            {selectedCount} selected
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            className="h-8 gap-1.5"
+            onClick={onBulkDelete}
+            disabled={isDeleting}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete selected
+          </Button>
+          {onClearSelection && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={onClearSelection}
+              disabled={isDeleting}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold shrink-0 mr-1">Workspaces</h1>
 

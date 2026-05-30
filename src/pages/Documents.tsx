@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import {
-  deleteFile,
+  deleteFiles,
   getKnowledgeGraph,
   getPerFileGraphCounts,
   listFiles,
@@ -32,7 +32,7 @@ const Documents = () => {
   const [fileGraphData, setFileGraphData] = useState<Record<string, { nodes: number; edges: number }>>({});
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
 
   const fetchKnowledgeGraphData = useCallback(async (workspaceName: string, silent = false) => {
     if (!silent) setIsGraphLoading(true);
@@ -70,21 +70,45 @@ const Documents = () => {
   }, [currentWorkspace, fetchKnowledgeGraphData]);
 
   const confirmDeleteFile = (fileName: string) => {
-    setFileToDelete(fileName);
+    setFilesToDelete([fileName]);
     setIsDeleteDialogOpen(true);
   };
 
-  const executeDeleteFile = async () => {
-    if (!currentWorkspace || !fileToDelete) return;
+  const confirmDeleteFiles = (fileNames: string[]) => {
+    if (fileNames.length === 0) return;
+    setFilesToDelete(fileNames);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const executeDeleteFiles = async () => {
+    if (!currentWorkspace || filesToDelete.length === 0) return;
 
     setIsDeleting(true);
-    const deleteToastId = showLoading(`Deleting ${fileToDelete}...`);
+    const deleteToastId = showLoading(
+      filesToDelete.length === 1
+        ? `Deleting ${filesToDelete[0]}...`
+        : `Deleting ${filesToDelete.length} files...`
+    );
     try {
-      await deleteFile(currentWorkspace, fileToDelete);
+      const result = await deleteFiles(currentWorkspace, filesToDelete);
       dismissToast(deleteToastId);
-      showSuccess(`${fileToDelete} deleted successfully!`);
-      fetchKnowledgeGraphData(currentWorkspace);
-      setPreprocessRefreshToken((t) => t + 1);
+      if (result.failed.length === 0) {
+        showSuccess(
+          filesToDelete.length === 1
+            ? `${filesToDelete[0]} deleted successfully!`
+            : `${result.succeeded.length} files deleted successfully!`
+        );
+      } else if (result.succeeded.length === 0) {
+        showError(`Failed to delete files: ${result.failed[0]?.error ?? "Delete failed"}`);
+      } else {
+        showError(
+          `${result.succeeded.length} deleted, ${result.failed.length} failed.`
+        );
+      }
+      if (result.succeeded.length > 0) {
+        fetchKnowledgeGraphData(currentWorkspace);
+        setPreprocessRefreshToken((t) => t + 1);
+      }
     } catch (error: unknown) {
       dismissToast(deleteToastId);
       const message = error instanceof Error ? error.message : "Delete failed";
@@ -92,7 +116,7 @@ const Documents = () => {
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
-      setFileToDelete(null);
+      setFilesToDelete([]);
     }
   };
 
@@ -171,6 +195,7 @@ const Documents = () => {
               fileGraphData={fileGraphData}
               isGraphLoading={isGraphLoading}
               onDeleteFile={confirmDeleteFile}
+              onDeleteFiles={confirmDeleteFiles}
               isDeleting={isDeleting}
               onUploadSuccess={handleUploadSuccess}
               onStartPreprocess={handleStartPreprocess}
@@ -180,14 +205,23 @@ const Documents = () => {
         </Card>
       )}
 
-      {fileToDelete && (
+      {filesToDelete.length > 0 && (
         <DeleteConfirmationDialog
           isOpen={isDeleteDialogOpen}
           onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={executeDeleteFile}
-          title={`Permanently Delete File: ${fileToDelete}`}
-          description={`This action will permanently delete the file "${fileToDelete}" from workspace "${currentWorkspace}". This action cannot be undone.`}
-          itemName={fileToDelete}
+          onConfirm={executeDeleteFiles}
+          title={
+            filesToDelete.length === 1
+              ? "Permanently Delete File"
+              : `Permanently Delete ${filesToDelete.length} Files`
+          }
+          description={
+            filesToDelete.length === 1
+              ? `This action will permanently delete the file "${filesToDelete[0]}" from workspace "${currentWorkspace}". This action cannot be undone.`
+              : `This action will permanently delete ${filesToDelete.length} files from workspace "${currentWorkspace}". This action cannot be undone.`
+          }
+          itemName={filesToDelete.length === 1 ? filesToDelete[0] : undefined}
+          itemNames={filesToDelete.length > 1 ? filesToDelete : undefined}
         />
       )}
     </div>

@@ -67,7 +67,7 @@ const FileListItem: React.FC<FileListItemProps> = ({
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDelete}
-        title={`Delete File: ${fileName}`}
+        title="Delete File"
         description={`Are you sure you want to permanently delete the file "${fileName}" from workspace "${workspaceName}"? This action cannot be undone.`}
         itemName={fileName}
       />

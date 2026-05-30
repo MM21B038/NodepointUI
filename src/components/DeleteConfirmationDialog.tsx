@@ -14,7 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils"; // Import cn for utility classes
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface DeleteConfirmationDialogProps {
   isOpen: boolean;
@@ -22,10 +23,18 @@ interface DeleteConfirmationDialogProps {
   onConfirm: () => void;
   title: string;
   description: string;
-  itemName: string;
+  itemName?: string;
+  itemNames?: string[];
 }
 
 const CONFIRMATION_TEXT = "DELETE";
+
+function resolveItemLabel(itemName?: string, itemNames?: string[]): string {
+  if (itemNames && itemNames.length > 0) {
+    return itemNames.length === 1 ? itemNames[0] : `${itemNames.length} items`;
+  }
+  return itemName ?? "this item";
+}
 
 const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
   isOpen,
@@ -34,9 +43,14 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
   title,
   description,
   itemName,
+  itemNames,
 }) => {
   const [confirmationInput, setConfirmationInput] = useState("");
   const isConfirmationValid = confirmationInput === CONFIRMATION_TEXT;
+  const resolvedNames =
+    itemNames && itemNames.length > 0 ? itemNames : itemName ? [itemName] : [];
+  const confirmLabel = resolveItemLabel(itemName, itemNames);
+  const isBulk = resolvedNames.length > 1;
 
   const handleConfirm = () => {
     if (isConfirmationValid) {
@@ -52,23 +66,54 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleClose}>
-      <AlertDialogContent 
+      <AlertDialogContent
         className={cn(
-          "w-full sm:max-w-md",
+          "w-[calc(100%-2rem)] max-w-md overflow-hidden",
           "bg-card/50 backdrop-blur-sm",
-          "border-t-4 border-b-4 border-destructive", // Red top and bottom borders
-          "border-x-0" // Explicitly remove left and right borders
+          "border-t-4 border-b-4 border-destructive",
+          "border-x-0",
         )}
       >
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-red-600">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="w-full break-words">
+        <AlertDialogHeader className="min-w-0 space-y-2 text-left">
+          <AlertDialogTitle className="break-words text-red-600 line-clamp-3">
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="max-h-32 overflow-y-auto break-words text-left [overflow-wrap:anywhere]">
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground w-full break-words">
-            To confirm deletion of <span className="font-semibold text-foreground inline-block max-w-full break-words">{itemName}</span>, please type <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
+
+        {isBulk && (
+          <ScrollArea className="max-h-32 rounded-md border bg-muted/30">
+            <ul className="divide-y p-2">
+              {resolvedNames.map((name) => (
+                <li
+                  key={name}
+                  className="truncate px-1 py-1.5 text-sm text-foreground"
+                  title={name}
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+
+        <div className="min-w-0 space-y-4">
+          <p className="text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">
+            To confirm deletion of{" "}
+            {!isBulk && resolvedNames.length === 1 ? (
+              <span
+                className="font-semibold text-foreground inline-block max-w-full truncate align-bottom"
+                title={resolvedNames[0]}
+              >
+                {resolvedNames[0]}
+              </span>
+            ) : (
+              <span className="font-semibold text-foreground">{confirmLabel}</span>
+            )}
+            , please type{" "}
+            <code className="font-mono text-red-600">{CONFIRMATION_TEXT}</code> below.
           </p>
           <div>
             <Label htmlFor="delete-confirm" className="sr-only">
@@ -83,7 +128,7 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
             />
           </div>
         </div>
-        <AlertDialogFooter className="w-full flex-wrap">
+        <AlertDialogFooter className="w-full flex-wrap gap-2 sm:gap-0">
           <AlertDialogCancel asChild>
             <Button variant="outline" onClick={handleClose}>
               Cancel

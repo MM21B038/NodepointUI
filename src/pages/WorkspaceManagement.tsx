@@ -9,7 +9,7 @@ import {
   getWorkspaceStats,
   createWorkspace,
   addWorkspaceToGroup,
-  deleteWorkspace,
+  deleteWorkspaces,
   startPreprocess,
   summarizePreprocessStart,
   WorkspaceCreateError,
@@ -45,9 +45,8 @@ const WorkspaceManagement = () => {
   const [page, setPage] = useState(1);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [workspaceToDelete, setWorkspaceToDelete] = useState<string | null>(
-    null
-  );
+  const [workspacesToDelete, setWorkspacesToDelete] = useState<string[]>([]);
+  const [selectedWorkspaces, setSelectedWorkspaces] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(
     new Map()
@@ -147,10 +146,47 @@ const WorkspaceManagement = () => {
     }
   }, [activePagination.total_pages, page]);
 
+  const displayedWorkspaceNames = useMemo(
+    () => displayedWorkspaces.map((workspace) => workspace.name),
+    [displayedWorkspaces]
+  );
+
+  useEffect(() => {
+    setSelectedWorkspaces((prev) => {
+      const next = new Set<string>();
+      for (const name of prev) {
+        if (displayedWorkspaceNames.includes(name)) next.add(name);
+      }
+      return next;
+    });
+  }, [displayedWorkspaceNames.join("\0")]);
+
+  const allDisplayedSelected =
+    displayedWorkspaceNames.length > 0 &&
+    displayedWorkspaceNames.every((name) => selectedWorkspaces.has(name));
+  const someSelected = selectedWorkspaces.size > 0;
+
+  const toggleWorkspaceSelection = (workspaceName: string, checked: boolean) => {
+    setSelectedWorkspaces((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(workspaceName);
+      else next.delete(workspaceName);
+      return next;
+    });
+  };
+
+  const toggleSelectAllDisplayed = (checked: boolean) => {
+    setSelectedWorkspaces(
+      checked ? new Set(displayedWorkspaceNames) : new Set()
+    );
+  };
+
   const isInitialGridLoad =
     isInitialLoading && displayedWorkspaces.length === 0;
   const hasNoWorkspacesEver =
     workspaceStats !== null && workspaceStats.total === 0;
+
+  const clearSelection = () => setSelectedWorkspaces(new Set());
 
   const refreshAfterMutation = useCallback(async () => {
     await fetchStats();
@@ -220,27 +256,53 @@ const WorkspaceManagement = () => {
   };
 
   const handleDeleteClick = (workspaceName: string) => {
-    setWorkspaceToDelete(workspaceName);
+    setWorkspacesToDelete([workspaceName]);
     setIsDeleteDialogOpen(true);
   };
 
-  const executeDeleteWorkspace = useCallback(async () => {
-    if (!workspaceToDelete) return;
+  const handleBulkDeleteClick = () => {
+    if (selectedWorkspaces.size === 0) return;
+    setWorkspacesToDelete(Array.from(selectedWorkspaces));
+    setIsDeleteDialogOpen(true);
+  };
+
+  const executeDeleteWorkspaces = useCallback(async () => {
+    if (workspacesToDelete.length === 0) return;
 
     setIsDeleting(true);
     const loadingToastId = toast.loading(
-      `Deleting workspace ${workspaceToDelete}...`
+      workspacesToDelete.length === 1
+        ? `Deleting workspace ${workspacesToDelete[0]}...`
+        : `Deleting ${workspacesToDelete.length} workspaces...`
     );
 
     try {
-      await deleteWorkspace(workspaceToDelete);
-      toast.success(`Workspace "${workspaceToDelete}" deleted successfully!`, {
-        id: loadingToastId,
-      });
-      if (currentWorkspace === workspaceToDelete) {
+      const result = await deleteWorkspaces(workspacesToDelete);
+      if (result.failed.length === 0) {
+        toast.success(
+          workspacesToDelete.length === 1
+            ? `Workspace "${workspacesToDelete[0]}" deleted successfully!`
+            : `${result.succeeded.length} workspaces deleted successfully!`,
+          { id: loadingToastId }
+        );
+      } else if (result.succeeded.length === 0) {
+        toast.error(`Deletion failed: ${result.failed[0]?.error ?? "Unknown error"}`, {
+          id: loadingToastId,
+        });
+      } else {
+        toast.warning(
+          `${result.succeeded.length} deleted, ${result.failed.length} failed.`,
+          { id: loadingToastId }
+        );
+      }
+
+      if (result.succeeded.includes(currentWorkspace ?? "")) {
         setCurrentWorkspace(null);
       }
-      await refreshAfterMutation();
+      if (result.succeeded.length > 0) {
+        clearSelection();
+        await refreshAfterMutation();
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -250,9 +312,9 @@ const WorkspaceManagement = () => {
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
-      setWorkspaceToDelete(null);
+      setWorkspacesToDelete([]);
     }
-  }, [workspaceToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
+  }, [workspacesToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
 
   const handleExtract = useCallback(
     async (workspaceName: string) => {
@@ -320,6 +382,13 @@ const WorkspaceManagement = () => {
           onPreviousPage={handlePreviousPage}
           onNextPage={handleNextPage}
           isSearchActive={isSearchActive}
+          selectedCount={selectedWorkspaces.size}
+          allDisplayedSelected={allDisplayedSelected}
+          someSelected={someSelected}
+          onToggleSelectAllDisplayed={toggleSelectAllDisplayed}
+          onBulkDelete={handleBulkDeleteClick}
+          onClearSelection={clearSelection}
+          isDeleting={isDeleting}
         />
 
         <PreprocessQueueStatusPanel />
@@ -386,7 +455,14 @@ const WorkspaceManagement = () => {
                   onSelect={handleSelectWorkspace}
                   onDelete={handleDeleteClick}
                   isDeleting={isDeleting}
-                  deletingWorkspaceName={workspaceToDelete}
+                  deletingWorkspaceName={
+                    workspacesToDelete.length === 1 ? workspacesToDelete[0] : null
+                  }
+                  isSelected={selectedWorkspaces.has(workspace.name)}
+                  onSelectionChange={(checked) =>
+                    toggleWorkspaceSelection(workspace.name, checked)
+                  }
+                  showSelection={displayedWorkspaces.length > 0}
                   counts={workspace.counts}
                   onExtract={handleExtract}
                   isExtracting={
@@ -401,14 +477,23 @@ const WorkspaceManagement = () => {
         </div>
       </div>
 
-      {workspaceToDelete && (
+      {workspacesToDelete.length > 0 && (
         <DeleteConfirmationDialog
           isOpen={isDeleteDialogOpen}
           onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={executeDeleteWorkspace}
-          title={`Permanently Delete Workspace: ${workspaceToDelete}`}
-          description={`This action will permanently delete the workspace "${workspaceToDelete}" and all associated documents and data. This action cannot be undone.`}
-          itemName={workspaceToDelete}
+          onConfirm={executeDeleteWorkspaces}
+          title={
+            workspacesToDelete.length === 1
+              ? "Permanently Delete Workspace"
+              : `Permanently Delete ${workspacesToDelete.length} Workspaces`
+          }
+          description={
+            workspacesToDelete.length === 1
+              ? `This action will permanently delete the workspace "${workspacesToDelete[0]}" and all associated documents and data. This action cannot be undone.`
+              : `This action will permanently delete ${workspacesToDelete.length} workspaces and all associated documents and data. This action cannot be undone.`
+          }
+          itemName={workspacesToDelete.length === 1 ? workspacesToDelete[0] : undefined}
+          itemNames={workspacesToDelete.length > 1 ? workspacesToDelete : undefined}
         />
       )}
     </div>

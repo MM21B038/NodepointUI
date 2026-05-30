@@ -691,6 +691,76 @@ export async function deleteFile(
   return true;
 }
 
+export interface BulkFileOperationResult {
+  succeeded: string[];
+  failed: { name: string; error: string }[];
+}
+
+export async function uploadFiles(
+  workspaceName: string,
+  files: File[]
+): Promise<BulkFileOperationResult> {
+  const succeeded: string[] = [];
+  const failed: BulkFileOperationResult["failed"] = [];
+
+  for (const file of files) {
+    try {
+      await uploadFile(workspaceName, file);
+      succeeded.push(file.name);
+    } catch (error) {
+      failed.push({
+        name: file.name,
+        error: error instanceof Error ? error.message : "Upload failed",
+      });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+export async function deleteFiles(
+  workspaceName: string,
+  fileNames: string[]
+): Promise<BulkFileOperationResult> {
+  const succeeded: string[] = [];
+  const failed: BulkFileOperationResult["failed"] = [];
+
+  for (const fileName of fileNames) {
+    try {
+      await deleteFile(workspaceName, fileName);
+      succeeded.push(fileName);
+    } catch (error) {
+      failed.push({
+        name: fileName,
+        error: error instanceof Error ? error.message : "Delete failed",
+      });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+export async function deleteWorkspaces(
+  workspaceNames: string[]
+): Promise<BulkFileOperationResult> {
+  const succeeded: string[] = [];
+  const failed: BulkFileOperationResult["failed"] = [];
+
+  for (const workspaceName of workspaceNames) {
+    try {
+      await deleteWorkspace(workspaceName);
+      succeeded.push(workspaceName);
+    } catch (error) {
+      failed.push({
+        name: workspaceName,
+        error: error instanceof Error ? error.message : "Delete failed",
+      });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
 // --- Preprocess ---
 
 export interface StartPreprocessOptions {

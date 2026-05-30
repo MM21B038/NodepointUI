@@ -126,7 +126,7 @@ const ManageWorkspacesDialog: React.FC<ManageWorkspacesDialogProps> = ({
           isOpen={isConfirmingDelete}
           onClose={() => setIsConfirmingDelete(false)}
           onConfirm={handleConfirmDelete}
-          title={`Permanently Delete Workspace: ${workspaceToDelete}`}
+          title="Permanently Delete Workspace"
           description={`This action will permanently delete the workspace "${workspaceToDelete}" and all associated documents and data. This action cannot be undone.`}
           itemName={workspaceToDelete}
         />

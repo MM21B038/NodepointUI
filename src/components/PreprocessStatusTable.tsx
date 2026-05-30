@@ -13,10 +13,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { GitGraph, Loader2, Play, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FileUpload from "@/components/FileUpload";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   getWorkspacePreprocessStatus,
+  uploadFiles,
   type ChunkPipelineCounts,
   type PreprocessPhase,
   type WorkspacePreprocessStatusResponse,
@@ -44,6 +46,7 @@ interface PreprocessStatusTableProps {
   fileGraphData?: Record<string, FileGraphCounts>;
   isGraphLoading?: boolean;
   onDeleteFile?: (fileName: string) => void;
+  onDeleteFiles?: (fileNames: string[]) => void;
   isDeleting?: boolean;
   onUploadSuccess?: () => void;
   onStartPreprocess?: () => void;
@@ -135,6 +138,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   fileGraphData = {},
   isGraphLoading = false,
   onDeleteFile,
+  onDeleteFiles,
   isDeleting = false,
   onUploadSuccess,
   onStartPreprocess,
@@ -142,8 +146,43 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
 }) => {
   const [status, setStatus] = useState<WorkspacePreprocessStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
+
+  const fileNames = status?.files.map((file) => file.file_name) ?? [];
+  const allSelected =
+    fileNames.length > 0 && fileNames.every((name) => selectedFiles.has(name));
+  const someSelected = selectedFiles.size > 0;
+  const selectionIndeterminate = someSelected && !allSelected;
+
+  useEffect(() => {
+    setSelectedFiles((prev) => {
+      const next = new Set<string>();
+      for (const name of prev) {
+        if (fileNames.includes(name)) next.add(name);
+      }
+      return next;
+    });
+  }, [workspaceName, fileNames.join("\0")]);
+
+  const toggleFileSelection = (fileName: string, checked: boolean) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(fileName);
+      else next.delete(fileName);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedFiles(checked ? new Set(fileNames) : new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedFiles.size === 0) return;
+    onDeleteFiles?.(Array.from(selectedFiles));
+  };
 
   const fetchStatus = useCallback(
     async (showSpinner: boolean) => {
@@ -238,12 +277,28 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {someSelected && onDeleteFiles && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={handleBulkDelete}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>
+                Delete {selectedFiles.size} selected
+              </span>
+            </Button>
+          )}
           {onUploadSuccess && (
             <FileUpload
               workspaceName={workspaceName}
               onUploadSuccess={onUploadSuccess}
               variant="outline"
               size="sm"
+              enableDragDrop
             />
           )}
           {onStartPreprocess && (
@@ -315,16 +370,26 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
           </div>
 
           {status.files.length === 0 ? (
-            <div className="flex h-32 items-center justify-center rounded-md border border-dashed">
-              <p className="text-muted-foreground">
-                No files in this workspace. Upload documents and start preprocessing.
-              </p>
-            </div>
+            <FileUploadDropZone
+              workspaceName={workspaceName}
+              onUploadSuccess={onUploadSuccess}
+              disabled={!onUploadSuccess}
+            />
           ) : (
             <ScrollArea className="max-h-[calc(100vh-22rem)] min-h-[240px] flex-1 hide-scrollbar">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {onDeleteFiles && (
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={allSelected ? true : selectionIndeterminate ? "indeterminate" : false}
+                          onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+                          aria-label="Select all files"
+                          disabled={isDeleting}
+                        />
+                      </TableHead>
+                    )}
                     <TableHead>File</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead className="text-center">Entities</TableHead>
@@ -338,8 +403,25 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                 <TableBody>
                   {status.files.map((file) => {
                     const graphCounts = fileGraphData[file.file_name] ?? { nodes: 0, edges: 0 };
+                    const isSelected = selectedFiles.has(file.file_name);
                     return (
-                      <TableRow key={file.id}>
+                      <TableRow
+                        key={file.id}
+                        data-state={isSelected ? "selected" : undefined}
+                        className={cn(isSelected && "bg-muted/40")}
+                      >
+                        {onDeleteFiles && (
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(checked) =>
+                                toggleFileSelection(file.file_name, checked === true)
+                              }
+                              aria-label={`Select ${file.file_name}`}
+                              disabled={isDeleting}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="max-w-[180px] truncate font-medium" title={file.file_name}>
                           {file.file_name}
                         </TableCell>
@@ -407,5 +489,85 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
     </div>
   );
 };
+
+const ALLOWED_UPLOAD_EXTENSIONS = [".txt", ".md"] as const;
+
+function isAllowedUploadFile(file: File): boolean {
+  const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
+  return (ALLOWED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext);
+}
+
+function FileUploadDropZone({
+  workspaceName,
+  onUploadSuccess,
+  disabled = false,
+}: {
+  workspaceName: string;
+  onUploadSuccess?: () => void;
+  disabled?: boolean;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const dragDepthRef = useRef(0);
+
+  const handleUpload = async (fileList: FileList | File[]) => {
+    if (disabled || !onUploadSuccess) return;
+    const files = Array.from(fileList).filter(isAllowedUploadFile);
+    if (files.length === 0) {
+      showError("Only .txt and .md files can be uploaded.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const result = await uploadFiles(workspaceName, files);
+      if (result.succeeded.length > 0) {
+        onUploadSuccess();
+      }
+      if (result.failed.length > 0 && result.succeeded.length === 0) {
+        showError(result.failed[0]?.error ?? "Upload failed");
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex h-32 items-center justify-center rounded-md border border-dashed transition-colors",
+        isDragging && "border-primary bg-primary/5",
+        disabled && "opacity-60"
+      )}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        dragDepthRef.current += 1;
+        setIsDragging(true);
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setIsDragging(false);
+      }}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={async (event) => {
+        event.preventDefault();
+        dragDepthRef.current = 0;
+        setIsDragging(false);
+        await handleUpload(event.dataTransfer.files);
+      }}
+    >
+      <p className="px-4 text-center text-muted-foreground">
+        {isUploading
+          ? "Uploading files…"
+          : isDragging
+            ? "Drop .txt or .md files here"
+            : "No files in this workspace. Upload or drag documents here, then start preprocessing."}
+      </p>
+    </div>
+  );
+}
 
 export default PreprocessStatusTable;

@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { FLAGGED_GROUP_NAME, type WorkspaceCounts } from "@/database/workspaceStorage";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import WorkspaceGroupMembership from "@/components/workspace/WorkspaceGroupMembership";
 
 interface WorkspaceCardProps {
@@ -26,6 +27,9 @@ interface WorkspaceCardProps {
   onDelete: (workspaceName: string) => void;
   isDeleting: boolean;
   deletingWorkspaceName: string | null;
+  isSelected?: boolean;
+  onSelectionChange?: (checked: boolean) => void;
+  showSelection?: boolean;
   counts: WorkspaceCounts;
   onExtract: (workspaceName: string) => void;
   isExtracting: boolean;
@@ -40,6 +44,9 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   onDelete,
   isDeleting,
   deletingWorkspaceName,
+  isSelected = false,
+  onSelectionChange,
+  showSelection = false,
   counts,
   onExtract,
   isExtracting,
@@ -60,14 +67,25 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         "cursor-pointer h-full w-full",
         isCurrent
           ? "border-2 border-primary bg-primary/5 ring-1 ring-primary/30 shadow-lg scale-[1.01]"
-          : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10"
+          : "border bg-card hover:shadow-lg hover:scale-[1.01] hover:border-accent hover:bg-secondary/10",
+        isSelected && "ring-2 ring-destructive/40"
       )}
       onClick={() => onSelect(workspaceName)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <CardHeader className="p-0 flex flex-col space-y-2">
-        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0">
+        <CardTitle className="text-xl font-bold flex items-center flex-grow min-w-0 gap-2">
+          {showSelection && onSelectionChange && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelectionChange(checked === true)}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`Select ${workspaceName}`}
+              disabled={isDisabled}
+              className="shrink-0"
+            />
+          )}
           <FolderCog
             className={cn(
               "h-6 w-6 mr-3 shrink-0",
