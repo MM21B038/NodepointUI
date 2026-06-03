@@ -220,7 +220,7 @@ export function ThinkingPipeline({
                 "grid motion-reduce:transition-none",
                 "transition-[grid-template-rows] ease-out",
                 isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
-                slot.phase === "mergeOut" ? "duration-[520ms]" : "duration-[480ms]"
+                slot.phase === "mergeOut" ? "duration-merge" : "duration-enter"
               )}
               style={
                 slot.phase === "visible"

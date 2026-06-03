@@ -12,7 +12,7 @@ export type ToolItem = {
 
 export const MAX_VISIBLE_TOOLS = 3;
 
-/** Keep in sync with Tailwind `duration-[…]` / animation durations on rows and rail. */
+/** Keep in sync with Tailwind `duration-rail` / `duration-enter` / `duration-merge` and animation durations. */
 const ENTER_MS = 480;
 const MERGE_MS = 520;
 const RAIL_MS = 400;
@@ -262,7 +262,7 @@ export function ToolPipeline({
         <div
           className={cn(
             "pointer-events-none absolute left-[3px] top-2 w-px origin-top overflow-hidden bg-border/70",
-            "transition-[transform,height] duration-[400ms] ease-out motion-reduce:transition-none"
+            "transition-[transform,height] duration-rail ease-out motion-reduce:transition-none"
           )}
           style={{ height: "calc(100% - 0.5rem)" }}
           aria-hidden
@@ -275,7 +275,7 @@ export function ToolPipeline({
       <ul
         className={cn(
           "relative min-w-0 list-none overflow-visible p-0 m-0",
-          "transition-[height] duration-[400ms] ease-out motion-reduce:transition-none"
+          "transition-[height] duration-rail ease-out motion-reduce:transition-none"
         )}
       >
         {displaySlots.map((slot, index) => {
@@ -292,7 +292,7 @@ export function ToolPipeline({
                 "grid motion-reduce:transition-none",
                 "transition-[grid-template-rows] ease-out",
                 isCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
-                slot.phase === "mergeOut" ? "duration-[520ms]" : "duration-[480ms]"
+                slot.phase === "mergeOut" ? "duration-merge" : "duration-enter"
               )}
               style={
                 usePipeline && slot.phase === "visible"
