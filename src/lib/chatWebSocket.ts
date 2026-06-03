@@ -47,7 +47,7 @@ const PING_INTERVAL_MS = 25_000;
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 20_000;
 const MAX_RECONNECT_ATTEMPTS = 12;
-const TURN_TIMEOUT_MS = 300_000;
+const CONNECTION_WAIT_MS = 15_000;
 
 function dispatchStreamEvent(
   data: ChatStreamEvent,
@@ -149,7 +149,6 @@ export class ChatWebSocketClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private pingTimer: ReturnType<typeof setInterval> | undefined;
-  private turnTimeout: ReturnType<typeof setTimeout> | undefined;
 
   private readyReceived = false;
   private pendingReconnectHandshake = false;
@@ -271,7 +270,6 @@ export class ChatWebSocketClient {
                 : {}),
             })
           );
-          this.armTurnTimeout();
         })
         .catch((err) => {
           this.finishTurn(
@@ -377,7 +375,6 @@ export class ChatWebSocketClient {
       this.setAgentBusy(busy);
       if (!busy && !this.turnReject) {
         this.activeTurn = false;
-        this.clearTurnTimeout();
         this.setConnectionState("connected");
       }
       return;
@@ -425,7 +422,6 @@ export class ChatWebSocketClient {
 
     if (busy) {
       this.activeTurn = true;
-      this.armTurnTimeout();
       this.callbacks.onLiveAttach?.(event);
     }
 
@@ -443,13 +439,11 @@ export class ChatWebSocketClient {
 
     if (event.agent_busy) {
       this.activeTurn = true;
-      this.armTurnTimeout();
       this.ws?.send(JSON.stringify({ type: "chat.status" }));
       this.flushBlockEmit();
       this.callbacks.onLiveAttach?.(event);
     } else {
       this.activeTurn = false;
-      this.clearTurnTimeout();
     }
   }
 
@@ -497,7 +491,7 @@ export class ChatWebSocketClient {
           resolve();
           return;
         }
-        if (Date.now() - started > 15_000) {
+        if (Date.now() - started > CONNECTION_WAIT_MS) {
           reject(new Error("Timed out waiting for chat connection"));
           return;
         }
@@ -528,7 +522,6 @@ export class ChatWebSocketClient {
     error?: Error
   ): void {
     this.activeTurn = false;
-    this.clearTurnTimeout();
 
     if (error) {
       this.turnReject?.(error);
@@ -545,21 +538,6 @@ export class ChatWebSocketClient {
       this.finishTurn(undefined, error);
     }
     this.activeTurn = false;
-  }
-
-  private armTurnTimeout(): void {
-    this.clearTurnTimeout();
-    this.turnTimeout = setTimeout(() => {
-      this.finishTurn(undefined, new Error("Chat request timed out"));
-      this.destroy();
-    }, TURN_TIMEOUT_MS);
-  }
-
-  private clearTurnTimeout(): void {
-    if (this.turnTimeout !== undefined) {
-      clearTimeout(this.turnTimeout);
-      this.turnTimeout = undefined;
-    }
   }
 
   private armPing(): void {
@@ -588,7 +566,6 @@ export class ChatWebSocketClient {
   private clearTimers(): void {
     this.clearPing();
     this.clearReconnectTimer();
-    this.clearTurnTimeout();
   }
 
   private setConnectionState(state: ChatConnectionState): void {
