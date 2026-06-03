@@ -1728,6 +1728,20 @@ export async function getPreprocessQueueStatus(
   return response.json();
 }
 
+/** Not-ready workspaces only — one request for pipeline modal table. */
+export interface PreprocessWorkspacesSummaryResponse {
+  generated_at: string;
+  workspaces: PreprocessWorkspaceIncomplete[];
+}
+
+export async function getPreprocessWorkspacesSummary(): Promise<PreprocessWorkspacesSummaryResponse> {
+  const response = await fetch(buildApiUrl("/preprocess/workspaces-summary/"));
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
+}
+
 // --- Knowledge graph ---
 
 /** Slim node shape from GET /api/knowledge-graph/ and search graph payloads. */

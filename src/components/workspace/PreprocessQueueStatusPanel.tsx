@@ -45,6 +45,7 @@ const PreprocessQueueStatusPanel = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [workspaceTableRefresh, setWorkspaceTableRefresh] = useState(0);
 
   const fetchStatus = useCallback(
     async (showSpinner: boolean) => {
@@ -109,6 +110,7 @@ const PreprocessQueueStatusPanel = ({
   useEffect(() => {
     if (!modalOpen) return;
     void fetchStatus(false);
+    setWorkspaceTableRefresh((n) => n + 1);
   }, [modalOpen, fetchStatus]);
 
   const title = workspaceName
@@ -194,6 +196,7 @@ const PreprocessQueueStatusPanel = ({
                 className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setWorkspaceTableRefresh((n) => n + 1);
                   void fetchStatus(true);
                 }}
                 disabled={isLoading}
@@ -282,7 +285,10 @@ const PreprocessQueueStatusPanel = ({
                   variant="outline"
                   size="sm"
                   className="h-8 gap-1.5"
-                  onClick={() => void fetchStatus(true)}
+                  onClick={() => {
+                    setWorkspaceTableRefresh((n) => n + 1);
+                    void fetchStatus(true);
+                  }}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -318,6 +324,14 @@ const PreprocessQueueStatusPanel = ({
             ) : data ? (
               <PreprocessQueueStatusDetail
                 data={data}
+                overviewLoadActive={modalOpen}
+                overviewRefreshKey={
+                  modalOpen
+                    ? shouldPollPreprocessStatus(data)
+                      ? `${workspaceTableRefresh}:${data.generated_at}`
+                      : String(workspaceTableRefresh)
+                    : undefined
+                }
                 workspaceName={workspaceName}
                 className="flex-1 min-h-0"
               />

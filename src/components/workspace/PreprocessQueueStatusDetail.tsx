@@ -1,15 +1,18 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   Database,
   HardDrive,
   Layers,
+  Loader2,
   Lock,
   Server,
   Workflow,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,15 +31,22 @@ import { cn } from "@/lib/utils";
 import { brand } from "@/lib/brandColors";
 import {
   computePreprocessSummary,
+  fetchWorkspacePreprocessTableRows,
   formatArgsSummary,
+  formatPreprocessPhaseLabel,
   formatTimestamp,
   formatTtl,
   orderedQueueNames,
   queueActivityTotal,
+  type WorkspacePreprocessTableRow,
 } from "@/components/workspace/preprocessQueueStatusUtils";
 
 interface PreprocessQueueStatusDetailProps {
   data: PreprocessQueueStatusResponse;
+  /** Global queue-status snapshot id for refreshing the workspace table. */
+  overviewRefreshKey?: string;
+  /** Fetch workspace table when the pipeline modal is open. */
+  overviewLoadActive?: boolean;
   workspaceName?: string;
   className?: string;
 }
@@ -74,17 +84,202 @@ function StatCard({
 
 function PhaseBadge({ phase }: { phase: string }) {
   const isFailed = phase === "failed";
-  const isReady = phase === "ready";
+  const isReady = phase === "ready" || phase === "kg_ready";
+  const label = formatPreprocessPhaseLabel(phase);
   return (
     <Badge
       variant={isFailed ? "destructive" : isReady ? "default" : "secondary"}
       className={cn(
-        "font-normal capitalize",
-        isReady && "bg-green-600 hover:bg-green-600"
+        "font-normal",
+        isReady && "bg-green-600 hover:bg-green-600",
+        phase === "embedding" || phase === "processing"
+          ? "capitalize"
+          : undefined
       )}
     >
-      {phase.replace(/_/g, " ")}
+      {label}
     </Badge>
+  );
+}
+
+type PhaseCountTone =
+  | "neutral"
+  | "prepare"
+  | "queued"
+  | "processing"
+  | "embedding"
+  | "failed"
+  | "ready";
+
+const PHASE_COUNT_TONE_CLASS: Record<PhaseCountTone, string> = {
+  neutral: "text-foreground",
+  prepare: cn(brand.warning.text, "font-medium"),
+  queued: "text-muted-foreground font-medium",
+  processing: "text-primary font-medium",
+  embedding: cn(brand.info.text, "font-medium"),
+  failed: "text-destructive font-semibold",
+  ready: "text-green-600 dark:text-green-500 font-medium",
+};
+
+function CountCell({
+  value,
+  tone = "neutral",
+}: {
+  value: number;
+  tone?: PhaseCountTone;
+}) {
+  if (value === 0) {
+    return <span className="text-muted-foreground/50">—</span>;
+  }
+  return (
+    <span className={cn("tabular-nums", PHASE_COUNT_TONE_CLASS[tone])}>
+      {value}
+    </span>
+  );
+}
+
+function WorkspacesInProgressOverview({
+  refreshKey,
+  loadActive,
+  highlightWorkspace,
+}: {
+  refreshKey?: string;
+  loadActive: boolean;
+  highlightWorkspace?: string;
+}) {
+  const [rows, setRows] = useState<WorkspacePreprocessTableRow[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const showSpinnerRef = useRef(true);
+
+  useEffect(() => {
+    if (!loadActive) {
+      showSpinnerRef.current = true;
+      return;
+    }
+
+    const controller = new AbortController();
+    const showSpinner = showSpinnerRef.current;
+    if (showSpinner) setIsLoading(true);
+    setError(null);
+
+    void fetchWorkspacePreprocessTableRows(controller.signal)
+      .then((tableRows) => {
+        if (!controller.signal.aborted) setRows(tableRows);
+      })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        setError(
+          e instanceof Error ? e.message : "Failed to load workspace status."
+        );
+        if (showSpinner) setRows([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          showSpinnerRef.current = false;
+          setIsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [loadActive, refreshKey]);
+
+  if (!loadActive) return null;
+  // Hide entire block unless at least one workspace is not ready (or load failed).
+  if (!error && rows.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-sm font-medium">Workspaces in progress</h4>
+        <span className="text-xs text-muted-foreground tabular-nums flex items-center gap-1.5">
+          {isLoading && (
+            <Loader2 className="h-3 w-3 animate-spin shrink-0" aria-hidden />
+          )}
+          {isLoading
+            ? "Loading workspaces…"
+            : `${rows.length} workspace${rows.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {error ? (
+        <p className="text-sm text-destructive rounded-md border border-destructive/30 px-3 py-2">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="rounded-md border overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[8rem]">Workspace</TableHead>
+              <TableHead>Overall</TableHead>
+              <TableHead className="text-right">Total files</TableHead>
+              <TableHead className="text-right">Prepare</TableHead>
+              <TableHead className="text-right">Queued</TableHead>
+              <TableHead className="text-right">Processing</TableHead>
+              <TableHead className="text-right">Embedding</TableHead>
+              <TableHead className="text-right">Failed</TableHead>
+              <TableHead className="text-right">Ready</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16" />
+                  </TableCell>
+                  {Array.from({ length: 7 }).map((__, j) => (
+                    <TableCell key={j} className="text-right">
+                      <Skeleton className="h-4 w-8 ml-auto" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              rows.map((row) => (
+                  <TableRow
+                    key={row.workspace}
+                    className={cn(
+                      highlightWorkspace === row.workspace && "bg-primary/5"
+                    )}
+                  >
+                    <TableCell className="font-medium">{row.workspace}</TableCell>
+                    <TableCell>
+                      <PhaseBadge phase={row.overallPhase} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {row.totalFiles}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.needsPrepare} tone="prepare" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.queued} tone="queued" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.processing} tone="processing" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.embedding} tone="embedding" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.failed} tone="failed" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <CountCell value={row.ready} tone="ready" />
+                    </TableCell>
+                  </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 
@@ -124,6 +319,8 @@ function QueueCountsRow({
 
 const PreprocessQueueStatusDetail = ({
   data,
+  overviewRefreshKey,
+  overviewLoadActive = false,
   workspaceName,
   className,
 }: PreprocessQueueStatusDetailProps) => {
@@ -244,74 +441,14 @@ const PreprocessQueueStatusDetail = ({
             </div>
           </div>
 
-          {isGlobal &&
-            (data.database.workspaces_incomplete?.length ?? 0) > 0 && (
-              <div>
-                <h4 className="text-sm font-medium mb-2">Workspaces not ready</h4>
-                <div className="rounded-md border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Workspace</TableHead>
-                        <TableHead>Phase</TableHead>
-                        <TableHead>Pipeline</TableHead>
-                        <TableHead className="text-right">Orch. jobs</TableHead>
-                        <TableHead className="text-right">Orphaned</TableHead>
-                        <TableHead className="text-right">Documents</TableHead>
-                        <TableHead className="text-right">Failed</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.database.workspaces_incomplete!.map((row) => (
-                        <TableRow key={row.workspace}>
-                          <TableCell className="font-medium">
-                            {row.workspace}
-                          </TableCell>
-                          <TableCell>
-                            <PhaseBadge phase={row.phase} />
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {row.pipeline_active || row.lock_held ? (
-                              <span className="flex flex-wrap gap-1">
-                                {row.pipeline_active && (
-                                  <Badge variant="default" className="font-normal text-[10px]">
-                                    active
-                                  </Badge>
-                                )}
-                                {row.lock_held && (
-                                  <Badge variant="secondary" className="font-normal text-[10px]">
-                                    lock
-                                  </Badge>
-                                )}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {row.orchestrator_jobs ?? "—"}
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              "text-right tabular-nums",
-                              (row.chunks_orphaned ?? 0) > 0 && "text-destructive font-medium"
-                            )}
-                          >
-                            {row.chunks_orphaned ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {row.documents_total}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {row.documents_failed}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
+          <Separator />
+
+          <WorkspacesInProgressOverview
+            loadActive={overviewLoadActive}
+            refreshKey={overviewRefreshKey}
+            highlightWorkspace={workspaceName}
+          />
+
           </div>
         </ScrollArea>
       </TabsContent>
