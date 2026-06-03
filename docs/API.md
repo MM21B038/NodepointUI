@@ -639,14 +639,21 @@ Upload triggers a **4-step global preprocess pipeline** (see [Preprocess](#prepr
   "file_name": "notes.md",
   "file_path": "/path/to/media/workspaces/PRAJNA/notes.md",
   "file_url": "/media/workspaces/PRAJNA/notes.md",
-  "status": "PENDING"
+  "status": "PENDING",
+  "replaced": false
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `replaced` | `false` on first upload; `true` when an existing document with the same `file_name` in the workspace was overwritten and re-queued for preprocessing |
 
 | Status | Condition |
 |--------|-----------|
 | `400` | Missing file, bad extension, or no group member workspace when `workspace_name` omitted |
 | `404` | Workspace not found |
+
+Duplicate filename in the same workspace returns **`200`** (replace file, reset status, re-queue pipeline) — not `500`.
 
 ---
 
@@ -846,7 +853,11 @@ Use this to debug idle workers, stuck `nodepoint:preprocess:pipeline:{workspace}
         "workspace": "PRAJNA",
         "phase": "embedding",
         "documents_total": 6,
-        "documents_failed": 0
+        "documents_failed": 0,
+        "chunks_orphaned": 0,
+        "pipeline_active": true,
+        "lock_held": true,
+        "orchestrator_jobs": 2
       }
     ]
   },
@@ -873,8 +884,8 @@ Use this to debug idle workers, stuck `nodepoint:preprocess:pipeline:{workspace}
 | `database.documents` / `chunks` | Row counts by `status` (global or filtered workspace) |
 | `database.chunks_orphaned` | Chunks in `QUEUED` or `INPROGRESS` while the **chunk** RQ queue has no `queued` or `started` jobs (stale after restart; `worker-orchestrator` startup recovery resets and re-enqueues these) |
 | `database.vectors.*` | Rows with vector status `PENDING` or `FAILED` only (embedding backlog) |
-| `database.workspaces_incomplete` | Omitted when `?workspace=` is set; otherwise workspaces where per-workspace preprocess is not `ready` |
-| `active_pipelines` | Workspaces with a pipeline lock and/or matching orchestrator queue jobs |
+| `database.workspaces_incomplete` | Omitted when `?workspace=` is set; otherwise workspaces where preprocess is not `ready` **or** an orchestrator pipeline is active (`pipeline_active`, `lock_held`, `orchestrator_jobs`) |
+| `active_pipelines` | Same running pipelines in detail (lock TTL, job list); also folded into `workspaces_incomplete` for the overview table |
 
 Monitored queues: `orchestrator`, `chunk`, `vector`, `default` (from `RQ_QUEUES`).
 
@@ -959,7 +970,7 @@ Poll after upload until `overall.ready` is `true` and `overall.phase` is `ready`
 | `needs_prepare` | No chunks yet (`content=false`) or completed doc with no chunks/KG (run POST preprocess to migrate) |
 | `queued` | Document `PENDING` or `QUEUED` (awaiting chunk workers) |
 | `processing` | Chunks still running KG (`process_chunk`) or document `INPROGRESS` during prepare |
-| `kg_ready` | All chunks `COMPLETED` but no entity rows yet |
+| `kg_ready` | Legacy alias; empty KG after chunk completion is reported as `ready` |
 | `embedding` | Chunk KG done (or legacy doc with entity rows only) and some vectors not `COMPLETED` |
 | `ready` | All vectors `COMPLETED` (legacy: entity/relation vectors only when there are no chunks) |
 | `failed` | Document `FAILED`, `INVALID`, or `TERMINATED`, or chunk failures |

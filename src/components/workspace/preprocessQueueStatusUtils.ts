@@ -74,6 +74,7 @@ export function shouldPollPreprocessStatus(
   const vectorFailed =
     vectors.entities.failed + vectors.relations.failed + vectors.chunks.failed;
   if (vectorPending + vectorFailed > 0) return true;
+  if ((data.database.chunks_orphaned ?? 0) > 0) return true;
   const docs = data.database.documents;
   const chunks = data.database.chunks;
   const docBacklog =
@@ -122,5 +123,6 @@ export function computePreprocessSummary(data: PreprocessQueueStatusResponse) {
     vectorBacklog,
     docTotal: data.database.documents.total,
     chunkTotal: data.database.chunks.total,
+    chunksOrphaned: data.database.chunks_orphaned ?? 0,
   };
 }

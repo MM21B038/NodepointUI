@@ -206,6 +206,14 @@ const PreprocessQueueStatusDetail = ({
             />
             <StatCard label="Documents" value={summary.docTotal} sub="total rows" />
             <StatCard label="Chunks" value={summary.chunkTotal} sub="total rows" />
+            {summary.chunksOrphaned > 0 && (
+              <StatCard
+                label="Orphaned chunks"
+                value={summary.chunksOrphaned}
+                sub="stale after restart"
+                variant="danger"
+              />
+            )}
           </div>
 
           <div>
@@ -246,6 +254,9 @@ const PreprocessQueueStatusDetail = ({
                       <TableRow>
                         <TableHead>Workspace</TableHead>
                         <TableHead>Phase</TableHead>
+                        <TableHead>Pipeline</TableHead>
+                        <TableHead className="text-right">Orch. jobs</TableHead>
+                        <TableHead className="text-right">Orphaned</TableHead>
                         <TableHead className="text-right">Documents</TableHead>
                         <TableHead className="text-right">Failed</TableHead>
                       </TableRow>
@@ -258,6 +269,35 @@ const PreprocessQueueStatusDetail = ({
                           </TableCell>
                           <TableCell>
                             <PhaseBadge phase={row.phase} />
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {row.pipeline_active || row.lock_held ? (
+                              <span className="flex flex-wrap gap-1">
+                                {row.pipeline_active && (
+                                  <Badge variant="default" className="font-normal text-[10px]">
+                                    active
+                                  </Badge>
+                                )}
+                                {row.lock_held && (
+                                  <Badge variant="secondary" className="font-normal text-[10px]">
+                                    lock
+                                  </Badge>
+                                )}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.orchestrator_jobs ?? "—"}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right tabular-nums",
+                              (row.chunks_orphaned ?? 0) > 0 && "text-destructive font-medium"
+                            )}
+                          >
+                            {row.chunks_orphaned ?? "—"}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {row.documents_total}
@@ -508,6 +548,21 @@ const PreprocessQueueStatusDetail = ({
               </CardContent>
             </Card>
           </div>
+
+          {(data.database.chunks_orphaned ?? 0) > 0 && (
+            <Card className="shadow-none border-destructive/40 bg-destructive/5">
+              <CardContent className="p-3 text-sm">
+                <p className="font-medium text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Orphaned chunks: {data.database.chunks_orphaned}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Chunk rows are QUEUED/INPROGRESS but no chunk-queue jobs are running.
+                  Usually clears after worker-orchestrator startup recovery.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <div>
             <h4 className="text-sm font-medium mb-2">Embedding backlog (PENDING / FAILED)</h4>

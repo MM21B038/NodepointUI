@@ -82,10 +82,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
       try {
         const result = await uploadFiles(workspaceName, allowed);
         if (result.failed.length === 0) {
+          const replacedNote =
+            result.replaced.length > 0
+              ? ` (${result.replaced.length} replaced existing file${result.replaced.length === 1 ? "" : "s"})`
+              : "";
           toast.success(
             allowed.length === 1
-              ? `${allowed[0].name} uploaded successfully!`
-              : `${result.succeeded.length} files uploaded successfully!`,
+              ? `${allowed[0].name} uploaded successfully!${replacedNote}`
+              : `${result.succeeded.length} files uploaded successfully!${replacedNote}`,
             { id: loadingToastId }
           );
         } else if (result.succeeded.length === 0) {

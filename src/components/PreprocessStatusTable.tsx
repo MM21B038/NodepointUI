@@ -25,7 +25,7 @@ import {
 } from "@/database/workspaceStorage";
 import { cn } from "@/lib/utils";
 import { brand } from "@/lib/brandColors";
-import { showError } from "@/utils/toast";
+import { showError, showSuccess } from "@/utils/toast";
 import DocumentsPageSkeleton from "@/components/documents/DocumentsPageSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -69,7 +69,7 @@ function formatPhaseLabel(phase: PreprocessPhase): string {
     case "ready":
       return "Ready";
     case "kg_ready":
-      return "KG ready";
+      return "Ready";
     case "failed":
       return "Failed";
     default:
@@ -88,7 +88,7 @@ function PhaseBadge({ phase }: { phase: PreprocessPhase }) {
     case "embedding":
       return <Badge>{label}</Badge>;
     case "kg_ready":
-      return <Badge variant="secondary">{label}</Badge>;
+      return <Badge className="bg-green-600 hover:bg-green-600">{label}</Badge>;
     case "needs_prepare":
       return <Badge variant="outline" className={cn(brand.warning.border, brand.warning.text, "border")}>{label}</Badge>;
     case "queued":
@@ -524,6 +524,11 @@ function FileUploadDropZone({
       const result = await uploadFiles(workspaceName, files);
       if (result.succeeded.length > 0) {
         onUploadSuccess();
+        if (result.replaced.length > 0) {
+          showSuccess(
+            `${result.replaced.length} file${result.replaced.length === 1 ? "" : "s"} replaced and re-queued for preprocessing.`
+          );
+        }
       }
       if (result.failed.length > 0 && result.succeeded.length === 0) {
         showError(result.failed[0]?.error ?? "Upload failed");

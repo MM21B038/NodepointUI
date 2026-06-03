@@ -1258,11 +1258,14 @@ export async function listFiles(workspaceName: string): Promise<string[]> {
 
 export interface UploadFileResponse {
   message: string;
+  pipeline?: PreprocessPipelineResult;
   id: string;
   file_name: string;
   file_path: string;
   file_url: string;
   status: DocumentStatus;
+  /** True when same file_name in workspace was overwritten and re-queued. */
+  replaced?: boolean;
 }
 
 function isAllowedUploadFile(file: File): boolean {
@@ -1309,6 +1312,8 @@ export async function deleteFile(
 
 export interface BulkFileOperationResult {
   succeeded: string[];
+  /** Files that replaced an existing document with the same name. */
+  replaced: string[];
   failed: { name: string; error: string }[];
 }
 
@@ -1317,12 +1322,14 @@ export async function uploadFiles(
   files: File[]
 ): Promise<BulkFileOperationResult> {
   const succeeded: string[] = [];
+  const replaced: string[] = [];
   const failed: BulkFileOperationResult["failed"] = [];
 
   for (const file of files) {
     try {
-      await uploadFile(workspaceName, file);
+      const res = await uploadFile(workspaceName, file);
       succeeded.push(file.name);
+      if (res.replaced) replaced.push(file.name);
     } catch (error) {
       failed.push({
         name: file.name,
@@ -1331,7 +1338,7 @@ export async function uploadFiles(
     }
   }
 
-  return { succeeded, failed };
+  return { succeeded, replaced, failed };
 }
 
 export async function deleteFiles(
@@ -1353,7 +1360,7 @@ export async function deleteFiles(
     }
   }
 
-  return { succeeded, failed };
+  return { succeeded, replaced: [], failed };
 }
 
 export async function deleteWorkspaces(
@@ -1374,7 +1381,7 @@ export async function deleteWorkspaces(
     }
   }
 
-  return { succeeded, failed };
+  return { succeeded, replaced: [], failed };
 }
 
 export async function deleteWorkspaceGroups(
@@ -1395,7 +1402,7 @@ export async function deleteWorkspaceGroups(
     }
   }
 
-  return { succeeded, failed };
+  return { succeeded, replaced: [], failed };
 }
 
 // --- Preprocess ---
@@ -1668,6 +1675,10 @@ export interface PreprocessWorkspaceIncomplete {
   phase: PreprocessPhase;
   documents_total: number;
   documents_failed: number;
+  chunks_orphaned?: number;
+  pipeline_active?: boolean;
+  lock_held?: boolean;
+  orchestrator_jobs?: number;
 }
 
 export interface PreprocessActivePipeline {
@@ -1691,6 +1702,8 @@ export interface PreprocessQueueStatusResponse {
   database: {
     documents: PreprocessStatusCountMap;
     chunks: PreprocessStatusCountMap;
+    /** Stale QUEUED/INPROGRESS chunks with no matching chunk-queue jobs. */
+    chunks_orphaned?: number;
     vectors: {
       entities: PreprocessVectorBacklog;
       relations: PreprocessVectorBacklog;
