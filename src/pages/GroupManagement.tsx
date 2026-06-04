@@ -31,9 +31,15 @@ import {
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
 import { useGroupDirectory } from "@/hooks/useGroupDirectory";
 import { isSelectableGroup } from "@/lib/viewScope";
+import {
+  duplicateNamesInList,
+  groupResourceKey,
+  listHasMultipleOwners,
+  ownerParamsFrom,
+} from "@/lib/ownerScope";
 
 const GroupManagement = () => {
-  const { activeGroup, setActiveGroup, refreshGroups } = useWorkspace();
+  const { activeGroup, activeGroupOwnerId, setActiveGroup, refreshGroups } = useWorkspace();
   const { gridRef, pageSize } = useWorkspaceGridPageSize();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -42,6 +48,9 @@ const GroupManagement = () => {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const [membersGroupName, setMembersGroupName] = useState<string | null>(null);
+  const [membersGroupOwner, setMembersGroupOwner] = useState<
+    ReturnType<typeof ownerParamsFrom>
+  >(undefined);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -101,6 +110,16 @@ const GroupManagement = () => {
 
   const displayedGroupNames = useMemo(
     () => displayedGroups.map((group) => group.name),
+    [displayedGroups]
+  );
+
+  const duplicateGroupNames = useMemo(
+    () => duplicateNamesInList(displayedGroups),
+    [displayedGroups]
+  );
+
+  const multiOwnerGroups = useMemo(
+    () => listHasMultipleOwners(displayedGroups),
     [displayedGroups]
   );
 
@@ -172,13 +191,14 @@ const GroupManagement = () => {
     }
   };
 
-  const handleSelectGroup = (groupName: string) => {
-    setActiveGroup(groupName);
-    toast.success(`Active group: ${groupName}`);
+  const handleSelectGroup = (group: WorkspaceGroupSummary) => {
+    setActiveGroup(group.name, group.owner_id ?? null);
+    toast.success(`Active group: ${group.name}`);
   };
 
-  const handleManageMembers = (groupName: string) => {
-    setMembersGroupName(groupName);
+  const handleManageMembers = (group: WorkspaceGroupSummary) => {
+    setMembersGroupName(group.name);
+    setMembersGroupOwner(ownerParamsFrom(group));
     setMembersDialogOpen(true);
   };
 
@@ -342,6 +362,7 @@ const GroupManagement = () => {
           open={membersDialogOpen}
           onOpenChange={setMembersDialogOpen}
           groupName={membersGroupName}
+          groupOwner={membersGroupOwner}
           onChanged={() => void refreshAfterMutation()}
         />
 
@@ -387,16 +408,24 @@ const GroupManagement = () => {
             >
               {displayedGroups.map((group: WorkspaceGroupSummary) => (
                 <GroupCard
-                  key={group.name}
+                  key={groupResourceKey(group.name, group.owner_id)}
                   groupName={group.name}
+                  ownerUsername={group.owner_username}
+                  showOwnerLabel={
+                    duplicateGroupNames.has(group.name) || multiOwnerGroups
+                  }
                   groupTag={group.tag}
                   description={group.description}
                   memberCount={group.member_count}
-                  isActive={activeGroup === group.name}
-                  onSelect={handleSelectGroup}
-                  onManageMembers={handleManageMembers}
-                  onEdit={handleEditClick}
-                  onDelete={handleDeleteClick}
+                  isActive={
+                    activeGroup === group.name &&
+                    (activeGroupOwnerId == null ||
+                      group.owner_id === activeGroupOwnerId)
+                  }
+                  onSelect={() => handleSelectGroup(group)}
+                  onManageMembers={() => handleManageMembers(group)}
+                  onEdit={() => handleEditClick(group.name)}
+                  onDelete={() => handleDeleteClick(group.name)}
                   isDeleting={isDeleting}
                   deletingGroupName={
                     groupsToDelete.length === 1 ? groupsToDelete[0] : null

@@ -13,40 +13,48 @@
   }
 
   :root {
-    --background: 220 20% 98%;
-    --foreground: 224 71% 4%;
+    /* Warm off-white paper — refined light mode */
+    --background: 43 33% 96.5%;
+    --foreground: 222 20% 14%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card: 43 42% 99%;
+    --card-foreground: 222 20% 14%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
+    --popover: 43 42% 99%;
+    --popover-foreground: 222 20% 14%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 221 62% 48%;
+    --primary-foreground: 43 40% 98%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 224 47% 11%;
+    --secondary: 43 22% 93%;
+    --secondary-foreground: 222 18% 18%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 43 20% 92%;
+    --muted-foreground: 220 8% 44%;
 
-    --accent: 220 14% 94%;
-    --accent-foreground: 224 47% 11%;
+    --accent: 43 24% 90%;
+    --accent-foreground: 222 18% 18%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 43 40% 98%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 221 83% 53%;
+    --border: 43 14% 86%;
+    --input: 43 16% 88%;
+    --ring: 221 62% 48%;
 
     --radius: 0.625rem;
 
+    /* Chat surfaces (light) — layered off-whites */
+    --chat-canvas: 43 28% 94.5%;
+    --chat-elevated: 43 45% 99.2%;
+    --chat-user: 43 38% 97.5%;
+    --chat-user-border: 43 16% 84%;
+    --chat-assistant: 43 50% 99.5%;
+
     /* Semantic brand accents (cool palette — no amber/orange) */
-    --brand-workspace: 217 91% 45%;
-    --brand-group: 239 84% 55%;
-    --brand-chat: 221 83% 53%;
+    --brand-workspace: 217 75% 42%;
+    --brand-group: 239 70% 52%;
+    --brand-chat: 221 62% 48%;
     --brand-success: 160 84% 39%;
     --brand-warning: 0 72% 51%;
     --brand-info: 199 89% 42%;
@@ -57,18 +65,18 @@
     --group-tag-entity: 262 83% 52%;
     --group-tag-relation: 346 77% 50%;
 
-    --sidebar-background: 220 20% 98%;
-    --sidebar-foreground: 224 47% 11%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 220 14% 94%;
-    --sidebar-accent-foreground: 224 47% 11%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 221 83% 53%;
-    --sidebar-accent-border: 221 83% 53%;
-    
-    --nav-background: var(--background);
-    --nav-foreground: 224 71% 4%;
+    --sidebar-background: 43 30% 95%;
+    --sidebar-foreground: 222 18% 18%;
+    --sidebar-primary: 221 62% 48%;
+    --sidebar-primary-foreground: 43 40% 98%;
+    --sidebar-accent: 43 22% 91%;
+    --sidebar-accent-foreground: 222 18% 18%;
+    --sidebar-border: 43 14% 86%;
+    --sidebar-ring: 221 62% 48%;
+    --sidebar-accent-border: 221 62% 48%;
+
+    --nav-background: 43 35% 97%;
+    --nav-foreground: 222 20% 14%;
     --navbar-height: 76px;
 
     --sidebar-collapsed-width: 64px;
@@ -116,6 +124,12 @@
     --border: 215 28% 16%;
     --input: 215 28% 16%;
     --ring: 217 91% 60%;
+
+    --chat-canvas: 224 71% 4%;
+    --chat-elevated: 224 47% 7%;
+    --chat-user: 215 28% 12%;
+    --chat-user-border: 215 28% 18%;
+    --chat-assistant: 224 47% 7%;
 
     --brand-workspace: 213 94% 68%;
     --brand-group: 234 89% 74%;
@@ -284,4 +298,9 @@
 .navbar-translucent {
   background-color: hsl(var(--nav-background) / 0.8);
   backdrop-filter: blur(8px);
+}
+
+/* Subtle film grain for auth backgrounds */
+.auth-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }

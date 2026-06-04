@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { getGroup, normalizeGroupTag, type GroupTag } from "@/database/workspaceStorage";
+import type { OwnerParams } from "@/lib/ownerScope";
 import { GroupMembersHeader } from "@/components/group/members/GroupMembersHeader";
 import { WorkspaceMembersPanel } from "@/components/group/members/WorkspaceMembersPanel";
 import { FilesMembersPanel } from "@/components/group/members/FilesMembersPanel";
@@ -22,6 +23,7 @@ interface GroupMembersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   groupName: string | null;
+  groupOwner?: OwnerParams;
   onChanged?: () => void;
 }
 
@@ -29,6 +31,7 @@ export default function GroupMembersDialog({
   open,
   onOpenChange,
   groupName,
+  groupOwner,
   onChanged,
 }: GroupMembersDialogProps) {
   const { refreshGroups } = useWorkspace();
@@ -41,7 +44,7 @@ export default function GroupMembersDialog({
     const showSpinner = options?.showSpinner !== false;
     if (showSpinner) setLoadingMeta(true);
     try {
-      const detail = await getGroup(name, { page: 1, page_size: 1 });
+      const detail = await getGroup(name, { page: 1, page_size: 1, owner: groupOwner });
       setTag(normalizeGroupTag(detail.tag));
       setDescription(detail.description ?? null);
       setMemberCount(detail.member_count);
@@ -51,7 +54,7 @@ export default function GroupMembersDialog({
     } finally {
       if (showSpinner) setLoadingMeta(false);
     }
-  }, []);
+  }, [groupOwner]);
 
   useEffect(() => {
     if (!open || !groupName) {
@@ -97,13 +100,29 @@ export default function GroupMembersDialog({
               memberCount={memberCount}
             />
             {tag === "workspace" ? (
-              <WorkspaceMembersPanel groupName={groupName} onChanged={handleChanged} />
+              <WorkspaceMembersPanel
+                groupName={groupName}
+                groupOwner={groupOwner}
+                onChanged={handleChanged}
+              />
             ) : tag === "files" ? (
-              <FilesMembersPanel groupName={groupName} onChanged={handleChanged} />
+              <FilesMembersPanel
+                groupName={groupName}
+                groupOwner={groupOwner}
+                onChanged={handleChanged}
+              />
             ) : tag === "entity" ? (
-              <EntitiesMembersPanel groupName={groupName} onChanged={handleChanged} />
+              <EntitiesMembersPanel
+                groupName={groupName}
+                groupOwner={groupOwner}
+                onChanged={handleChanged}
+              />
             ) : (
-              <RelationsMembersPanel groupName={groupName} onChanged={handleChanged} />
+              <RelationsMembersPanel
+                groupName={groupName}
+                groupOwner={groupOwner}
+                onChanged={handleChanged}
+              />
             )}
           </div>
         )}

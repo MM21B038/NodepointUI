@@ -5,18 +5,21 @@ import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  addWorkspaceToGroup,
-  getAllGroupMembers,
-  getAllWorkspaces,
   getGroupMembers,
   removeWorkspaceFromGroup,
   type GroupWorkspaceMember,
   type WorkspacePagePagination,
 } from "@/database/workspaceStorage";
-import GroupAssignmentList from "@/components/workspace/GroupAssignmentList";
+import GroupAddOptionsPicker from "@/components/group/members/GroupAddOptionsPicker";
 import { PaginatedMemberList } from "@/components/group/members/PaginatedMemberList";
 import { MembersPanelLayout } from "@/components/group/members/MembersPanelLayout";
-import { groupMemberAddTitle } from "@/lib/groupTag";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+  ownerParamsFrom,
+  workspaceResourceKey,
+} from "@/lib/ownerScope";
+import type { OwnerParams } from "@/lib/ownerScope";
 
 const EMPTY_PAGINATION: WorkspacePagePagination = {
   page: 1,
@@ -29,66 +32,64 @@ const EMPTY_PAGINATION: WorkspacePagePagination = {
 
 interface WorkspaceMembersPanelProps {
   groupName: string;
+  groupOwner?: OwnerParams;
   onChanged?: () => void;
 }
 
 export function WorkspaceMembersPanel({
   groupName,
+  groupOwner,
   onChanged,
 }: WorkspaceMembersPanelProps) {
   const [page, setPage] = useState(1);
   const [members, setMembers] = useState<GroupWorkspaceMember[]>([]);
   const [pagination, setPagination] = useState<WorkspacePagePagination>(EMPTY_PAGINATION);
-  const [workspaceNames, setWorkspaceNames] = useState<string[]>([]);
-  const [memberSet, setMemberSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [pendingWorkspace, setPendingWorkspace] = useState<string | null>(null);
+
+  const duplicateWorkspaceNames = useMemo(
+    () => duplicateNamesInList(members),
+    [members]
+  );
 
   const loadMembers = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
     try {
-      const [pageData, allMembers, workspaces] = await Promise.all([
-        getGroupMembers(groupName, { page, page_size: 20, expectedTag: "workspace" }),
-        getAllGroupMembers(groupName, { expectedTag: "workspace" }),
-        getAllWorkspaces(),
-      ]);
+      const pageData = await getGroupMembers(groupName, {
+        page,
+        page_size: 20,
+        expectedTag: "workspace",
+        owner: groupOwner,
+      });
       const workspaceMembers = pageData.members as GroupWorkspaceMember[];
-      const allMemberNames = allMembers as GroupWorkspaceMember[];
       setMembers(workspaceMembers);
       setPagination(pageData.pagination);
-      setMemberSet(new Set(allMemberNames.map((m) => m.name).filter(Boolean)));
-      setWorkspaceNames(workspaces.map((w) => w.name).sort((a, b) => a.localeCompare(b)));
     } catch (error) {
       console.error(error);
       toast.error(`Failed to load members for "${groupName}".`);
     } finally {
       if (!options?.silent) setLoading(false);
     }
-  }, [groupName, page]);
+  }, [groupName, groupOwner, page]);
 
   useEffect(() => {
     void loadMembers();
   }, [loadMembers]);
 
-  const workspaceItems = useMemo(
-    () =>
-      workspaceNames.map((name) => ({
-        id: name,
-        label: name,
-      })),
-    [workspaceNames]
-  );
-
-  const toggleMembership = async (workspaceName: string, checked: boolean) => {
-    setPendingWorkspace(workspaceName);
+  const removeMember = async (member: GroupWorkspaceMember) => {
+    const memberKey = workspaceResourceKey(member.name, member.owner_id);
+    const label = formatScopedResourceLabel(
+      member.name,
+      member.owner_username,
+      { duplicateNames: duplicateWorkspaceNames }
+    );
+    setPendingWorkspace(memberKey);
     try {
-      if (checked) {
-        await addWorkspaceToGroup(groupName, workspaceName);
-        toast.success(`Added "${workspaceName}".`);
-      } else {
-        await removeWorkspaceFromGroup(groupName, workspaceName);
-        toast.success(`Removed "${workspaceName}".`);
-      }
+      await removeWorkspaceFromGroup(groupName, member.name, {
+        groupOwner,
+        workspaceOwner: ownerParamsFrom(member),
+      });
+      toast.success(`Removed "${label}".`);
       onChanged?.();
       await loadMembers({ silent: true });
     } catch (error) {
@@ -116,44 +117,49 @@ export function WorkspaceMembersPanel({
           onNext={() => setPage((p) => p + 1)}
           isEmpty={pagination.total_items === 0}
         >
-          {members.map((member) => (
-            <div
-              key={member.name}
-              className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2"
-            >
-              <span className="truncate text-sm font-medium">{member.name}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-destructive/80 hover:text-destructive"
-                disabled={pendingWorkspace === member.name}
-                onClick={() => void toggleMembership(member.name, false)}
-                aria-label={`Remove ${member.name}`}
+          {members.map((member) => {
+            const memberKey = workspaceResourceKey(member.name, member.owner_id);
+            const label = formatScopedResourceLabel(
+              member.name,
+              member.owner_username,
+              { duplicateNames: duplicateWorkspaceNames }
+            );
+            return (
+              <div
+                key={memberKey}
+                className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2"
               >
-                {pendingWorkspace === member.name ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          ))}
+                <span className="truncate text-sm font-medium">{label}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-destructive/80 hover:text-destructive"
+                  disabled={pendingWorkspace === memberKey}
+                  onClick={() => void removeMember(member)}
+                  aria-label={`Remove ${label}`}
+                >
+                  {pendingWorkspace === memberKey ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            );
+          })}
         </PaginatedMemberList>
       }
       add={
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            {groupMemberAddTitle("workspace")}
-          </p>
-          <GroupAssignmentList
-            items={workspaceItems}
-            selectedIds={memberSet}
-            onToggle={(id, checked) => void toggleMembership(id, checked)}
-            pendingId={pendingWorkspace}
-            heightClass="h-[min(10rem,22vh)]"
-          />
-        </div>
+        <GroupAddOptionsPicker
+          groupName={groupName}
+          groupOwner={groupOwner}
+          tag="workspace"
+          onAdded={() => {
+            onChanged?.();
+            void loadMembers({ silent: true });
+          }}
+        />
       }
     />
   );

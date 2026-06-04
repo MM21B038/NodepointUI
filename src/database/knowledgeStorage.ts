@@ -1,4 +1,4 @@
-import { buildApiUrl } from "@/database/apiUrl";
+import { apiFetch, parseErrorResponse } from "@/database/apiClient";
 import type { CitationKind } from "@/lib/chatCitations";
 
 const KIND_API_SEGMENT: Record<CitationKind, string> = {
@@ -7,20 +7,6 @@ const KIND_API_SEGMENT: Record<CitationKind, string> = {
   chunk: "chunk",
   doc: "document",
 };
-
-async function parseErrorResponse(response: Response): Promise<string> {
-  try {
-    const data = await response.json();
-    return (
-      (data as { error?: string; detail?: string; message?: string }).error ||
-      (data as { detail?: string }).detail ||
-      (data as { message?: string }).message ||
-      response.statusText
-    );
-  } catch {
-    return response.statusText;
-  }
-}
 
 export interface KnowledgeRecordOption {
   id: string;
@@ -33,8 +19,9 @@ export async function fetchKnowledgeRecord(
   id: string
 ): Promise<unknown> {
   const segment = KIND_API_SEGMENT[kind];
-  const url = buildApiUrl(`/knowledge/${segment}/${encodeURIComponent(id)}/`);
-  const response = await fetch(url);
+  const response = await apiFetch(
+    `/knowledge/${segment}/${encodeURIComponent(id)}/`
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }

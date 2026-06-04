@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GitGraph, Loader2, Play, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Play, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FileUpload from "@/components/FileUpload";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,10 +23,18 @@ import {
   type PreprocessPhase,
   type WorkspacePreprocessStatusResponse,
 } from "@/database/workspaceStorage";
+import type { OwnerParams } from "@/lib/ownerScope";
+import {
+  countFilesInProgress,
+  friendlyPhaseLabel,
+  showUserRetryButton,
+  type PreprocessTableVariant,
+} from "@/lib/preprocessUserCopy";
 import { cn } from "@/lib/utils";
 import { brand } from "@/lib/brandColors";
 import { showError, showSuccess } from "@/utils/toast";
 import DocumentsPageSkeleton from "@/components/documents/DocumentsPageSkeleton";
+import WorkspaceReadinessBanner from "@/components/documents/WorkspaceReadinessBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const POLL_MS = 2500;
@@ -38,7 +46,7 @@ interface FileGraphCounts {
 
 interface PreprocessStatusTableProps {
   workspaceName: string;
-  /** Bump to force an immediate refetch (e.g. after starting preprocess). */
+  owner?: OwnerParams;
   refreshToken?: number;
   onStatusChange?: (status: WorkspacePreprocessStatusResponse) => void;
   onRefreshAll?: () => void;
@@ -52,6 +60,9 @@ interface PreprocessStatusTableProps {
   onUploadSuccess?: () => void;
   onStartPreprocess?: () => void;
   isPreprocessing?: boolean;
+  variant?: PreprocessTableVariant;
+  /** @deprecated Use variant="admin" | "user" */
+  showPipelineUI?: boolean;
 }
 
 function formatPhaseLabel(phase: PreprocessPhase): string {
@@ -77,20 +88,33 @@ function formatPhaseLabel(phase: PreprocessPhase): string {
   }
 }
 
-function PhaseBadge({ phase }: { phase: PreprocessPhase }) {
-  const label = formatPhaseLabel(phase);
+function PhaseBadge({
+  phase,
+  variant,
+}: {
+  phase: PreprocessPhase;
+  variant: PreprocessTableVariant;
+}) {
+  const label =
+    variant === "user" ? friendlyPhaseLabel(phase) : formatPhaseLabel(phase);
   switch (phase) {
     case "ready":
+    case "kg_ready":
       return <Badge className="bg-green-600 hover:bg-green-600">{label}</Badge>;
     case "failed":
       return <Badge variant="destructive">{label}</Badge>;
     case "processing":
     case "embedding":
       return <Badge>{label}</Badge>;
-    case "kg_ready":
-      return <Badge className="bg-green-600 hover:bg-green-600">{label}</Badge>;
     case "needs_prepare":
-      return <Badge variant="outline" className={cn(brand.warning.border, brand.warning.text, "border")}>{label}</Badge>;
+      return (
+        <Badge
+          variant="outline"
+          className={cn(brand.warning.border, brand.warning.text, "border")}
+        >
+          {label}
+        </Badge>
+      );
     case "queued":
       return <Badge variant="outline">{label}</Badge>;
     case "idle":
@@ -123,14 +147,44 @@ function formatVectorSummary(v: { completed: number; total: number }): string {
   return `${v.completed}/${v.total}`;
 }
 
+function GraphStatCard({
+  label,
+  value,
+  isLoading,
+}: {
+  label: string;
+  value: number;
+  isLoading?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      {isLoading ? (
+        <Skeleton className="mt-1 h-5 w-10" />
+      ) : (
+        <p className="font-medium tabular-nums">{value}</p>
+      )}
+    </div>
+  );
+}
+
 function shouldPoll(status: WorkspacePreprocessStatusResponse | null): boolean {
   if (!status) return true;
   if (status.overall.ready) return false;
   return status.overall.phase !== "idle";
 }
 
+function resolveVariant(
+  variant: PreprocessTableVariant | undefined,
+  showPipelineUI: boolean | undefined
+): PreprocessTableVariant {
+  if (variant) return variant;
+  return showPipelineUI === false ? "user" : showPipelineUI ? "admin" : "user";
+}
+
 const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   workspaceName,
+  owner,
   refreshToken = 0,
   onStatusChange,
   onRefreshAll,
@@ -144,7 +198,12 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   onUploadSuccess,
   onStartPreprocess,
   isPreprocessing = false,
+  variant: variantProp,
+  showPipelineUI,
 }) => {
+  const variant = resolveVariant(variantProp, showPipelineUI);
+  const isAdmin = variant === "admin";
+
   const [status, setStatus] = useState<WorkspacePreprocessStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -156,6 +215,10 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
     fileNames.length > 0 && fileNames.every((name) => selectedFiles.has(name));
   const someSelected = selectedFiles.size > 0;
   const selectionIndeterminate = someSelected && !allSelected;
+
+  const showRetry =
+    !isAdmin && onStartPreprocess && showUserRetryButton(status);
+  const showAdminStart = isAdmin && onStartPreprocess;
 
   useEffect(() => {
     setSelectedFiles((prev) => {
@@ -189,18 +252,19 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
     async (showSpinner: boolean) => {
       if (showSpinner) setIsLoading(true);
       try {
-        const data = await getWorkspacePreprocessStatus(workspaceName);
+        const data = await getWorkspacePreprocessStatus(workspaceName, owner);
         setStatus(data);
         onStatusChangeRef.current?.(data);
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to fetch preprocessing status.";
+        const message =
+          e instanceof Error ? e.message : "Failed to fetch preprocessing status.";
         showError(message);
         setStatus(null);
       } finally {
         if (showSpinner) setIsLoading(false);
       }
     },
-    [workspaceName]
+    [workspaceName, owner]
   );
 
   useEffect(() => {
@@ -211,7 +275,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       if (cancelled) return;
       if (showSpinner) setIsLoading(true);
       try {
-        const data = await getWorkspacePreprocessStatus(workspaceName);
+        const data = await getWorkspacePreprocessStatus(workspaceName, owner);
         if (cancelled) return;
         setStatus(data);
         onStatusChangeRef.current?.(data);
@@ -228,7 +292,8 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
         }
       } catch (e) {
         if (cancelled) return;
-        const message = e instanceof Error ? e.message : "Failed to fetch preprocessing status.";
+        const message =
+          e instanceof Error ? e.message : "Failed to fetch preprocessing status.";
         showError(message);
         setStatus(null);
       } finally {
@@ -242,7 +307,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [workspaceName, refreshToken]);
+  }, [workspaceName, owner, refreshToken]);
 
   const handleRefresh = () => {
     void fetchStatus(true);
@@ -250,35 +315,24 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
   };
 
   const vectorSummary = status?.vectors;
+  const inProgressCount = status ? countFilesInProgress(status) : 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-xl font-medium">Preprocessing status</h3>
-          {status && <PhaseBadge phase={status.overall.phase} />}
-          {status?.overall.ready && (
-            <span className="text-xs text-muted-foreground">Safe for chat &amp; search</span>
-          )}
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <GitGraph className="h-4 w-4" />
-            {isGraphLoading ? (
-              <span className="flex items-center gap-1.5">
-                <Skeleton className="h-3 w-10" />
-                <span>·</span>
-                <Skeleton className="h-3 w-16" />
-              </span>
-            ) : (
-              <>
-                <span className="tabular-nums">{totalNodes} entities</span>
-                <span>·</span>
-                <span className="tabular-nums">{totalEdges} relationships</span>
-              </>
-            )}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="text-xl font-semibold tracking-tight">Documents</h2>
+          {isAdmin ? (
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+              Operator
+            </Badge>
+          ) : null}
+          {status ? (
+            <PhaseBadge phase={status.overall.phase} variant={variant} />
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {someSelected && onDeleteFiles && (
+          {someSelected && onDeleteFiles ? (
             <Button
               type="button"
               variant="destructive"
@@ -288,21 +342,39 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
               className="gap-2"
             >
               <Trash2 className="h-4 w-4" />
-              <span>
-                Delete {selectedFiles.size} selected
-              </span>
+              <span>Delete {selectedFiles.size} selected</span>
             </Button>
-          )}
-          {onUploadSuccess && (
+          ) : null}
+          {onUploadSuccess ? (
             <FileUpload
               workspaceName={workspaceName}
+              owner={owner}
               onUploadSuccess={onUploadSuccess}
               variant="outline"
               size="sm"
               enableDragDrop
             />
-          )}
-          {onStartPreprocess && (
+          ) : null}
+          {showRetry ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPreprocessing || isDeleting || isLoading}
+              onClick={onStartPreprocess}
+              className="gap-2"
+            >
+              {isPreprocessing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">
+                {isPreprocessing ? "Processing…" : "Process documents"}
+              </span>
+            </Button>
+          ) : null}
+          {showAdminStart ? (
             <Button
               type="button"
               variant="outline"
@@ -320,7 +392,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                 {isPreprocessing ? "Starting…" : "Start preprocessing"}
               </span>
             </Button>
-          )}
+          ) : null}
           <Button
             variant="outline"
             size="icon"
@@ -334,68 +406,122 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
       </div>
 
       {isLoading && !status ? (
-        <DocumentsPageSkeleton />
+        <DocumentsPageSkeleton variant={variant} />
       ) : !status ? (
         <div className="flex h-32 items-center justify-center">
-          <p className="text-muted-foreground">Could not load preprocessing status.</p>
+          <p className="text-muted-foreground">Could not load document status.</p>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
-            <div className="rounded-md border bg-secondary/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Documents</p>
-              <p className="font-medium tabular-nums">{status.overall.documents_total}</p>
+          {!status.overall.ready ? (
+            <WorkspaceReadinessBanner status={status} />
+          ) : null}
+
+          {isAdmin ? (
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Documents</p>
+                <p className="font-medium tabular-nums">{status.overall.documents_total}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Failed docs</p>
+                <p className="font-medium tabular-nums">{status.overall.documents_failed}</p>
+              </div>
+              <GraphStatCard
+                label="Entities"
+                value={totalNodes}
+                isLoading={isGraphLoading}
+              />
+              <GraphStatCard
+                label="Relationships"
+                value={totalEdges}
+                isLoading={isGraphLoading}
+              />
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Entity vectors</p>
+                <p className="font-medium tabular-nums">
+                  {formatVectorSummary(vectorSummary?.entities ?? { completed: 0, total: 0 })}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Relation vectors</p>
+                <p className="font-medium tabular-nums">
+                  {formatVectorSummary(vectorSummary?.relations ?? { completed: 0, total: 0 })}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Chunk vectors</p>
+                <p className="font-medium tabular-nums">
+                  {formatVectorSummary(vectorSummary?.chunks ?? { completed: 0, total: 0 })}
+                </p>
+              </div>
             </div>
-            <div className="rounded-md border bg-secondary/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Failed docs</p>
-              <p className="font-medium tabular-nums">{status.overall.documents_failed}</p>
+          ) : (
+            <div
+              className={cn(
+                "grid gap-3 text-sm",
+                status.overall.ready
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-2 sm:grid-cols-4"
+              )}
+            >
+              <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Files</p>
+                <p className="font-medium tabular-nums">{status.overall.documents_total}</p>
+              </div>
+              <GraphStatCard
+                label="Entities"
+                value={totalNodes}
+                isLoading={isGraphLoading}
+              />
+              <GraphStatCard
+                label="Relationships"
+                value={totalEdges}
+                isLoading={isGraphLoading}
+              />
+              {!status.overall.ready ? (
+                <div className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">In progress</p>
+                  <p className="font-medium tabular-nums">{inProgressCount}</p>
+                </div>
+              ) : null}
             </div>
-            <div className="rounded-md border bg-secondary/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Entity vectors</p>
-              <p className="font-medium tabular-nums">
-                {formatVectorSummary(vectorSummary?.entities ?? { completed: 0, total: 0 })}
-              </p>
-            </div>
-            <div className="rounded-md border bg-secondary/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Relation vectors</p>
-              <p className="font-medium tabular-nums">
-                {formatVectorSummary(vectorSummary?.relations ?? { completed: 0, total: 0 })}
-              </p>
-            </div>
-            <div className="rounded-md border bg-secondary/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">Chunk vectors</p>
-              <p className="font-medium tabular-nums">
-                {formatVectorSummary(vectorSummary?.chunks ?? { completed: 0, total: 0 })}
-              </p>
-            </div>
-          </div>
+          )}
 
           {status.files.length === 0 ? (
             <FileUploadDropZone
               workspaceName={workspaceName}
+              owner={owner}
               onUploadSuccess={onUploadSuccess}
               disabled={!onUploadSuccess}
+              variant={variant}
             />
           ) : (
-            <ScrollArea className="max-h-[calc(100vh-22rem)] min-h-[240px] flex-1 hide-scrollbar">
+            <ScrollArea className="max-h-[calc(100vh-22rem)] min-h-[240px] flex-1 hide-scrollbar rounded-lg border border-border/60">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {onDeleteFiles && (
+                    {onDeleteFiles ? (
                       <TableHead className="w-10">
                         <Checkbox
-                          checked={allSelected ? true : selectionIndeterminate ? "indeterminate" : false}
+                          checked={
+                            allSelected
+                              ? true
+                              : selectionIndeterminate
+                                ? "indeterminate"
+                                : false
+                          }
                           onCheckedChange={(checked) => toggleSelectAll(checked === true)}
                           aria-label="Select all files"
                           disabled={isDeleting}
                         />
                       </TableHead>
-                    )}
+                    ) : null}
                     <TableHead>File</TableHead>
-                    <TableHead>Stage</TableHead>
+                    <TableHead>{isAdmin ? "Stage" : "Status"}</TableHead>
                     <TableHead className="text-center">Entities</TableHead>
                     <TableHead className="text-center">Relationships</TableHead>
-                    <TableHead>Chunks (KG)</TableHead>
+                    {isAdmin ? <TableHead>Chunks (KG)</TableHead> : null}
                     <TableHead>Progress</TableHead>
                     <TableHead className="hidden lg:table-cell">Uploaded</TableHead>
                     <TableHead className="w-12 text-right" />
@@ -403,7 +529,10 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                 </TableHeader>
                 <TableBody>
                   {status.files.map((file) => {
-                    const graphCounts = fileGraphData[file.file_name] ?? { nodes: 0, edges: 0 };
+                    const graphCounts = fileGraphData[file.file_name] ?? {
+                      nodes: 0,
+                      edges: 0,
+                    };
                     const isSelected = selectedFiles.has(file.file_name);
                     return (
                       <TableRow
@@ -411,7 +540,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                         data-state={isSelected ? "selected" : undefined}
                         className={cn(isSelected && "bg-muted/40")}
                       >
-                        {onDeleteFiles && (
+                        {onDeleteFiles ? (
                           <TableCell>
                             <Checkbox
                               checked={isSelected}
@@ -422,12 +551,15 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                               disabled={isDeleting}
                             />
                           </TableCell>
-                        )}
-                        <TableCell className="max-w-[180px] truncate font-medium" title={file.file_name}>
+                        ) : null}
+                        <TableCell
+                          className="max-w-[180px] truncate font-medium"
+                          title={file.file_name}
+                        >
                           {file.file_name}
                         </TableCell>
                         <TableCell>
-                          <PhaseBadge phase={file.phase} />
+                          <PhaseBadge phase={file.phase} variant={variant} />
                         </TableCell>
                         <TableCell className="text-center tabular-nums">
                           {isGraphLoading ? (
@@ -443,13 +575,18 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                             graphCounts.edges
                           )}
                         </TableCell>
-                        <TableCell className="text-xs tabular-nums text-muted-foreground">
-                          {formatChunkSummary(file.chunks)}
-                        </TableCell>
+                        {isAdmin ? (
+                          <TableCell className="text-xs tabular-nums text-muted-foreground">
+                            {formatChunkSummary(file.chunks)}
+                          </TableCell>
+                        ) : null}
                         <TableCell className="min-w-[100px]">
                           <div className="flex items-center gap-2">
                             <Progress
-                              value={Math.min(100, Math.max(0, file.embedding_progress * 100))}
+                              value={Math.min(
+                                100,
+                                Math.max(0, file.embedding_progress * 100)
+                              )}
                               className="h-2 flex-1"
                             />
                             <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
@@ -461,7 +598,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                           {formatUploadedAt(file.uploaded_at)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {onDeleteFile && (
+                          {onDeleteFile ? (
                             <Button
                               type="button"
                               variant="destructive"
@@ -472,7 +609,7 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     );
@@ -482,9 +619,11 @@ const PreprocessStatusTable: React.FC<PreprocessStatusTableProps> = ({
             </ScrollArea>
           )}
 
-          {shouldPoll(status) && (
-            <p className={cn("text-xs text-muted-foreground")}>Auto-refreshing every few seconds…</p>
-          )}
+          {shouldPoll(status) ? (
+            <p className="text-xs text-muted-foreground">
+              Auto-refreshing every few seconds…
+            </p>
+          ) : null}
         </>
       )}
     </div>
@@ -500,12 +639,16 @@ function isAllowedUploadFile(file: File): boolean {
 
 function FileUploadDropZone({
   workspaceName,
+  owner,
   onUploadSuccess,
   disabled = false,
+  variant = "user",
 }: {
   workspaceName: string;
+  owner?: OwnerParams;
   onUploadSuccess?: () => void;
   disabled?: boolean;
+  variant?: PreprocessTableVariant;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -521,12 +664,12 @@ function FileUploadDropZone({
 
     setIsUploading(true);
     try {
-      const result = await uploadFiles(workspaceName, files);
+      const result = await uploadFiles(workspaceName, files, owner);
       if (result.succeeded.length > 0) {
         onUploadSuccess();
         if (result.replaced.length > 0) {
           showSuccess(
-            `${result.replaced.length} file${result.replaced.length === 1 ? "" : "s"} replaced and re-queued for preprocessing.`
+            `${result.replaced.length} file${result.replaced.length === 1 ? "" : "s"} replaced and re-queued for processing.`
           );
         }
       }
@@ -543,7 +686,7 @@ function FileUploadDropZone({
   return (
     <div
       className={cn(
-        "flex h-32 items-center justify-center rounded-md border border-dashed transition-colors",
+        "flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border/60 bg-muted/20 px-6 py-10 transition-colors",
         isDragging && "border-primary bg-primary/5",
         disabled && "opacity-60"
       )}
@@ -565,12 +708,15 @@ function FileUploadDropZone({
         await handleUpload(event.dataTransfer.files);
       }}
     >
-      <p className="px-4 text-center text-muted-foreground">
+      <Upload className="h-10 w-10 text-muted-foreground/70" aria-hidden />
+      <p className="max-w-md text-center text-sm text-muted-foreground">
         {isUploading
           ? "Uploading files…"
           : isDragging
             ? "Drop .txt or .md files here"
-            : "No files in this workspace. Upload or drag documents here, then start preprocessing."}
+            : variant === "admin"
+              ? "No files yet. Upload or drag documents here — preprocessing starts automatically after upload."
+              : "No documents yet. Drop .txt or .md files here or use Upload — we'll process them for chat and search."}
       </p>
     </div>
   );

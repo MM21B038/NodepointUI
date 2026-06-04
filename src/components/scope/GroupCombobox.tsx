@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,15 +19,23 @@ import {
 } from "@/components/ui/popover";
 import type { GroupTag } from "@/database/workspaceStorage";
 import {
-  formatGroupLabel,
   formatGroupTag,
   groupSearchText,
   groupTagTone,
 } from "@/lib/groupTag";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+  groupResourceKey,
+  listHasMultipleOwners,
+} from "@/lib/ownerScope";
 import { metaDescription } from "@/lib/resourceMeta";
 
 export interface GroupOption {
+  id?: number;
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   tag: GroupTag;
   description?: string | null;
   member_count: number;
@@ -36,7 +44,8 @@ export interface GroupOption {
 interface GroupComboboxProps {
   groups: GroupOption[];
   value: string | null;
-  onSelect: (name: string) => void;
+  valueOwnerId?: number | null;
+  onSelect: (group: GroupOption) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -44,18 +53,32 @@ interface GroupComboboxProps {
 export default function GroupCombobox({
   groups,
   value,
+  valueOwnerId,
   onSelect,
   disabled,
   className,
 }: GroupComboboxProps) {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(value ?? "");
+  const duplicateNames = useMemo(() => duplicateNamesInList(groups), [groups]);
+  const multiOwnerList = useMemo(() => listHasMultipleOwners(groups), [groups]);
+  const hasAmbiguousNames = duplicateNames.size > 0 || multiOwnerList;
 
-  useEffect(() => {
-    setSelected(value ?? "");
-  }, [value]);
+  const active = groups.find(
+    (g) =>
+      g.name === value &&
+      (valueOwnerId == null || g.owner_id === valueOwnerId)
+  );
 
-  const active = groups.find((g) => g.name === selected);
+  const selectedKey = active
+    ? groupResourceKey(active.name, active.owner_id)
+    : value ?? "";
+
+  const activeLabel = active
+    ? formatScopedResourceLabel(active.name, active.owner_username, {
+        duplicateNames,
+        multiOwnerList,
+      })
+    : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -66,68 +89,108 @@ export default function GroupCombobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "h-8 justify-between gap-1 px-3 text-xs font-normal",
-            "w-[10rem] border-input bg-background",
+            "h-9 min-w-[11rem] max-w-[16rem] justify-between gap-2 bg-card px-3 text-foreground hover:bg-card/90",
             className
           )}
         >
-          <span className="flex min-w-0 items-center gap-1 truncate">
-            <Users className="h-3 w-3 shrink-0 opacity-70" />
+          <span className="flex min-w-0 flex-1 items-center gap-1 truncate">
+            <Users className="h-3.5 w-3.5 shrink-0 opacity-70" />
             {active ? (
-              <span className="truncate">
-                {formatGroupLabel(active.name, active.member_count, active.tag)}
+              <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+                <span
+                  className="w-full truncate text-left text-sm font-medium"
+                  title={activeLabel ?? active.name}
+                >
+                  {activeLabel ?? active.name}
+                </span>
+                <span className="truncate text-[10px] text-muted-foreground">
+                  {formatGroupTag(active.tag)} · {active.member_count}
+                </span>
               </span>
             ) : (
-              <span className="text-muted-foreground">Select group</span>
+              <span className="text-sm text-muted-foreground">Select group…</span>
             )}
           </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[12rem] p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] min-w-[14rem] max-w-[20rem] p-0"
+        align="start"
+      >
         <Command
           filter={(itemValue, search) => {
             if (!search) return 1;
-            const group = groups.find((g) => g.name === itemValue);
+            const group = groups.find(
+              (g) => groupResourceKey(g.name, g.owner_id) === itemValue
+            );
             const haystack = group ? groupSearchText(group) : itemValue.toLowerCase();
             return haystack.includes(search.toLowerCase()) ? 1 : 0;
           }}
         >
-          <CommandInput placeholder="Search group…" className="h-8 text-xs" />
-          <CommandList className="max-h-[180px] hide-scrollbar">
-            <CommandEmpty className="py-4 text-xs">No group found.</CommandEmpty>
-            <CommandGroup>
-              {groups.map((g) => (
-                <CommandItem
-                  key={g.name}
-                  value={g.name}
-                  className="text-xs"
-                  onSelect={(currentValue) => {
-                    onSelect(currentValue);
-                    setSelected(currentValue);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-3.5 w-3.5",
-                      selected === g.name ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <span className="min-w-0 truncate">{g.name}</span>
-                  <span className={cn("shrink-0", groupTagTone(g.tag).text)}>
-                    · {formatGroupTag(g.tag)}
-                  </span>
-                  {metaDescription(g) && (
-                    <span className="hidden min-w-0 truncate text-muted-foreground sm:inline">
-                      · {metaDescription(g)}
+          <CommandInput
+            placeholder={
+              hasAmbiguousNames ? "Search name or owner…" : "Search group…"
+            }
+            className="h-9"
+          />
+          <CommandList className="max-h-[220px] hide-scrollbar">
+            <CommandEmpty className="py-6 text-xs text-muted-foreground">
+              No group found.
+            </CommandEmpty>
+            <CommandGroup
+              heading={
+                hasAmbiguousNames
+                  ? "Choose group · owner"
+                  : undefined
+              }
+            >
+              {groups.map((g) => {
+                const key = groupResourceKey(g.name, g.owner_id);
+                const rowLabel = formatScopedResourceLabel(
+                  g.name,
+                  g.owner_username,
+                  { duplicateNames, multiOwnerList }
+                );
+                const isSelected = selectedKey === key;
+                return (
+                  <CommandItem
+                    key={key}
+                    value={key}
+                    className="items-center gap-2 py-2"
+                    onSelect={() => {
+                      onSelect(g);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span
+                        className="truncate text-sm font-medium leading-none"
+                        title={rowLabel}
+                      >
+                        {rowLabel}
+                      </span>
+                      <span className="text-[11px] leading-none text-muted-foreground">
+                        <span className={cn(groupTagTone(g.tag).text)}>
+                          {formatGroupTag(g.tag)}
+                        </span>
+                        {metaDescription(g)
+                          ? ` · ${metaDescription(g)}`
+                          : null}
+                      </span>
                     </span>
-                  )}
-                  <span className="ml-auto shrink-0 text-muted-foreground">
-                    ({g.member_count})
-                  </span>
-                </CommandItem>
-              ))}
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      ({g.member_count})
+                    </span>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

@@ -1,7 +1,7 @@
 import * as React from "react";
 
-/** Tailwind max-w-6xl — matches Stream CHAT_THREAD_MAX_CLASS */
-export const CHAT_THREAD_MAX_PX = 1152;
+/** Tailwind max-w-3xl — matches Stream CHAT_THREAD_MAX_CLASS */
+export const CHAT_THREAD_MAX_PX = 768;
 
 export const CITATION_PANEL_MAX_PX = 420;
 

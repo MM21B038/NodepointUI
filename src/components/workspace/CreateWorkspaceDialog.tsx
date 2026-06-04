@@ -19,12 +19,18 @@ import { isWorkspaceGroup } from "@/database/workspaceStorage";
 import { formatGroupTag } from "@/lib/groupTag";
 import { metaDescription } from "@/lib/resourceMeta";
 import GroupAssignmentList from "@/components/workspace/GroupAssignmentList";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+  groupResourceKey,
+  listHasMultipleOwners,
+} from "@/lib/ownerScope";
 
 export interface CreateWorkspaceFormValues {
   name: string;
   tag?: string | null;
   description?: string | null;
-  groupNames: string[];
+  groupKeys: string[];
 }
 
 interface CreateWorkspaceDialogProps {
@@ -55,24 +61,40 @@ export default function CreateWorkspaceDialog({
     }
   }, [open]);
 
+  const workspaceGroups = useMemo(
+    () => groups.filter(isWorkspaceGroup),
+    [groups]
+  );
+
+  const duplicateGroupNames = useMemo(
+    () => duplicateNamesInList(workspaceGroups),
+    [workspaceGroups]
+  );
+
+  const multiOwnerGroups = useMemo(
+    () => listHasMultipleOwners(workspaceGroups),
+    [workspaceGroups]
+  );
+
   const groupItems = useMemo(
     () =>
-      groups
-        .filter(isWorkspaceGroup)
-        .map((g) => {
-          const desc = metaDescription(g);
-          const hintParts = [
-            formatGroupTag(g.tag),
-            desc ? "desc" : null,
-            `${g.member_count} ws`,
-          ].filter(Boolean);
-          return {
-            id: g.name,
-            label: g.name,
-            hint: hintParts.join(" · "),
-          };
-        }),
-    [groups]
+      workspaceGroups.map((g) => {
+        const desc = metaDescription(g);
+        const hintParts = [
+          formatGroupTag(g.tag),
+          desc ? "desc" : null,
+          `${g.member_count} ws`,
+        ].filter(Boolean);
+        return {
+          id: groupResourceKey(g.name, g.owner_id),
+          label: formatScopedResourceLabel(g.name, g.owner_username, {
+            duplicateNames: duplicateGroupNames,
+            multiOwnerList: multiOwnerGroups,
+          }),
+          hint: hintParts.join(" · "),
+        };
+      }),
+    [workspaceGroups, duplicateGroupNames]
   );
 
   const handleSubmit = async () => {
@@ -82,7 +104,7 @@ export default function CreateWorkspaceDialog({
       name: trimmed,
       tag: tag.trim() || null,
       description: description.trim() || null,
-      groupNames: Array.from(selectedGroups),
+      groupKeys: Array.from(selectedGroups),
     });
   };
 
@@ -96,7 +118,8 @@ export default function CreateWorkspaceDialog({
           </DialogTitle>
           <DialogDescription>
             Create a workspace for documents and knowledge graph data. Optionally
-            add it to one or more groups for group-scoped chat and KG.
+            pre-select groups; membership is applied after the workspace is created
+            (eligible groups only).
           </DialogDescription>
         </DialogHeader>
 
@@ -135,7 +158,7 @@ export default function CreateWorkspaceDialog({
             />
           </div>
 
-          {groups.length > 0 && (
+          {workspaceGroups.length > 0 && (
             <div className="space-y-2">
               <Label>Add to groups (optional)</Label>
               <GroupAssignmentList

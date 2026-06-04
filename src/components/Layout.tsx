@@ -5,13 +5,23 @@ import Navbar from "./Navbar";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import SidebarNav from "./SidebarNav";
-import { FileStack, BookOpen, FolderCog, FolderKanban, MessageCircle } from "lucide-react";
+import {
+  FileStack,
+  BookOpen,
+  FolderCog,
+  FolderKanban,
+  MessageCircle,
+  Shield,
+  KeyRound,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { isAdminRole } from "@/database/authStorage";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const pages = [
+const basePages = [
   { path: "/workspace-management", name: "Workspaces", icon: FolderCog },
   { path: "/group-management", name: "Groups", icon: FolderKanban },
   { path: "/documents", name: "Documents", icon: FileStack },
@@ -19,8 +29,18 @@ const pages = [
   { path: "/chat", name: "Chat", icon: MessageCircle },
 ];
 
+const adminPages = [
+  { path: "/admin/users", name: "Users", icon: Shield },
+  { path: "/admin/api-keys", name: "API keys", icon: KeyRound },
+];
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { user } = useAuth();
   const location = useLocation();
+  const pages = [
+    ...basePages,
+    ...(user && isAdminRole(user.role) ? adminPages : []),
+  ];
   const path =
     location.pathname.length > 1
       ? location.pathname.replace(/\/+$/, "")

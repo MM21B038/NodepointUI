@@ -4,6 +4,8 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import WorkspaceControl from "./WorkspaceControl";
 import ThemeSwitcher from "./ThemeSwitcher";
+import UserMenu from "@/components/auth/UserMenu";
+import LogoutButton from "@/components/auth/LogoutButton";
 import { NodepointLogo } from "@/components/brand/NodepointLogo";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +33,9 @@ const Navbar = () => {
           <WorkspaceControl />
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <UserMenu />
+          <LogoutButton variant="outline" size="sm" />
           <ThemeSwitcher />
         </div>
       </div>

@@ -25,22 +25,27 @@ import WorkspaceGroupMembership from "@/components/workspace/WorkspaceGroupMembe
 
 interface WorkspaceCardProps {
   workspaceName: string;
+  workspaceOwnerId?: number;
+  ownerUsername?: string | null;
+  /** Show owner badge when names repeat across owners on the page. */
+  showOwnerLabel?: boolean;
   tag?: string | null;
   description?: string | null;
   isCurrent: boolean;
-  onSelect: (workspaceName: string) => void;
-  onDelete: (workspaceName: string) => void;
+  onSelect: () => void;
+  onDelete: () => void;
   isDeleting: boolean;
+  isDeletingThis?: boolean;
   deletingWorkspaceName: string | null;
   isSelected?: boolean;
   onSelectionChange?: (checked: boolean) => void;
   showSelection?: boolean;
   counts: WorkspaceCounts;
-  onExtract: (workspaceName: string) => void;
-  isExtracting: boolean;
+  onExtract?: (workspaceName: string) => void;
+  isExtracting?: boolean;
   groups?: string[];
   onGroupsChanged?: () => void;
-  onEdit?: (workspaceName: string) => void;
+  onEdit?: () => void;
 }
 
 const statItems = (
@@ -54,26 +59,30 @@ const statItems = (
 
 const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
   workspaceName,
+  workspaceOwnerId,
+  ownerUsername,
+  showOwnerLabel,
   tag,
   description,
   isCurrent,
   onSelect,
   onDelete,
   isDeleting,
+  isDeletingThis = false,
   deletingWorkspaceName,
   isSelected = false,
   onSelectionChange,
   showSelection = false,
   counts,
   onExtract,
-  isExtracting,
+  isExtracting = false,
   groups = [],
   onGroupsChanged,
   onEdit,
 }) => {
   const customGroups = groups.filter((g) => g !== FLAGGED_GROUP_NAME);
   const isThisWorkspaceDeleting =
-    isDeleting && deletingWorkspaceName === workspaceName;
+    isDeletingThis || (isDeleting && deletingWorkspaceName === workspaceName);
   const isDisabled = isDeleting || isExtracting;
 
   return (
@@ -81,6 +90,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
       <DirectoryCardFrame
         accent="workspace"
         name={workspaceName}
+        ownerUsername={ownerUsername}
+        showOwnerLabel={showOwnerLabel}
         tag={tag}
         description={description}
         isActive={isCurrent}
@@ -89,8 +100,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
         isDeleting={isDeleting}
         isDisabled={isDisabled}
         isThisDeleting={isThisWorkspaceDeleting}
-        onSelect={() => onSelect(workspaceName)}
-        onDelete={() => onDelete(workspaceName)}
+        onSelect={onSelect}
+        onDelete={onDelete}
         onSelectionChange={onSelectionChange}
         activeLabel="Current"
         icon={<FolderCog className="h-5 w-5" />}
@@ -98,6 +109,8 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
           <div className={directoryActionsClass()}>
             <WorkspaceGroupMembership
               workspaceName={workspaceName}
+              workspaceOwnerId={workspaceOwnerId}
+              workspaceOwnerUsername={ownerUsername}
               memberGroups={customGroups}
               onMembershipChanged={onGroupsChanged}
               disabled={isDisabled}
@@ -110,7 +123,7 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEdit(workspaceName);
+                    onEdit?.();
                   }}
                   disabled={isDisabled}
                   className="h-9 gap-2 border-border/60"
@@ -119,26 +132,28 @@ const WorkspaceCard: React.FC<WorkspaceCardProps> = ({
                   <span>Edit</span>
                 </Button>
               ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onExtract(workspaceName);
-                }}
-                disabled={isDisabled}
-                className={cn(
-                  directoryCardAccentActionClass("workspace"),
-                  !onEdit && "col-span-2"
-                )}
-              >
-              {isExtracting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              <span>{isExtracting ? "Extracting…" : "Run extract"}</span>
-            </Button>
+              {onExtract ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExtract(workspaceName);
+                  }}
+                  disabled={isDisabled}
+                  className={cn(
+                    directoryCardAccentActionClass("workspace"),
+                    !onEdit && "col-span-2"
+                  )}
+                >
+                  {isExtracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  <span>{isExtracting ? "Extracting…" : "Run extract"}</span>
+                </Button>
+              ) : null}
             </div>
           </div>
         }

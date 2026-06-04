@@ -5,6 +5,7 @@ import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { uploadFiles } from "@/database/workspaceStorage";
+import type { OwnerParams } from "@/lib/ownerScope";
 import { cn } from "@/lib/utils";
 
 const ALLOWED_UPLOAD_EXTENSIONS = [".txt", ".md"] as const;
@@ -18,6 +19,7 @@ function isAllowedUploadFile(file: File): boolean {
 
 interface FileUploadProps {
   workspaceName: string | null;
+  owner?: OwnerParams;
   onUploadSuccess: () => void;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
@@ -28,6 +30,7 @@ interface FileUploadProps {
 
 const FileUpload: React.FC<FileUploadProps> = ({
   workspaceName,
+  owner,
   onUploadSuccess,
   variant = "default",
   size = "default",
@@ -80,7 +83,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       );
 
       try {
-        const result = await uploadFiles(workspaceName, allowed);
+        const result = await uploadFiles(workspaceName, allowed, owner);
         if (result.failed.length === 0) {
           const replacedNote =
             result.replaced.length > 0
@@ -114,7 +117,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         resetInput();
       }
     },
-    [workspaceName, onUploadSuccess]
+    [workspaceName, owner, onUploadSuccess]
   );
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {

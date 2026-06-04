@@ -80,13 +80,13 @@ export function CitationSplitLayout({
   return (
     <div
       ref={containerRef}
-      className={cn("flex h-full min-h-0 flex-1 justify-center overflow-hidden", className)}
+      className={cn("flex h-full min-h-0 w-full flex-1 overflow-hidden", className)}
     >
       <div
         ref={rowRef}
         className={cn(
           "flex h-full min-h-0 max-w-full motion-reduce:!transition-none",
-          pixelRow ? "shrink-0" : "w-full min-w-0"
+          pixelRow ? "h-full w-full shrink-0" : "min-w-0 w-full flex-1"
         )}
         style={{
           ...ROW_TRANSITION,

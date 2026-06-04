@@ -10,6 +10,7 @@ import {
   type WorkspacePagePagination,
 } from "@/database/workspaceStorage";
 import { metaSearchText } from "@/lib/resourceMeta";
+import { parseResourceKey, workspaceResourceKey } from "@/lib/ownerScope";
 
 const EMPTY_PAGINATION: WorkspacePagePagination = {
   page: 1,
@@ -28,7 +29,10 @@ const ZERO_COUNTS: WorkspaceCounts = {
 };
 
 function entryToItem(entry: {
+  id?: number;
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   tag?: string | null;
   description?: string | null;
   is_flag: boolean;
@@ -36,7 +40,10 @@ function entryToItem(entry: {
   groups?: string[];
 }): WorkspacePageItem {
   return {
+    id: entry.id,
     name: entry.name,
+    owner_id: entry.owner_id,
+    owner_username: entry.owner_username ?? null,
     tag: entry.tag ?? null,
     description: entry.description ?? null,
     is_flag: entry.is_flag,
@@ -52,7 +59,10 @@ function mergeCounts(
 ): WorkspacePageItem[] {
   return items.map((w) => ({
     ...w,
-    counts: countsByName.get(w.name) ?? w.counts,
+    counts:
+      countsByName.get(workspaceResourceKey(w.name, w.owner_id)) ??
+      countsByName.get(w.name) ??
+      w.counts,
   }));
 }
 
@@ -89,8 +99,14 @@ export function useWorkspaceDirectory({
   const [reloadKey, setReloadKey] = useState(0);
 
   const isSearchActive = searchQuery.trim().length > 0;
+  const parsedGroupFilter =
+    groupFilter !== "all" ? parseResourceKey(groupFilter) : null;
   const serverGroup =
-    groupFilter !== "all" && !isSearchActive ? groupFilter : undefined;
+    parsedGroupFilter && !isSearchActive ? parsedGroupFilter.name : undefined;
+  const serverGroupOwner =
+    parsedGroupFilter?.ownerId != null
+      ? { ownerId: parsedGroupFilter.ownerId }
+      : undefined;
 
   const invalidateCache = useCallback(() => {
     fullListCacheRef.current = null;
@@ -107,8 +123,9 @@ export function useWorkspaceDirectory({
       const q = searchQuery.trim().toLowerCase();
       let filtered = all;
       if (groupFilter !== "all") {
+        const { name: groupName } = parseResourceKey(groupFilter);
         filtered = filtered.filter((w) =>
-          (w.groups ?? []).includes(groupFilter)
+          (w.groups ?? []).includes(groupName)
         );
       }
       if (q) {
@@ -200,6 +217,7 @@ export function useWorkspaceDirectory({
           page,
           page_size: pageSize,
           group: serverGroup,
+          owner: serverGroupOwner,
           include_counts: true,
         });
         if (requestId !== requestIdRef.current) return;
@@ -234,6 +252,7 @@ export function useWorkspaceDirectory({
     searchQuery,
     isSearchActive,
     serverGroup,
+    serverGroupOwner,
     reloadKey,
     applySearchPage,
     hydrateSearchCounts,

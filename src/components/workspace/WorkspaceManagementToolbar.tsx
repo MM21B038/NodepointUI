@@ -41,7 +41,7 @@ interface WorkspaceManagementToolbarProps {
   onSearchTermChange: (value: string) => void;
   groupFilter: string;
   onGroupFilterChange: (value: string) => void;
-  groupNames: string[];
+  groupFilterItems: { key: string; label: string }[];
   workspaceStats: WorkspaceStats | null;
   totalItems: number;
   page: number;
@@ -66,7 +66,7 @@ const WorkspaceManagementToolbar = ({
   onSearchTermChange,
   groupFilter,
   onGroupFilterChange,
-  groupNames,
+  groupFilterItems,
   workspaceStats,
   totalItems,
   page,
@@ -154,9 +154,9 @@ const WorkspaceManagementToolbar = ({
           >
             <FolderKanban className="h-3.5 w-3.5" />
             Groups
-            {groupNames.length > 0 && (
+            {groupFilterItems.length > 0 && (
               <span className="tabular-nums text-muted-foreground">
-                ({groupNames.length})
+                ({groupFilterItems.length})
               </span>
             )}
           </Button>
@@ -189,9 +189,9 @@ const WorkspaceManagementToolbar = ({
                 All workspaces
                 {workspaceStats != null ? ` (${workspaceStats.total})` : ""}
               </SelectItem>
-              {groupNames.map((name) => (
-                <SelectItem key={name} value={name}>
-                  In group: {name}
+              {groupFilterItems.map(({ key, label }) => (
+                <SelectItem key={key} value={key}>
+                  In group: {label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -233,14 +233,9 @@ const WorkspaceManagementToolbar = ({
           )}
         </div>
       </div>
-      {isSearchActive && (
-        <p className="text-xs text-muted-foreground pl-0.5">
-          Search filters all loaded workspace names.
-        </p>
-      )}
-      {groupFilter !== "all" && !isSearchActive && (
-        <p className="text-xs text-muted-foreground pl-0.5">
-          Showing workspaces in group &quot;{groupFilter}&quot;.
+      {isSearchActive && groupFilter === "all" && (
+        <p className="text-[11px] text-muted-foreground pl-0.5">
+          Search filters all workspace names.
         </p>
       )}
     </div>

@@ -56,6 +56,13 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "chat-surface": {
+          canvas: "hsl(var(--chat-canvas))",
+          elevated: "hsl(var(--chat-elevated))",
+          user: "hsl(var(--chat-user))",
+          "user-border": "hsl(var(--chat-user-border))",
+          assistant: "hsl(var(--chat-assistant))",
+        },
         brand: {
           workspace: "hsl(var(--brand-workspace) / <alpha-value>)",
           group: "hsl(var(--brand-group) / <alpha-value>)",
@@ -202,6 +209,76 @@ export default {
           "50%": { opacity: "0.85" },
           "100%": { transform: "translateY(100%)", opacity: "0.15" },
         },
+        "auth-orb-a": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(28px, -18px) scale(1.06)" },
+          "66%": { transform: "translate(-16px, 22px) scale(0.96)" },
+        },
+        "auth-orb-b": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "50%": { transform: "translate(-32px, 24px) scale(1.08)" },
+        },
+        "auth-orb-c": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "40%": { transform: "translate(20px, -28px) scale(1.04)" },
+          "80%": { transform: "translate(-24px, 12px) scale(0.98)" },
+        },
+        "auth-aurora": {
+          "0%, 100%": { transform: "translateX(-8%) skewY(-2deg)", opacity: "0.35" },
+          "50%": { transform: "translateX(8%) skewY(2deg)", opacity: "0.65" },
+        },
+        "auth-fade-up": {
+          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "auth-glow": {
+          "0%, 100%": { opacity: "0.45", transform: "scale(0.95)" },
+          "50%": { opacity: "0.85", transform: "scale(1.05)" },
+        },
+        "auth-orbit": {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+        "auth-node-pulse": {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.35" },
+          "50%": { transform: "scale(1.15)", opacity: "0.7" },
+        },
+        "auth-edge": {
+          "0%, 100%": { opacity: "0.35" },
+          "50%": { opacity: "1" },
+        },
+        "auth-dash-travel": {
+          "0%": { strokeDashoffset: "32" },
+          "100%": { strokeDashoffset: "0" },
+        },
+        "auth-dash-travel-reverse": {
+          "0%": { strokeDashoffset: "0" },
+          "100%": { strokeDashoffset: "32" },
+        },
+        "auth-ring-pulse": {
+          "0%": { transform: "scale(0.88)", opacity: "0.55" },
+          "100%": { transform: "scale(1.45)", opacity: "0" },
+        },
+        "auth-hub-breathe": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.12)" },
+        },
+        "auth-node-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
+        "auth-orbit-reverse": {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(-360deg)" },
+        },
+        "auth-illustration-drift": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
+        },
+        "auth-sparkle": {
+          "0%, 100%": { opacity: "0.2", transform: "scale(0.8)" },
+          "50%": { opacity: "1", transform: "scale(1.2)" },
+        },
       },
       transitionDuration: {
         rail: "400ms",
@@ -228,6 +305,23 @@ export default {
         "tool-lane-merge": "tool-lane-merge 0.52s ease-in forwards",
         "tool-node-complete": "tool-node-complete 0.4s ease-out",
         "tool-rail-flow": "tool-rail-flow 2s ease-in-out infinite",
+        "auth-orb-a": "auth-orb-a 22s ease-in-out infinite",
+        "auth-orb-b": "auth-orb-b 28s ease-in-out infinite",
+        "auth-orb-c": "auth-orb-c 24s ease-in-out infinite",
+        "auth-aurora": "auth-aurora 16s ease-in-out infinite",
+        "auth-fade-up": "auth-fade-up 0.65s ease-out both",
+        "auth-glow": "auth-glow 4s ease-in-out infinite",
+        "auth-orbit": "auth-orbit 48s linear infinite",
+        "auth-node-pulse": "auth-node-pulse 3s ease-in-out infinite",
+        "auth-edge": "auth-edge 2.8s ease-in-out infinite",
+        "auth-dash-travel": "auth-dash-travel 2.4s linear infinite",
+        "auth-dash-travel-reverse": "auth-dash-travel-reverse 2.8s linear infinite",
+        "auth-ring-pulse": "auth-ring-pulse 2.8s ease-out infinite",
+        "auth-hub-breathe": "auth-hub-breathe 3.2s ease-in-out infinite",
+        "auth-node-float": "auth-node-float 4.5s ease-in-out infinite",
+        "auth-orbit-reverse": "auth-orbit-reverse 56s linear infinite",
+        "auth-illustration-drift": "auth-illustration-drift 7s ease-in-out infinite",
+        "auth-sparkle": "auth-sparkle 2.2s ease-in-out infinite",
       },
     },
   },

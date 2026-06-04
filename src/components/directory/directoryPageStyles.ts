@@ -5,13 +5,13 @@ export const directoryPagePanelClass =
   "flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg";
 
 export const directoryPageScrollClass =
-  "relative flex-1 min-h-0 overflow-y-auto bg-muted/20 p-4 sm:p-5";
+  "relative flex-1 min-h-0 overflow-y-auto bg-muted/20 p-3 sm:p-4 content-start";
 
 export const directoryPageGridClass =
   "grid auto-rows-auto grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 
 export const directoryToolbarClass =
-  "shrink-0 space-y-2.5 border-b border-border/60 bg-gradient-to-b from-muted/20 to-card px-4 py-3";
+  "shrink-0 space-y-2 border-b border-border/60 bg-gradient-to-b from-muted/20 to-card px-3 py-2.5 sm:px-4";
 
 export const directoryToolbarRowClass =
   "flex flex-wrap items-center gap-x-3 gap-y-2";

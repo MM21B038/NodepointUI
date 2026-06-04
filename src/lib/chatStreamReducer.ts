@@ -239,6 +239,35 @@ export function createEmptyAssistantTurn(id?: string): ChatTurn {
   };
 }
 
+/** Apply inline partial text from incognito cancel/interrupt payloads. */
+export function applyPartialSavedToTurns(
+  turns: ChatTurn[],
+  savedContent: string | undefined
+): ChatTurn[] {
+  const text = savedContent?.trim();
+  if (!text) return turns;
+  const next = [...turns];
+  const last = next[next.length - 1];
+  if (last?.role !== "assistant") return next;
+  const blocks = finalizeAssistantBlocks(last.blocks);
+  const hasResponse = blocks.some((b) => b.kind === "response");
+  next[next.length - 1] = {
+    ...last,
+    isStreaming: false,
+    blocks: hasResponse
+      ? blocks
+      : [
+          ...blocks,
+          {
+            id: createBlockId("response"),
+            kind: "response" as const,
+            content: text,
+          },
+        ],
+  };
+  return next;
+}
+
 export function applyStreamEvent(blocks: ChatBlock[], event: ChatStreamEvent): ChatBlock[] {
   const next = applyStreamEventInner(blocks, event);
   return normalizeBlockTimeline(next);

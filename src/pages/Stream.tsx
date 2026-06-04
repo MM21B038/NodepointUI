@@ -5,60 +5,94 @@ import {
   ArrowDown,
   Bot,
   Loader2,
-  Trash2,
-  RefreshCw,
-  FolderOpen,
-  Users,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useResolvedScopeOwner } from "@/hooks/useResolvedScopeOwner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import GroupScopeSelector from "@/components/scope/GroupScopeSelector";
-import { loadChatTurns, clearChat } from "@/database/chatStorage";
+import { ChatSessionsSheet } from "@/components/chat/ChatSessionsSheet";
+import {
+  ChatPageToolbar,
+  type ChatBanner,
+} from "@/components/chat/ChatPageToolbar";
+import {
+  clearChatSessionMessages,
+  loadChatTurns,
+  resolveChatConnectMode,
+  type ChatPartialSaved,
+} from "@/database/chatStorage";
+import { useChatSessions } from "@/hooks/useChatSessions";
 import {
   ChatWebSocketClient,
   type ChatConnectionState,
 } from "@/lib/chatWebSocket";
 import { Button } from "@/components/ui/button";
-import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
+  applyPartialSavedToTurns,
   createEmptyAssistantTurn,
   mergeHistoryWithStreamedAssistantTurn,
   mergeReconnectChatTurns,
   pickRicherBlocks,
 } from "@/lib/chatStreamReducer";
 import { ChatComposerBar } from "@/components/chat/ChatComposerBar";
+import { chatPageCanvasClass } from "@/components/chat/chatDialogStyles";
 import { ChatTurnRow } from "@/components/chat/ChatTurnRow";
-import { brand } from "@/lib/brandColors";
 import { cn } from "@/lib/utils";
-import { CitationTag } from "@/components/chat/CitationTag";
+import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import { createBlockId } from "@/lib/chatTypes";
 import { throttle } from "@/lib/rafThrottle";
 import { toast } from "sonner";
 import { CitationModalProvider } from "@/components/chat/CitationModalContext";
 import { CitationChatAlign } from "@/components/chat/CitationChatAlign";
 import { CitationSplitLayout } from "@/components/chat/CitationSplitLayout";
-import { GroupTagBadge } from "@/components/group/GroupTagBadge";
-import { formatGroupMemberCount, formatGroupTag } from "@/lib/groupTag";
-import { metaDescription } from "@/lib/resourceMeta";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+  listHasMultipleOwners,
+} from "@/lib/ownerScope";
 
-const TEXTAREA_MAX_HEIGHT = 160;
-/** Message thread max width */
-const CHAT_THREAD_MAX_CLASS = "max-w-6xl";
-/** Composer bar max width (narrower than message thread) */
-const CHAT_COMPOSER_MAX_CLASS = "max-w-2xl";
+const TEXTAREA_MAX_HEIGHT = 120;
+const CHAT_THREAD_MAX_CLASS = "w-full max-w-3xl";
+const CHAT_COMPOSER_MAX_CLASS = "w-full max-w-3xl";
 /** Max turns mounted in the DOM; older messages load on demand. */
 const INITIAL_VISIBLE_TURNS = 60;
 const LOAD_OLDER_TURNS_STEP = 40;
 
 const StreamPage: React.FC = () => {
-  const { currentWorkspace, scopeMode, activeGroup, groups } = useWorkspace();
+  const {
+    currentWorkspace,
+    scopeMode,
+    activeGroup,
+    activeGroupOwnerId,
+    groups,
+    scopeHydrated,
+  } = useWorkspace();
+  const {
+    owner: scopeOwner,
+    needsOwner: scopeNeedsOwner,
+    ready: scopeOwnerReady,
+  } = useResolvedScopeOwner();
+  const scopeReady =
+    scopeMode === "group"
+      ? !!activeGroup?.trim()
+      : !!currentWorkspace?.trim();
+
+  const chatSessions = useChatSessions({
+    scopeMode,
+    workspaceName: currentWorkspace,
+    groupName: activeGroup,
+    owner: scopeOwner,
+    enabled: scopeReady && scopeOwnerReady && scopeHydrated,
+  });
+
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [resolvedWorkspace, setResolvedWorkspace] = useState<string | null>(null);
   const [workspaceKey, setWorkspaceKey] = useState<string | null>(null);
+  const [connectKey, setConnectKey] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [isQueued, setIsQueued] = useState(false);
+  const [sessionsSheetOpen, setSessionsSheetOpen] = useState(false);
   const [connectionState, setConnectionState] =
     useState<ChatConnectionState>("disconnected");
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -83,22 +117,25 @@ const StreamPage: React.FC = () => {
 
   turnsRef.current = turns;
 
-  const streamActive = isStreaming || agentBusy;
+  const { incognito, activeSessionId, activeSessionTitle } = chatSessions;
+
+  const streamActive = isStreaming || agentBusy || isQueued;
   const isConnected =
     connectionState === "connected" || connectionState === "reconnecting";
 
   const isInputEnabled =
     !streamActive &&
     !isLoadingHistory &&
+    !chatSessions.loading &&
     isConnected &&
-    (scopeMode === "group"
-      ? !!activeGroup?.trim()
-      : !!currentWorkspace?.trim());
+    scopeReady &&
+    !!connectKey;
   const canSend =
     isInputEnabled &&
     !agentBusy &&
     currentInput.trim().length > 0 &&
-    !!workspaceKey;
+    !!workspaceKey &&
+    !!connectKey;
 
   const SCROLL_NEAR_BOTTOM_PX = 96;
   const userScrolledAwayRef = useRef(false);
@@ -129,16 +166,14 @@ const StreamPage: React.FC = () => {
   const scrollToBottomAfterLayout = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (behavior === "smooth") {
-            suppressScrollAwayRef.current = true;
-            window.setTimeout(() => {
-              suppressScrollAwayRef.current = false;
-              updateScrollAffordances();
-            }, 500);
-          }
-          scrollMessagesToBottom(behavior);
-        });
+        if (behavior === "smooth") {
+          suppressScrollAwayRef.current = true;
+          window.setTimeout(() => {
+            suppressScrollAwayRef.current = false;
+            updateScrollAffordances();
+          }, 400);
+        }
+        scrollMessagesToBottom(behavior);
       });
     },
     [scrollMessagesToBottom, updateScrollAffordances]
@@ -228,16 +263,50 @@ const StreamPage: React.FC = () => {
     adjustTextareaHeight();
   }, [currentInput, adjustTextareaHeight]);
 
+  const buildConnectKey = useCallback(() => {
+    if (!chatSessions.chatKey) return null;
+    try {
+      const mode = resolveChatConnectMode(incognito, activeSessionId);
+      return `${chatSessions.chatKey}|${
+        mode.kind === "incognito" ? "incognito" : mode.sessionId
+      }`;
+    } catch {
+      return null;
+    }
+  }, [chatSessions.chatKey, incognito, activeSessionId]);
+
   const loadChat = useCallback(
     async (requestId: number) => {
       try {
+        if (chatSessions.loading) return;
+        if (incognito) {
+          const chatKey = chatSessions.chatKey;
+          if (!chatKey || requestId !== chatLoadRequestIdRef.current) return;
+          setWorkspaceKey(chatKey);
+          setConnectKey(buildConnectKey());
+          setResolvedWorkspace(
+            scopeMode === "group" && activeGroup
+              ? `group: ${activeGroup}`
+              : currentWorkspace
+          );
+          setTurns([]);
+          setVisibleFromIndex(0);
+          setLoadError(null);
+          return;
+        }
+        if (!activeSessionId) {
+          throw new Error("No chat session selected.");
+        }
         const { chatKey, workspace, turns: history } = await loadChatTurns(
           scopeMode,
           currentWorkspace,
-          activeGroup
+          activeGroup,
+          activeSessionId,
+          scopeOwner
         );
         if (requestId !== chatLoadRequestIdRef.current) return;
         setWorkspaceKey(chatKey);
+        setConnectKey(buildConnectKey());
         setResolvedWorkspace(workspace);
         setTurns(history);
         setVisibleFromIndex(Math.max(0, history.length - INITIAL_VISIBLE_TURNS));
@@ -246,6 +315,7 @@ const StreamPage: React.FC = () => {
         if (requestId !== chatLoadRequestIdRef.current) return;
         console.error("Failed to load chat:", error);
         setWorkspaceKey(null);
+        setConnectKey(null);
         setResolvedWorkspace(null);
         setTurns([]);
         setLoadError(
@@ -257,7 +327,26 @@ const StreamPage: React.FC = () => {
         }
       }
     },
-    [scopeMode, currentWorkspace, activeGroup]
+    [
+      scopeMode,
+      currentWorkspace,
+      activeGroup,
+      scopeOwner,
+      incognito,
+      activeSessionId,
+      chatSessions.loading,
+      chatSessions.chatKey,
+      buildConnectKey,
+    ]
+  );
+
+  const finishTurnsWithSaved = useCallback(
+    (saved?: ChatPartialSaved) => {
+      if (incognito && saved?.content) {
+        setTurns((prev) => applyPartialSavedToTurns(prev, saved.content));
+      }
+    },
+    [incognito]
   );
 
   const applyStreamBlocks = useCallback((blocks: ChatBlock[]) => {
@@ -283,13 +372,24 @@ const StreamPage: React.FC = () => {
   }, []);
 
   const syncChatFromServer = useCallback(
-    async (liveBlocks?: ChatBlock[], options?: { fullReplace?: boolean }) => {
+    async (
+      liveBlocks?: ChatBlock[],
+      options?: { fullReplace?: boolean; saved?: ChatPartialSaved }
+    ) => {
       const gen = ++syncGenRef.current;
       try {
+        if (incognito) {
+          finishTurnsWithSaved(options?.saved ?? chatClientRef.current?.getLastSaved());
+          return;
+        }
+        if (!activeSessionId) return;
+
         const { turns: history, workspace } = await loadChatTurns(
           scopeMode,
           currentWorkspace,
-          activeGroup
+          activeGroup,
+          activeSessionId,
+          scopeOwner
         );
         if (gen !== syncGenRef.current) return;
 
@@ -325,12 +425,22 @@ const StreamPage: React.FC = () => {
         if (blocks.length) {
           client?.hydrateBlocks(blocks);
         }
+        void chatSessions.refreshSessions();
       } catch (error) {
         if (gen !== syncGenRef.current) return;
         console.error("Failed to sync chat after reconnect:", error);
       }
     },
-    [scopeMode, currentWorkspace, activeGroup]
+    [
+      scopeMode,
+      currentWorkspace,
+      activeGroup,
+      scopeOwner,
+      incognito,
+      activeSessionId,
+      finishTurnsWithSaved,
+      chatSessions.refreshSessions,
+    ]
   );
 
   const scheduleReconnectSync = useCallback(
@@ -406,9 +516,19 @@ const StreamPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!workspaceKey || isLoadingHistory) return;
+    if (!workspaceKey || !connectKey || isLoadingHistory) return;
 
-    const client = new ChatWebSocketClient(workspaceKey, {
+    let connectMode;
+    try {
+      connectMode = resolveChatConnectMode(incognito, activeSessionId);
+    } catch {
+      return;
+    }
+
+    const client = new ChatWebSocketClient(
+      workspaceKey,
+      connectMode,
+      {
       onReady: (ready) => {
         if (ready.workspace) {
           streamHandlersRef.current.setResolvedWorkspace(ready.workspace);
@@ -441,6 +561,14 @@ const StreamPage: React.FC = () => {
       onAgentBusyChange: (busy) => {
         streamHandlersRef.current.setAgentBusy(busy);
       },
+      onQueuedChange: (queued) => {
+        setIsQueued(queued);
+      },
+      onQueued: (message) => {
+        if (message) {
+          toast.info(message, { id: "chat-queue" });
+        }
+      },
       onDone: () => {
         setIsStopping(false);
         streamHandlersRef.current.setIsStreaming(false);
@@ -451,32 +579,37 @@ const StreamPage: React.FC = () => {
           fullReplace: true,
         });
       },
-      onCancelled: () => {
+      onCancelled: (saved) => {
         setIsStopping(false);
+        setIsQueued(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.dismiss("chat-reconnect");
         toast.dismiss("chat-stop");
+        toast.dismiss("chat-queue");
         setTurns((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
           if (last?.role === "assistant") {
             next[next.length - 1] = { ...last, isStreaming: false };
           }
-          return next;
+          return applyPartialSavedToTurns(next, saved?.content);
         });
         void streamHandlersRef.current.syncChatFromServer(undefined, {
           fullReplace: true,
+          saved,
         });
       },
       onBlocksChange: (blocks) => {
         streamHandlersRef.current.applyStreamBlocks(blocks);
       },
       onCompressed: () => {
-        toast.info("Context compressed", {
-          description:
-            "Older context was summarized server-side. History shown is unchanged.",
-        });
+        if (!incognito) {
+          toast.info("Context compressed", {
+            description:
+              "Older context was summarized server-side. History shown is unchanged.",
+          });
+        }
       },
       onCompressStarted: (message) => {
         toast.info(message ?? "Compressing context…", { id: "chat-compress" });
@@ -489,21 +622,38 @@ const StreamPage: React.FC = () => {
           id: "chat-compress",
         });
       },
-      onInterrupted: () => {
+      onInterrupted: (saved) => {
         setIsStopping(false);
+        setIsQueued(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
         toast.dismiss("chat-reconnect");
-        toast.warning("Stream interrupted — partial reply saved");
+        toast.dismiss("chat-queue");
+        toast.warning(
+          incognito
+            ? "Stream interrupted — partial reply kept locally"
+            : "Stream interrupted — partial reply saved"
+        );
         void streamHandlersRef.current.syncChatFromServer(undefined, {
           fullReplace: true,
+          saved,
         });
       },
-      onError: (message) => {
+      onError: (message, code) => {
         setIsStopping(false);
+        setIsQueued(false);
         streamHandlersRef.current.setIsStreaming(false);
         streamHandlersRef.current.setAgentBusy(false);
-        toast.error(message, { id: "chat-reconnect" });
+        toast.dismiss("chat-queue");
+        if (code === "chat_queue_timeout") {
+          toast.error(
+            message ||
+              "Timed out waiting for a free chat slot. Try again shortly.",
+            { id: "chat-queue" }
+          );
+        } else {
+          toast.error(message, { id: "chat-reconnect" });
+        }
         setTurns((prev) => {
           const next = [...prev];
           const last = next[next.length - 1];
@@ -520,7 +670,9 @@ const StreamPage: React.FC = () => {
           return next;
         });
       },
-    });
+      },
+      scopeOwner
+    );
 
     client.connect();
     chatClientRef.current = client;
@@ -533,29 +685,47 @@ const StreamPage: React.FC = () => {
       setConnectionState("disconnected");
       setAgentBusy(false);
       setReconnectAttempt(0);
+      setIsQueued(false);
       showReconnectToastRef.current = false;
     };
-  }, [workspaceKey, isLoadingHistory]);
+  }, [
+    workspaceKey,
+    connectKey,
+    isLoadingHistory,
+    incognito,
+    activeSessionId,
+    scopeOwner,
+  ]);
 
   useEffect(() => {
-    if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
+    if (!scopeReady || !scopeOwnerReady) {
       chatLoadRequestIdRef.current += 1;
       setIsLoadingHistory(false);
-      setLoadError(null);
+      setLoadError(
+        scopeNeedsOwner && !scopeOwner
+          ? "Multiple workspaces share this name — pick one from the workspace menu (name · owner)."
+          : chatSessions.error
+      );
       setTurns([]);
       setWorkspaceKey(null);
+      setConnectKey(null);
       setResolvedWorkspace(null);
       return;
     }
-    if (scopeMode === "group" && !activeGroup?.trim()) {
-      chatLoadRequestIdRef.current += 1;
-      setIsLoadingHistory(false);
-      setLoadError(null);
-      setTurns([]);
-      setWorkspaceKey(null);
-      setResolvedWorkspace(null);
+    if (chatSessions.loading) {
+      setIsLoadingHistory(true);
       return;
     }
+    if (chatSessions.error) {
+      setLoadError(chatSessions.error);
+      setIsLoadingHistory(false);
+      return;
+    }
+    if (!incognito && !activeSessionId) {
+      setIsLoadingHistory(true);
+      return;
+    }
+
     cancelRef.current?.();
     cancelRef.current = null;
     chatClientRef.current?.destroy();
@@ -563,18 +733,33 @@ const StreamPage: React.FC = () => {
     setConnectionState("disconnected");
     setAgentBusy(false);
     setIsStreaming(false);
+    setIsQueued(false);
     const requestId = ++chatLoadRequestIdRef.current;
     setIsLoadingHistory(true);
     setLoadError(null);
     setTurns([]);
     setVisibleFromIndex(0);
     setWorkspaceKey(null);
+    setConnectKey(null);
     setResolvedWorkspace(null);
     userScrolledAwayRef.current = false;
     setShowScrollToBottom(false);
     prevLoadingHistoryRef.current = true;
     void loadChat(requestId);
-  }, [scopeMode, currentWorkspace, activeGroup, loadChat]);
+  }, [
+    scopeReady,
+    scopeOwnerReady,
+    scopeNeedsOwner,
+    scopeOwner,
+    scopeMode,
+    currentWorkspace,
+    activeGroup,
+    loadChat,
+    chatSessions.loading,
+    chatSessions.error,
+    incognito,
+    activeSessionId,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -584,18 +769,44 @@ const StreamPage: React.FC = () => {
     };
   }, []);
 
-  const handleClearChat = async () => {
-    if (streamActive || !workspaceKey) return;
-    if (!window.confirm("Clear all messages in this chat? This cannot be undone.")) return;
+  const handleClearMessages = async () => {
+    if (streamActive || !workspaceKey || incognito || !activeSessionId) return;
+    if (
+      !window.confirm(
+        "Clear all messages in this conversation? The conversation will remain."
+      )
+    ) {
+      return;
+    }
     try {
-      await clearChat(scopeMode, currentWorkspace, activeGroup);
-      toast.success("Chat cleared");
+      await clearChatSessionMessages(
+        scopeMode,
+        currentWorkspace,
+        activeGroup,
+        activeSessionId,
+        scopeOwner
+      );
+      toast.success("Messages cleared");
       const requestId = ++chatLoadRequestIdRef.current;
       setIsLoadingHistory(true);
       await loadChat(requestId);
+      void chatSessions.refreshSessions();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to clear chat");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to clear messages"
+      );
     }
+  };
+
+  const handleIncognitoChange = (checked: boolean) => {
+    if (streamActive) return;
+    chatSessions.setIncognito(checked);
+    if (checked) setSessionsSheetOpen(false);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    if (streamActive) return;
+    chatSessions.selectSession(sessionId);
   };
 
   const handleSend = useCallback(async () => {
@@ -632,27 +843,41 @@ const StreamPage: React.FC = () => {
       cancelRef.current = () => client.requestCancel();
       await client.sendChat(query);
 
-      const { turns: history, workspace } = await loadChatTurns(
-        scopeMode,
-        currentWorkspace,
-        activeGroup
-      );
-      setResolvedWorkspace(workspace);
-      setTurns((prev) => {
-        const streamed = prev[prev.length - 1];
-        const merged = mergeHistoryWithStreamedAssistantTurn(
-          history,
-          streamed?.role === "assistant" ? streamed : undefined
+      if (!incognito && activeSessionId) {
+        const { turns: history, workspace } = await loadChatTurns(
+          scopeMode,
+          currentWorkspace,
+          activeGroup,
+          activeSessionId,
+          scopeOwner
         );
-        const last = merged[merged.length - 1];
-        if (last?.role === "assistant" && last.isStreaming) {
-          return [
-            ...merged.slice(0, -1),
-            { ...last, isStreaming: false },
-          ];
-        }
-        return merged;
-      });
+        setResolvedWorkspace(workspace);
+        setTurns((prev) => {
+          const streamed = prev[prev.length - 1];
+          const merged = mergeHistoryWithStreamedAssistantTurn(
+            history,
+            streamed?.role === "assistant" ? streamed : undefined
+          );
+          const last = merged[merged.length - 1];
+          if (last?.role === "assistant" && last.isStreaming) {
+            return [
+              ...merged.slice(0, -1),
+              { ...last, isStreaming: false },
+            ];
+          }
+          return merged;
+        });
+        void chatSessions.refreshSessions();
+      } else {
+        setTurns((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === "assistant") {
+            next[next.length - 1] = { ...last, isStreaming: false };
+          }
+          return next;
+        });
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "An unknown error occurred during chat.";
@@ -690,6 +915,9 @@ const StreamPage: React.FC = () => {
     currentWorkspace,
     activeGroup,
     turns.length,
+    incognito,
+    activeSessionId,
+    chatSessions.refreshSessions,
   ]);
 
   const handleStop = useCallback(() => {
@@ -707,295 +935,307 @@ const StreamPage: React.FC = () => {
   };
 
   const activeGroupMeta = useMemo(
-    () => groups.find((g) => g.name === activeGroup) ?? null,
-    [groups, activeGroup]
+    () =>
+      groups.find(
+        (g) =>
+          g.name === activeGroup &&
+          (activeGroupOwnerId == null || g.owner_id === activeGroupOwnerId)
+      ) ?? null,
+    [groups, activeGroup, activeGroupOwnerId]
   );
-  const activeGroupTypeLabel = activeGroupMeta
-    ? formatGroupTag(activeGroupMeta.tag)
-    : null;
-  const activeGroupMemberLabel = activeGroupMeta
-    ? formatGroupMemberCount(activeGroupMeta)
-    : null;
-  const activeGroupDescription = activeGroupMeta
-    ? metaDescription(activeGroupMeta)
-    : null;
+
+  const groupDisplayLabel = useMemo(() => {
+    if (!activeGroup) return null;
+    return formatScopedResourceLabel(
+      activeGroup,
+      activeGroupMeta?.owner_username,
+      {
+        duplicateNames: duplicateNamesInList(groups),
+        multiOwnerList: listHasMultipleOwners(groups),
+      }
+    );
+  }, [activeGroup, activeGroupMeta, groups]);
 
   const emptyState = useMemo(() => {
     if (scopeMode === "workspace" && !currentWorkspace?.trim()) return "no-workspace";
     if (scopeMode === "group" && !activeGroup?.trim()) return "no-group";
-    if (isLoadingHistory) return "loading";
-    if (loadError) return "error";
+    if (chatSessions.loading || isLoadingHistory) return "loading";
+    if (loadError || chatSessions.error) return "error";
     if (turns.length === 0) return "empty";
     return "ready";
-  }, [scopeMode, currentWorkspace, activeGroup, isLoadingHistory, loadError, turns.length]);
+  }, [
+    scopeMode,
+    currentWorkspace,
+    activeGroup,
+    isLoadingHistory,
+    chatSessions.loading,
+    chatSessions.error,
+    loadError,
+    turns.length,
+  ]);
 
   const displayTarget =
     resolvedWorkspace ??
-    (scopeMode === "group" && activeGroup
-      ? `group: ${activeGroup}`
-      : currentWorkspace) ??
+    (scopeMode === "group" ? groupDisplayLabel : currentWorkspace) ??
     "—";
 
+  const chatBanner = useMemo((): ChatBanner | null => {
+    if (connectionState === "reconnecting") {
+      return {
+        message:
+          reconnectAttempt > 0
+            ? `Reconnecting (attempt ${reconnectAttempt})…`
+            : "Reconnecting — agent may still be running…",
+        variant: "warning",
+        spinning: true,
+      };
+    }
+    if (isQueued) {
+      return {
+        message: "Waiting for a free chat slot — cancel to leave the queue",
+        variant: "warning",
+        spinning: true,
+      };
+    }
+    if (
+      agentBusy &&
+      connectionState === "connected" &&
+      !isStreaming &&
+      !isQueued
+    ) {
+      return {
+        message: "Agent busy on this session — wait before sending another message",
+        variant: "default",
+        spinning: true,
+      };
+    }
+    if (scopeNeedsOwner && !scopeOwner) {
+      return {
+        message:
+          "Multiple workspaces named the same — pick one from the navbar (name · owner)",
+        variant: "warning",
+      };
+    }
+    if (loadError || chatSessions.error) {
+      return {
+        message: loadError ?? chatSessions.error ?? "Could not load chat",
+        variant: "destructive",
+      };
+    }
+    return null;
+  }, [
+    connectionState,
+    reconnectAttempt,
+    isQueued,
+    agentBusy,
+    isStreaming,
+    scopeNeedsOwner,
+    scopeOwner,
+    loadError,
+    chatSessions.error,
+  ]);
+
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden",
+        chatPageCanvasClass
+      )}
+    >
+      <ChatSessionsSheet
+        open={sessionsSheetOpen}
+        onOpenChange={setSessionsSheetOpen}
+        sessions={chatSessions.sessions}
+        activeSessionId={activeSessionId}
+        incognito={incognito}
+        loading={chatSessions.loading}
+        disabled={streamActive}
+        onSelectSession={handleSelectSession}
+        onNewChat={async (title) => {
+          await chatSessions.createSession(title);
+        }}
+        onRenameSession={chatSessions.renameSession}
+        onDeleteSession={chatSessions.deleteSession}
+      />
       <CitationSplitLayout className="min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="z-10 shrink-0 bg-background px-4 pb-2 pt-3">
-        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS}>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 shadow-sm sm:px-4 sm:py-2.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-              <h1 className="shrink-0 text-base font-semibold tracking-tight">Chat</h1>
-              <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
-              <Badge
-                variant="secondary"
-                className="max-w-[min(100%,18rem)] truncate border border-border/60 font-normal"
-              >
-                {scopeMode === "group" ? (
-                  <>
-                    <Users className="mr-1 inline h-3 w-3 shrink-0" />
-                    {activeGroup ?? "No group"}
-                    {activeGroupMeta ? (
-                      <>
-                        <span className="text-muted-foreground"> · </span>
-                        <GroupTagBadge
-                          tag={activeGroupMeta.tag}
-                          size="xs"
-                          className="align-middle normal-case"
-                        />
-                      </>
-                    ) : null}
-                    {activeGroupMemberLabel ? (
-                      <span className="text-muted-foreground"> · {activeGroupMemberLabel}</span>
-                    ) : null}
-                    {activeGroupDescription ? (
-                      <span className="hidden text-muted-foreground sm:inline">
-                        {" "}
-                        — {activeGroupDescription}
-                      </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <FolderOpen className="mr-1 inline h-3 w-3 shrink-0" />
-                    {displayTarget}
-                  </>
+          <ChatPageToolbar
+            scopeMode={scopeMode}
+            displayTarget={displayTarget}
+            activeGroup={activeGroup}
+            activeGroupMeta={activeGroupMeta}
+            incognito={incognito}
+            activeSessionTitle={activeSessionTitle}
+            streamActive={streamActive}
+            banner={chatBanner}
+            showRetry={Boolean(loadError || chatSessions.error)}
+            canClear={
+              !streamActive && !!workspaceKey && !incognito && !!activeSessionId
+            }
+            onIncognitoChange={handleIncognitoChange}
+            onOpenSessions={() => setSessionsSheetOpen(true)}
+            onRetry={() => {
+              const requestId = ++chatLoadRequestIdRef.current;
+              setIsLoadingHistory(true);
+              void loadChat(requestId);
+            }}
+            onClearMessages={() => void handleClearMessages()}
+          />
+
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={messagesRef}
+              onScroll={onMessagesScroll}
+              className="h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-3 sm:px-4"
+            >
+              <CitationChatAlign
+                maxWidthClass={CHAT_THREAD_MAX_CLASS}
+                className={cn(
+                  "flex min-h-full flex-col py-3 sm:py-4",
+                  emptyState === "ready" ? "space-y-4" : ""
                 )}
-              </Badge>
+              >
+                {emptyState === "no-workspace" && (
+                  <div className="flex flex-1 items-center justify-center py-6">
+                    <Alert className="max-w-md">
+                      <AlertTitle>Select a workspace</AlertTitle>
+                      <AlertDescription className="text-sm">
+                        Use the workspace menu in the navbar, or switch to Group
+                        scope above.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+
+                {emptyState === "no-group" && (
+                  <div className="flex flex-1 items-center justify-center py-6">
+                    <Alert className="max-w-md">
+                      <AlertTitle>Select a group</AlertTitle>
+                      <AlertDescription className="text-sm">
+                        Create a group on Workspaces, then pick it in the scope
+                        control above.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+
+                {emptyState === "loading" && (
+                  <div className="flex flex-1 items-center justify-center gap-2 py-6 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Loading chat…</span>
+                  </div>
+                )}
+
+                {emptyState === "error" && !chatBanner && (
+                  <div className="flex flex-1 items-center justify-center py-6">
+                    <Alert variant="destructive" className="max-w-md">
+                      <AlertTitle>Could not load chat</AlertTitle>
+                      <AlertDescription>
+                        {loadError ?? chatSessions.error}
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+
+                {emptyState === "empty" && (
+                  <div className="flex flex-1 flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                    <Bot className="mb-3 h-10 w-10 opacity-30" />
+                    <p className="text-base font-medium text-foreground">
+                      How can I help?
+                    </p>
+                    <p className="mt-1 max-w-sm text-sm">
+                      {incognito
+                        ? "Private mode — nothing is saved."
+                        : `Ask about ${displayTarget}. Answers use your knowledge graph.`}
+                    </p>
+                  </div>
+                )}
+
+                {hiddenTurnCount > 0 && (
+                  <div className="flex justify-center py-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={showOlderMessages}
+                    >
+                      Load {hiddenTurnCount} older
+                    </Button>
+                  </div>
+                )}
+
+                {visibleTurns.map((turn, index) => {
+                  const globalIndex = visibleFromIndex + index;
+                  const assistantStreaming =
+                    Boolean(turn.isStreaming) ||
+                    (streamActive &&
+                      turn.role === "assistant" &&
+                      globalIndex === turns.length - 1);
+
+                  return (
+                    <ChatTurnRow
+                      key={turn.id}
+                      turn={turn}
+                      isStreaming={assistantStreaming}
+                    />
+                  );
+                })}
+
+                <div ref={scrollEndRef} className="h-px shrink-0" />
+              </CitationChatAlign>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <GroupScopeSelector disabled={streamActive} />
-
-              <span className="hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden />
-
-              <div className="flex items-center gap-1.5">
-                {loadError && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      const requestId = ++chatLoadRequestIdRef.current;
-                      setIsLoadingHistory(true);
-                      void loadChat(requestId);
-                    }}
-                  >
-                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                    Retry
-                  </Button>
-                )}
-
+            {showScrollToBottom && emptyState === "ready" ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={handleClearChat}
-                  disabled={streamActive || !workspaceKey}
-                  title="Clear chat history"
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="pointer-events-auto h-8 w-8 rounded-full border border-border/60 bg-background shadow-md hover:bg-background"
+                  onClick={handleScrollToBottom}
+                  aria-label="Scroll to latest messages"
+                  title="Jump to latest"
                 >
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />
-                  Clear
+                  <ArrowDown className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
+            ) : null}
           </div>
-        </CitationChatAlign>
-      </header>
 
-      {connectionState === "reconnecting" && (
-        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS} className="px-4 pb-2">
-          <Alert className={cn(brand.warning.border, brand.warning.bg, "border py-2")}>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertTitle className="text-sm">Reconnecting</AlertTitle>
-            <AlertDescription className="text-xs">
-              Connection lost during streaming. The agent is still running
-              {reconnectAttempt > 0 ? ` (attempt ${reconnectAttempt})` : ""}…
-            </AlertDescription>
-          </Alert>
-        </CitationChatAlign>
-      )}
-
-      {agentBusy && connectionState === "connected" && !isStreaming && (
-        <CitationChatAlign maxWidthClass={CHAT_THREAD_MAX_CLASS} className="px-4 pb-2">
-          <Alert className="border-primary/30 bg-primary/5 py-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertTitle className="text-sm">Agent busy</AlertTitle>
-            <AlertDescription className="text-xs">
-              A turn is in progress on the server. Live updates are attached — wait before sending.
-            </AlertDescription>
-          </Alert>
-        </CitationChatAlign>
-      )}
-
-        <div className="relative min-h-0 flex-1">
-        <div
-          ref={messagesRef}
-          onScroll={onMessagesScroll}
-          className="h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4"
-        >
-          <CitationChatAlign
-            maxWidthClass={CHAT_THREAD_MAX_CLASS}
-            className="space-y-5 px-3 py-4 sm:px-6"
-          >
-          {emptyState === "no-workspace" && (
-            <Alert>
-              <AlertTitle>Select a workspace</AlertTitle>
-              <AlertDescription>
-                Use the workspace selector in the navbar for per-workspace chat, or switch to{" "}
-                <strong>Group</strong> and pick a workspace group.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {emptyState === "no-group" && (
-            <Alert>
-              <AlertTitle>Select a group</AlertTitle>
-              <AlertDescription>
-                Create a workspace group on the Workspaces page, then choose it here for
-                group-scoped chat.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {emptyState === "loading" && (
-            <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading chat…</span>
-            </div>
-          )}
-
-          {emptyState === "error" && (
-            <Alert variant="destructive">
-              <AlertTitle>Could not load chat</AlertTitle>
-              <AlertDescription>{loadError}</AlertDescription>
-            </Alert>
-          )}
-
-          {emptyState === "empty" && (
-            <div className="text-center py-20 text-muted-foreground">
-              <Bot className="h-14 w-14 mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium text-foreground">How can I help?</p>
-              <p className="text-sm mt-2 max-w-sm mx-auto">
-                Ask about your knowledge graph in{" "}
-                <span className="font-medium text-foreground">{displayTarget}</span>.
-                Add workspaces to your group to enable knowledge search.
-              </p>
-            </div>
-          )}
-
-          {hiddenTurnCount > 0 && (
-            <div className="flex justify-center py-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={showOlderMessages}
-              >
-                Load older messages ({hiddenTurnCount} hidden)
-              </Button>
-            </div>
-          )}
-
-          {visibleTurns.map((turn, index) => {
-            const globalIndex = visibleFromIndex + index;
-            const assistantStreaming =
-              Boolean(turn.isStreaming) ||
-              (streamActive &&
-                turn.role === "assistant" &&
-                globalIndex === turns.length - 1);
-
-            return (
-              <ChatTurnRow
-                key={turn.id}
-                turn={turn}
-                isStreaming={assistantStreaming}
+          <footer className="shrink-0 border-t border-border/40 bg-background px-3 pb-2 pt-2 sm:px-4">
+            <CitationChatAlign maxWidthClass={CHAT_COMPOSER_MAX_CLASS}>
+              <ChatComposerBar
+                value={currentInput}
+                onChange={setCurrentInput}
+                onKeyDown={handleKeyDown}
+                onSend={handleSend}
+                onStop={handleStop}
+                placeholder={
+                  isQueued
+                    ? "Waiting for a free chat slot…"
+                    : scopeMode === "group"
+                      ? `Message ${activeGroup ?? "group"}…`
+                      : `Message ${displayTarget}…`
+                }
+                textareaRef={textareaRef}
+                disabled={!isInputEnabled || !workspaceKey}
+                canSend={canSend}
+                isStreaming={streamActive}
+                isStopping={isStopping}
+                statusLabel={
+                  isQueued
+                    ? "Waiting for slot"
+                    : isStreaming
+                      ? "Generating"
+                      : connectionState !== "connected" &&
+                          connectionState !== "reconnecting"
+                        ? "Offline"
+                        : undefined
+                }
               />
-            );
-          })}
-
-          <div ref={scrollEndRef} className="h-px" />
-          </CitationChatAlign>
-        </div>
-
-        {showScrollToBottom && emptyState === "ready" ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="pointer-events-auto h-9 w-9 rounded-full border border-border/60 bg-background/95 shadow-md backdrop-blur-sm hover:bg-background"
-              onClick={handleScrollToBottom}
-              aria-label="Scroll to latest messages"
-              title="Jump to latest"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : null}
-        </div>
-
-      <footer className="z-10 shrink-0  border-border/40 bg-background px-4 pb-3 pt-2">
-        <CitationChatAlign maxWidthClass={CHAT_COMPOSER_MAX_CLASS}>
-          <ChatComposerBar
-            value={currentInput}
-            onChange={setCurrentInput}
-            onKeyDown={handleKeyDown}
-            onSend={handleSend}
-            onStop={handleStop}
-            placeholder={
-              scopeMode === "group"
-                ? `Message group ${activeGroup ?? ""}…`
-                : `Message ${displayTarget}…`
-            }
-            textareaRef={textareaRef}
-            disabled={!isInputEnabled || !workspaceKey}
-            canSend={canSend}
-            isStreaming={streamActive}
-            isStopping={isStopping}
-          />
-          <p className="text-[10px] text-center text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
-            <span>
-              {scopeMode === "group"
-                ? `Group chat · ${activeGroupTypeLabel ?? "group"} scope (${activeGroupMemberLabel ?? "members"})`
-                : `Workspace ${displayTarget} chat`}
-            </span>
-            {connectionState !== "connected" && connectionState !== "reconnecting" && (
-              <span className={brand.warning.text}>
-                · {connectionState === "connecting" ? "Connecting…" : "Offline"}
-              </span>
-            )}
-            {agentBusy && (
-              <span className="text-primary">· Agent busy</span>
-            )}
-            <span className="text-muted-foreground/80">· Citations</span>
-            <CitationTag kind="doc" label="" />
-            <CitationTag kind="entity" label="" />
-            <CitationTag kind="relation" label="" />
-            <CitationTag kind="chunk" label="" />
-          </p>
-        </CitationChatAlign>
-      </footer>
+            </CitationChatAlign>
+          </footer>
         </div>
       </CitationSplitLayout>
     </div>

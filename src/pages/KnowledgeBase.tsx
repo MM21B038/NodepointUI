@@ -14,6 +14,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useResolvedScopeOwner } from "@/hooks/useResolvedScopeOwner";
 import { InteractiveGraphVisualization } from "@/components/InteractiveGraphVisualization";
 import SourceFilesPanel from "@/components/SourceFilesPanel";
 import GraphEntitySearchBar from "@/components/GraphEntitySearchBar";
@@ -37,6 +38,7 @@ import {
   fetchKnowledgeGraphForWorkspaces,
   resolveGroupKgScopeMeta,
   groupScope,
+  workspaceScope,
   listFiles,
   listFilesForWorkspaces,
   resolveGraphFileNamesParam,
@@ -74,7 +76,12 @@ type ActiveFilterPanel = "none" | "sourceFiles" | "workspaces" | "overview";
 
 const KnowledgeBase = () => {
   console.log("KnowledgeBase: Component rendered.");
-  const { currentWorkspace, scopeMode, activeGroup } = useWorkspace();
+  const { currentWorkspace, scopeMode, activeGroup, scopeHydrated } = useWorkspace();
+  const {
+    owner: scopeOwner,
+    needsOwner: scopeNeedsOwner,
+    ready: scopeOwnerReady,
+  } = useResolvedScopeOwner();
   const [allNodes, setAllNodes] = useState<GraphNode[]>([]);
   const [allEdges, setAllEdges] = useState<GraphEdge[]>([]);
   const [scopeLoading, setScopeLoading] = useState(true);
@@ -139,13 +146,15 @@ const KnowledgeBase = () => {
   const activeGroupTagRef = useRef(activeGroupTag);
   activeGroupTagRef.current = activeGroupTag;
 
-  const scopeLoadKey = useMemo(
-    () =>
-      scopeMode === "group"
-        ? `group:${activeGroup ?? ""}:${refreshCounter}`
-        : `workspace:${currentWorkspace ?? ""}:${refreshCounter}`,
-    [scopeMode, activeGroup, currentWorkspace, refreshCounter]
-  );
+  const scopeLoadKey = useMemo(() => {
+    const ownerKey =
+      scopeOwner?.ownerId != null
+        ? String(scopeOwner.ownerId)
+        : (scopeOwner?.ownerUsername ?? "");
+    return scopeMode === "group"
+      ? `group:${activeGroup ?? ""}:${ownerKey}:${refreshCounter}`
+      : `workspace:${currentWorkspace ?? ""}:${ownerKey}:${refreshCounter}`;
+  }, [scopeMode, activeGroup, currentWorkspace, refreshCounter, scopeOwner]);
 
   const loading = scopeLoading || graphLoading;
 
@@ -284,17 +293,20 @@ const KnowledgeBase = () => {
     return { names };
   }, [scopeMode, selectedGroupWorkspaces]);
 
-  const loadGroupSourceFiles = useCallback(async (workspaceNames: string[]) => {
-    if (workspaceNames.length === 0) {
-      setAvailableSourceFiles([]);
-      setSelectedSourceFiles(new Set());
-      return [];
-    }
-    const files = await listFilesForWorkspaces(workspaceNames);
-    setAvailableSourceFiles(files);
-    setSelectedSourceFiles(new Set(files));
-    return files;
-  }, []);
+  const loadGroupSourceFiles = useCallback(
+    async (workspaceNames: string[]) => {
+      if (workspaceNames.length === 0) {
+        setAvailableSourceFiles([]);
+        setSelectedSourceFiles(new Set());
+        return [];
+      }
+      const files = await listFilesForWorkspaces(workspaceNames, { owner: scopeOwner });
+      setAvailableSourceFiles(files);
+      setSelectedSourceFiles(new Set(files));
+      return files;
+    },
+    [scopeOwner]
+  );
 
   const loadBrowseGraph = useCallback(
     async (
@@ -346,7 +358,10 @@ const KnowledgeBase = () => {
         let data;
         if (mode === "group" && groupName) {
           if (!groupIsWorkspaceTagRef.current) {
-            data = await getFilteredKnowledgeGraph(groupScope(groupName), fetchParams);
+            data = await getFilteredKnowledgeGraph(
+              groupScope(groupName, scopeOwner),
+              fetchParams
+            );
           } else {
           const memberTotal = options?.groupMemberTotal ?? groupMemberCountRef.current;
           const sel = selectedGroupWorkspacesRef.current;
@@ -371,16 +386,20 @@ const KnowledgeBase = () => {
               data = await fetchKnowledgeGraphForWorkspaces(
                 targets,
                 groupName,
-                fetchParams
+                fetchParams,
+                { owner: scopeOwner }
               );
             }
           } else {
-            data = await getFilteredKnowledgeGraph(groupScope(groupName), fetchParams);
+            data = await getFilteredKnowledgeGraph(
+              groupScope(groupName, scopeOwner),
+              fetchParams
+            );
           }
           }
         } else {
           data = await getFilteredKnowledgeGraph(
-            { workspaceName: workspaceName! },
+            workspaceScope(workspaceName!, scopeOwner),
             fetchParams
           );
         }
@@ -407,7 +426,7 @@ const KnowledgeBase = () => {
         }
       }
     },
-    [applyGraphResponse]
+    [applyGraphResponse, scopeOwner]
   );
 
   const loadEntityTypeCatalog = useCallback(
@@ -436,8 +455,8 @@ const KnowledgeBase = () => {
             return;
           }
           const [entityTypesResult, kgMetaResult] = await Promise.allSettled([
-            getKnowledgeGraphEntityTypes(groupScope(groupName)),
-            resolveGroupKgScopeMeta(groupName),
+            getKnowledgeGraphEntityTypes(groupScope(groupName, scopeOwner)),
+            resolveGroupKgScopeMeta(groupName, scopeOwner),
           ]);
           if (requestId !== scopeLoadRequestIdRef.current) return;
           if (entityTypesResult.status === "rejected") {
@@ -507,9 +526,9 @@ const KnowledgeBase = () => {
           return;
         }
 
-        const { entityTypes } = await getKnowledgeGraphEntityTypes({
-          workspaceName: workspaceName!,
-        });
+        const { entityTypes } = await getKnowledgeGraphEntityTypes(
+          workspaceScope(workspaceName!, scopeOwner)
+        );
         if (requestId !== scopeLoadRequestIdRef.current) return;
 
         setEntityTypeCatalog(entityTypes);
@@ -521,7 +540,7 @@ const KnowledgeBase = () => {
         };
         setGraphLoadParams(loadParams);
 
-        const files = await listFiles(workspaceName!);
+        const files = await listFiles(workspaceName!, scopeOwner);
         if (requestId !== scopeLoadRequestIdRef.current) return;
         setAvailableSourceFiles(files);
         setSelectedSourceFiles(new Set(files));
@@ -556,7 +575,7 @@ const KnowledgeBase = () => {
         }
       }
     },
-    [loadBrowseGraph, resetBrowseUiFilters]
+    [loadBrowseGraph, resetBrowseUiFilters, scopeOwner]
   );
 
   const loadEntityTypeCatalogRef = useRef(loadEntityTypeCatalog);
@@ -575,8 +594,8 @@ const KnowledgeBase = () => {
     try {
       const scope =
         scopeMode === "group" && activeGroup
-          ? groupScope(activeGroup)
-          : { workspaceName: currentWorkspace! };
+          ? groupScope(activeGroup, scopeOwner)
+          : workspaceScope(currentWorkspace!, scopeOwner);
 
       const result = await searchKnowledgeEntities(scope, {
         q,
@@ -619,6 +638,7 @@ const KnowledgeBase = () => {
     activeGroup,
     availableSourceFiles,
     selectedSourceFiles,
+    scopeOwner,
   ]);
 
   const handleClearSearch = useCallback(() => {
@@ -895,7 +915,7 @@ const KnowledgeBase = () => {
           ? apiSelectedEntityTypes
           : new Set(topEntityTypesByCount(entityTypeCatalog, KB_INITIAL_TYPE_COUNT));
       if (types.size === 0) return;
-      const files = await listFiles(workspaceName);
+      const files = await listFiles(workspaceName, scopeOwner);
       setAvailableSourceFiles(files);
       setSelectedSourceFiles(new Set(files));
       await loadBrowseGraph(
@@ -915,6 +935,7 @@ const KnowledgeBase = () => {
       entityTypeCatalog,
       loadBrowseGraph,
       groupMemberCount,
+      scopeOwner,
     ]
   );
 
@@ -972,6 +993,8 @@ const KnowledgeBase = () => {
   }, [scopeMode, currentWorkspace, activeGroup]);
 
   useEffect(() => {
+    if (!scopeOwnerReady) return;
+
     if (scopeMode === "workspace") {
       if (!currentWorkspace?.trim()) {
         scopeLoadRequestIdRef.current += 1;
@@ -1014,12 +1037,13 @@ const KnowledgeBase = () => {
     setSelectedGroupWorkspaces(new Set());
     setActiveFilterPanel("none");
     void loadEntityTypeCatalogRef.current("group", null, activeGroup, requestId);
-  }, [scopeLoadKey, scopeMode, currentWorkspace, activeGroup]);
+  }, [scopeLoadKey, scopeMode, currentWorkspace, activeGroup, scopeOwnerReady]);
 
   const hasValidScope =
-    scopeMode === "group"
+    scopeOwnerReady &&
+    (scopeMode === "group"
       ? !!activeGroup?.trim()
-      : !!currentWorkspace?.trim();
+      : !!currentWorkspace?.trim());
 
   const graphReady =
     hasValidScope && !error && (!scopeLoading || allNodes.length > 0);
@@ -1263,7 +1287,12 @@ const KnowledgeBase = () => {
   }, [filteredNodes, entityTypeCatalog]);
 
   let alertMessage = "";
-  if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
+  if (scopeNeedsOwner && !scopeOwner) {
+    alertMessage =
+      scopeMode === "group"
+        ? `Multiple groups named "${activeGroup}" are visible. Choose the correct owner from the group selector in the toolbar.`
+        : `Multiple workspaces named "${currentWorkspace}" are visible. Choose the correct owner from the workspace selector in the navbar.`;
+  } else if (scopeMode === "workspace" && !currentWorkspace?.trim()) {
     alertMessage =
       "Select a workspace in the navigation bar, or switch to Group and pick a workspace group.";
   } else if (scopeLoading && allNodes.length === 0) {

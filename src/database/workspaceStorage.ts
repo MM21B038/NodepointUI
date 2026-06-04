@@ -1,15 +1,26 @@
-import { API_ROOT, buildApiUrl } from "@/database/apiUrl";
+import { API_ROOT } from "@/database/apiUrl";
+import {
+  apiFetch,
+  formatMembershipMutationError,
+  parseErrorResponse,
+} from "@/database/apiClient";
+import {
+  appendGroupWorkspaceDeleteQuery,
+  appendOwnerQuery,
+  buildGroupWorkspacePostBody,
+  normalizeOwnerFields,
+  type GroupMemberMutationOptions,
+  type GroupWorkspaceMutationOptions,
+  type OwnerParams,
+} from "@/lib/ownerScope";
+
+export type {
+  GroupMemberMutationOptions,
+  GroupWorkspaceMutationOptions,
+} from "@/lib/ownerScope";
 
 export { API_ROOT };
-
-async function parseErrorResponse(response: Response): Promise<string> {
-  try {
-    const data = await response.json();
-    return data.error || data.detail || data.message || response.statusText;
-  } catch {
-    return response.statusText;
-  }
-}
+export type { OwnerParams } from "@/lib/ownerScope";
 
 // --- Workspace ---
 
@@ -17,14 +28,23 @@ async function parseErrorResponse(response: Response): Promise<string> {
 export const FLAGGED_GROUP_NAME = "flagged";
 
 /** Exactly one of workspace or group scope for KG, entity search, entity-types, chat summary. */
-export type KgApiScope = { workspaceName: string } | { group: string };
+export type KgApiScope =
+  | ({ workspaceName: string } & OwnerParams)
+  | ({ group: string } & OwnerParams);
 
-export function isGroupScope(scope: KgApiScope): scope is { group: string } {
+export function isGroupScope(scope: KgApiScope): scope is { group: string } & OwnerParams {
   return "group" in scope;
 }
 
-export function groupScope(groupName: string): KgApiScope {
-  return { group: groupName };
+export function groupScope(groupName: string, owner?: OwnerParams): KgApiScope {
+  return { group: groupName, ...owner };
+}
+
+export function workspaceScope(
+  workspaceName: string,
+  owner?: OwnerParams
+): KgApiScope {
+  return { workspaceName, ...owner };
 }
 
 /** @deprecated Use groupScope(activeGroup) */
@@ -56,13 +76,16 @@ export interface GroupKgScopeMeta {
   isWorkspaceTagGroup: boolean;
 }
 
-export async function resolveGroupKgScopeMeta(groupName: string): Promise<GroupKgScopeMeta> {
-  const detail = await getGroup(groupName, { page: 1, page_size: 1 });
+export async function resolveGroupKgScopeMeta(
+  groupName: string,
+  owner?: OwnerParams
+): Promise<GroupKgScopeMeta> {
+  const detail = await getGroup(groupName, { page: 1, page_size: 1, owner });
   const tag = detail.tag;
   const memberCount = detail.member_count;
 
   if (isWorkspaceGroupTag(tag)) {
-    const graphWorkspaceNames = await getGroupWorkspaceNames(groupName);
+    const graphWorkspaceNames = await getGroupWorkspaceNames(groupName, owner);
     return {
       name: groupName,
       tag,
@@ -73,7 +96,9 @@ export async function resolveGroupKgScopeMeta(groupName: string): Promise<GroupK
     };
   }
 
-  const entityTypesResult = await getKnowledgeGraphEntityTypes(groupScope(groupName));
+  const entityTypesResult = await getKnowledgeGraphEntityTypes(
+    groupScope(groupName, owner)
+  );
   const graphWorkspaceNames = (entityTypesResult.workspaces ?? [])
     .map((w) => w.workspace)
     .filter(Boolean)
@@ -100,12 +125,17 @@ export async function resolveGroupKgScopeMeta(groupName: string): Promise<GroupK
 }
 
 export function scopeToQueryParams(scope: KgApiScope): Record<string, string> {
-  if (isGroupScope(scope)) return { group: scope.group };
-  return { workspace_name: scope.workspaceName };
+  const base = isGroupScope(scope)
+    ? { group: scope.group }
+    : { workspace_name: scope.workspaceName };
+  return appendOwnerQuery(base, scope);
 }
 
 export interface WorkspaceEntry {
+  id?: number;
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   tag?: string | null;
   description?: string | null;
   is_flag: boolean;
@@ -120,20 +150,19 @@ export interface WorkspaceListResponse {
   workspaces: WorkspaceEntry[];
 }
 
-function normalizeWorkspaceEntry(raw: {
-  name: string;
-  created_at: string;
-  tag?: string | null;
-  description?: string | null;
-  is_flag?: boolean;
-  groups?: string[];
-}): WorkspaceEntry {
-  const groups = Array.isArray(raw.groups) ? raw.groups : [];
+function normalizeWorkspaceEntry(
+  raw: Record<string, unknown> & { name: string; created_at: string }
+): WorkspaceEntry {
+  const groups = Array.isArray(raw.groups) ? (raw.groups as string[]) : [];
+  const owner = normalizeOwnerFields(raw);
   return {
-    name: raw.name,
-    tag: raw.tag ?? null,
-    description: raw.description ?? null,
-    created_at: raw.created_at,
+    id: owner.id,
+    name: String(raw.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
+    tag: raw.tag != null ? String(raw.tag) : null,
+    description: raw.description != null ? String(raw.description) : null,
+    created_at: String(raw.created_at),
     is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
     groups,
   };
@@ -160,9 +189,9 @@ export async function getWorkspaceList(params?: {
   if (params?.page_size !== undefined) query.page_size = String(params.page_size);
   if (params?.group) query.group = params.group;
 
-  const response = await fetch(buildApiUrl("/workspace/list/", query), {
+  const response = await apiFetch("/workspace/list/", {
     signal: params?.signal,
-  });
+  }, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -266,7 +295,10 @@ export interface WorkspaceCounts {
 }
 
 export interface WorkspacePageItem {
+  id?: number;
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   tag?: string | null;
   description?: string | null;
   is_flag: boolean;
@@ -303,22 +335,28 @@ function normalizeWorkspaceCounts(raw: Partial<WorkspaceCounts> | undefined): Wo
 }
 
 function normalizeWorkspacePageItem(
-  raw: Partial<WorkspacePageItem> & { name: string; created_at: string }
+  raw: Record<string, unknown> & { name: string; created_at: string }
 ): WorkspacePageItem {
-  const groups = Array.isArray(raw.groups) ? raw.groups : [];
+  const groups = Array.isArray(raw.groups) ? (raw.groups as string[]) : [];
+  const owner = normalizeOwnerFields(raw);
   return {
-    name: raw.name,
-    tag: raw.tag ?? null,
-    description: raw.description ?? null,
+    id: owner.id,
+    name: String(raw.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
+    tag: raw.tag != null ? String(raw.tag) : null,
+    description: raw.description != null ? String(raw.description) : null,
     is_flag: Boolean(raw.is_flag) || groups.includes(FLAGGED_GROUP_NAME),
-    created_at: raw.created_at,
-    counts: normalizeWorkspaceCounts(raw.counts),
+    created_at: String(raw.created_at),
+    counts: normalizeWorkspaceCounts(
+      raw.counts as Partial<WorkspaceCounts> | undefined
+    ),
     groups: groups.length > 0 ? groups : undefined,
   };
 }
 
 export async function getWorkspaceStats(): Promise<WorkspaceStats> {
-  const response = await fetch(buildApiUrl("/workspace/stats/"));
+  const response = await apiFetch("/workspace/stats/");
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -336,18 +374,20 @@ export async function getWorkspacePage(params: {
   page?: number;
   page_size?: number;
   group?: string;
+  owner?: OwnerParams;
   include_counts?: boolean;
   signal?: AbortSignal;
 }): Promise<WorkspacePageResponse> {
-  const query: Record<string, string> = {};
+  let query: Record<string, string> = {};
   if (params.page !== undefined) query.page = String(params.page);
   if (params.page_size !== undefined) query.page_size = String(params.page_size);
   if (params.group) query.group = params.group;
   if (params.include_counts === false) query.include_counts = "false";
+  query = appendOwnerQuery(query, params.owner);
 
-  const response = await fetch(buildApiUrl("/workspace/page/", query), {
+  const response = await apiFetch("/workspace/page/", {
     signal: params.signal,
-  });
+  }, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -384,6 +424,8 @@ export async function getWorkspaceCountsByName(
       signal: options?.signal,
     });
     for (const w of res.workspaces) {
+      const key = `${w.owner_id ?? 0}:${w.name}`;
+      map.set(key, w.counts);
       map.set(w.name, w.counts);
     }
     if (!res.pagination.has_next) break;
@@ -427,7 +469,7 @@ export async function createWorkspace(
 
   let response: Response;
   try {
-    response = await fetch(`${API_ROOT}/workspace/create/`, {
+    response = await apiFetch(`/workspace/create/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -454,11 +496,15 @@ export async function createWorkspace(
   throw new WorkspaceCreateError(message, "api");
 }
 
-export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
+export async function deleteWorkspace(
+  workspaceName: string,
+  owner?: OwnerParams
+): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${API_ROOT}/workspace/delete/${encodeURIComponent(workspaceName)}/`,
-      { method: "DELETE" }
+    const response = await apiFetch(
+      `/workspace/delete/${encodeURIComponent(workspaceName)}/`,
+      { method: "DELETE" },
+      appendOwnerQuery({}, owner)
     );
     if (!response.ok) {
       throw new Error(await parseErrorResponse(response));
@@ -489,7 +535,8 @@ export interface UpdateWorkspaceResult {
 
 export async function updateWorkspace(
   workspaceName: string,
-  options: UpdateWorkspaceOptions
+  options: UpdateWorkspaceOptions,
+  owner?: OwnerParams
 ): Promise<UpdateWorkspaceResult> {
   const body: Record<string, string | null> = {};
   if (options.name !== undefined) {
@@ -505,13 +552,14 @@ export async function updateWorkspace(
     throw new Error("No fields to update.");
   }
 
-  const response = await fetch(
-    buildApiUrl(`/workspace/update/${encodeURIComponent(workspaceName)}/`),
+  const response = await apiFetch(
+    `/workspace/update/${encodeURIComponent(workspaceName)}/`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }
+    },
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -526,8 +574,7 @@ export interface FlagStatusResponse {
 
 export async function getFlagStatus(workspaceName: string): Promise<FlagStatusResponse> {
   try {
-    const response = await fetch(
-      `${API_ROOT}/workspace/${encodeURIComponent(workspaceName)}/flag-status/`
+    const response = await apiFetch(`/workspace/${encodeURIComponent(workspaceName)}/flag-status/`
     );
     if (!response.ok) {
       throw new Error(await parseErrorResponse(response));
@@ -548,8 +595,7 @@ export interface ToggleFlagResponse {
 export async function toggleWorkspaceFlag(
   workspaceName: string
 ): Promise<ToggleFlagResponse> {
-  const response = await fetch(
-    `${API_ROOT}/workspace/${encodeURIComponent(workspaceName)}/toggle-flag/`,
+  const response = await apiFetch(`/workspace/${encodeURIComponent(workspaceName)}/toggle-flag/`,
     { method: "PATCH" }
   );
   if (!response.ok) {
@@ -593,7 +639,7 @@ export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountR
   }
 
   try {
-    const response = await fetch(buildApiUrl("/workspace/flagged/count/"));
+    const response = await apiFetch("/workspace/flagged/count/");
     if (response.ok) {
       const data = await response.json();
       return {
@@ -625,6 +671,8 @@ export function normalizeGroupTag(raw: unknown): GroupTag {
 
 export interface GroupWorkspaceMember {
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   created_at: string;
   is_flag?: boolean;
 }
@@ -658,8 +706,80 @@ export type GroupMember =
   | GroupEntityMember
   | GroupRelationMember;
 
-export interface WorkspaceGroupSummary {
+/** Eligible workspace row from `GET /group/<name>/add-options/`. */
+export interface GroupAddOptionWorkspace {
+  kind: "workspace";
+  id?: number;
   name: string;
+  owner_id?: number;
+  owner_username?: string | null;
+  tag?: string | null;
+  description?: string | null;
+}
+
+export interface GroupAddOptionFile {
+  kind: "files";
+  document_id: string;
+  workspace: string;
+  workspace_owner_id?: number;
+  owner_id?: number;
+  owner_username?: string | null;
+  file_name: string;
+}
+
+export interface GroupAddOptionEntity {
+  kind: "entity";
+  entity_id: string;
+  name: string;
+  entity_type: string;
+  workspace: string;
+  document_id?: string;
+  owner_id?: number;
+  owner_username?: string | null;
+}
+
+export interface GroupAddOptionRelation {
+  kind: "relation";
+  relation_id: string;
+  source: string;
+  target: string;
+  workspace: string;
+  owner_id?: number;
+  owner_username?: string | null;
+}
+
+export type GroupAddOption =
+  | GroupAddOptionWorkspace
+  | GroupAddOptionFile
+  | GroupAddOptionEntity
+  | GroupAddOptionRelation;
+
+export interface GroupAddOptionsPage {
+  tag: GroupTag;
+  items: GroupAddOption[];
+  pagination: WorkspacePagePagination;
+}
+
+export interface WorkspaceGroupOption {
+  name: string;
+  owner_id?: number;
+  owner_username?: string | null;
+  description?: string | null;
+  tag?: GroupTag;
+  member_count?: number;
+  already_member: boolean;
+}
+
+export interface WorkspaceGroupOptionsPage {
+  groups: WorkspaceGroupOption[];
+  pagination: WorkspacePagePagination;
+}
+
+export interface WorkspaceGroupSummary {
+  id?: number;
+  name: string;
+  owner_id?: number;
+  owner_username?: string | null;
   tag: GroupTag;
   description?: string | null;
   member_count: number;
@@ -687,6 +807,13 @@ export interface WorkspaceGroupDetail extends GroupMembersPage {
 export interface GroupListResponse {
   groups: WorkspaceGroupSummary[];
   pagination: WorkspacePagePagination;
+}
+
+/** `GET /group/lookup/` or `GET /workspace/lookup/` */
+export interface ResourceLookupResult<T> {
+  name: string;
+  ambiguous: boolean;
+  matches: T[];
 }
 
 export interface CreateGroupOptions {
@@ -770,8 +897,12 @@ export function normalizeGroupSummary(raw: Record<string, unknown>): WorkspaceGr
           : Array.isArray(raw.workspaces)
             ? raw.workspaces.length
             : 0;
+  const owner = normalizeOwnerFields(raw);
   const summary: WorkspaceGroupSummary = {
+    id: owner.id,
     name: String(raw.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
     tag: normalizeGroupTag(raw.tag),
     description: raw.description != null ? String(raw.description) : null,
     member_count: memberCount,
@@ -783,8 +914,11 @@ export function normalizeGroupSummary(raw: Record<string, unknown>): WorkspaceGr
 }
 
 function normalizeWorkspaceGroupMember(raw: Record<string, unknown>): GroupWorkspaceMember {
+  const owner = normalizeOwnerFields(raw);
   return {
     name: String(raw.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
     created_at: String(raw.created_at ?? ""),
     is_flag: Boolean(raw.is_flag),
   };
@@ -861,6 +995,202 @@ function normalizeGroupMembersPage(
   };
 }
 
+function extractPickerItemsArray(data: Record<string, unknown>): unknown[] {
+  if (Array.isArray(data.options)) return data.options;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.members)) return data.members;
+  return [];
+}
+
+function normalizeGroupAddOption(
+  row: Record<string, unknown>,
+  tag: GroupTag
+): GroupAddOption {
+  const owner = normalizeOwnerFields(row);
+  if (tag === "files") {
+    return {
+      kind: "files",
+      document_id: String(row.document_id),
+      workspace: String(row.workspace),
+      workspace_owner_id:
+        row.workspace_owner_id != null
+          ? Number(row.workspace_owner_id)
+          : undefined,
+      owner_id: owner.owner_id,
+      owner_username: owner.owner_username ?? null,
+      file_name: String(row.file_name ?? ""),
+    };
+  }
+  if (tag === "entity") {
+    return {
+      kind: "entity",
+      entity_id: String(row.entity_id ?? row.id ?? ""),
+      name: String(row.name ?? ""),
+      entity_type: String(row.entity_type ?? ""),
+      workspace: String(row.workspace ?? ""),
+      document_id:
+        row.document_id != null ? String(row.document_id) : undefined,
+      owner_id: owner.owner_id,
+      owner_username: owner.owner_username ?? null,
+    };
+  }
+  if (tag === "relation") {
+    return {
+      kind: "relation",
+      relation_id: String(row.relation_id),
+      source: String(row.source_name ?? row.source ?? ""),
+      target: String(row.target_name ?? row.target ?? ""),
+      workspace: String(row.workspace ?? ""),
+      owner_id: owner.owner_id,
+      owner_username: owner.owner_username ?? null,
+    };
+  }
+  return {
+    kind: "workspace",
+    id: owner.id,
+    name: String(row.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
+    tag: row.tag != null ? String(row.tag) : null,
+    description: row.description != null ? String(row.description) : null,
+  };
+}
+
+function normalizeGroupAddOptionsPage(
+  data: Record<string, unknown>,
+  fallback: { page?: number; page_size?: number; expectedTag?: GroupTag }
+): GroupAddOptionsPage {
+  const rawItems = extractPickerItemsArray(data);
+  const tag = resolveGroupMembersTag(data, rawItems, fallback.expectedTag);
+  const total_items =
+    typeof data.total_items === "number"
+      ? data.total_items
+      : (data.pagination as Partial<WorkspacePagePagination> | undefined)
+          ?.total_items ?? rawItems.length;
+  return {
+    tag,
+    items: rawItems.map((row) =>
+      normalizeGroupAddOption(row as Record<string, unknown>, tag)
+    ),
+    pagination: normalizeGroupPagination(
+      data.pagination as Partial<WorkspacePagePagination> | undefined,
+      { ...fallback, total_items }
+    ),
+  };
+}
+
+function normalizeWorkspaceGroupOption(
+  raw: Record<string, unknown>
+): WorkspaceGroupOption {
+  const owner = normalizeOwnerFields(raw);
+  return {
+    name: String(raw.name),
+    owner_id: owner.owner_id,
+    owner_username: owner.owner_username ?? null,
+    description: raw.description != null ? String(raw.description) : null,
+    tag: raw.tag != null ? normalizeGroupTag(raw.tag) : undefined,
+    member_count:
+      typeof raw.member_count === "number" ? raw.member_count : undefined,
+    already_member: Boolean(raw.already_member),
+  };
+}
+
+function normalizeWorkspaceGroupOptionsPage(
+  data: Record<string, unknown>,
+  fallback: { page?: number; page_size?: number }
+): WorkspaceGroupOptionsPage {
+  const rawGroups = Array.isArray(data.groups)
+    ? data.groups
+    : Array.isArray(data.options)
+      ? data.options
+      : Array.isArray(data.items)
+        ? data.items
+        : [];
+  const total_items =
+    typeof data.total_items === "number"
+      ? data.total_items
+      : (data.pagination as Partial<WorkspacePagePagination> | undefined)
+          ?.total_items ?? rawGroups.length;
+  return {
+    groups: rawGroups.map((g) =>
+      normalizeWorkspaceGroupOption(g as Record<string, unknown>)
+    ),
+    pagination: normalizeGroupPagination(
+      data.pagination as Partial<WorkspacePagePagination> | undefined,
+      { ...fallback, total_items }
+    ),
+  };
+}
+
+export async function getGroupAddOptions(
+  groupName: string,
+  params?: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    candidateOwnerId?: number;
+    expectedTag?: GroupTag;
+    owner?: OwnerParams;
+    signal?: AbortSignal;
+  }
+): Promise<GroupAddOptionsPage> {
+  let query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  if (params?.search?.trim()) query.search = params.search.trim();
+  if (params?.candidateOwnerId != null) {
+    query.candidate_owner_id = String(params.candidateOwnerId);
+  }
+  query = appendOwnerQuery(query, params?.owner);
+
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/add-options/`,
+    { signal: params?.signal },
+    query
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  return normalizeGroupAddOptionsPage(data, {
+    page: params?.page,
+    page_size: params?.page_size,
+    expectedTag: params?.expectedTag,
+  });
+}
+
+export async function getWorkspaceGroupOptions(
+  workspaceName: string,
+  params?: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    workspaceOwner?: OwnerParams;
+    signal?: AbortSignal;
+  }
+): Promise<WorkspaceGroupOptionsPage> {
+  let query: Record<string, string> = {};
+  if (params?.page !== undefined) query.page = String(params.page);
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  if (params?.search?.trim()) query.search = params.search.trim();
+  query = appendOwnerQuery(query, params?.workspaceOwner);
+
+  const response = await apiFetch(
+    `/workspace/${encodeURIComponent(workspaceName)}/group-options/`,
+    { signal: params?.signal },
+    query
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  return normalizeWorkspaceGroupOptionsPage(data, {
+    page: params?.page,
+    page_size: params?.page_size,
+  });
+}
+
 export function isWorkspaceGroupTag(tag: GroupTag | string | null | undefined): boolean {
   return normalizeGroupTag(tag) === "workspace";
 }
@@ -880,7 +1210,7 @@ export async function createWorkspaceGroup(
   };
   const normalizedDescription = options?.description?.trim();
   if (normalizedDescription) body.description = normalizedDescription;
-  const response = await fetch(buildApiUrl("/group/create/"), {
+  const response = await apiFetch("/group/create/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -892,20 +1222,73 @@ export async function createWorkspaceGroup(
   return normalizeGroupSummary((data.group ?? data) as Record<string, unknown>);
 }
 
+export async function lookupGroup(
+  name: string,
+  params?: {
+    owner?: OwnerParams;
+    tag?: GroupTag;
+    signal?: AbortSignal;
+  }
+): Promise<ResourceLookupResult<WorkspaceGroupSummary>> {
+  let query: Record<string, string> = { name: name.trim() };
+  if (params?.tag) query.tag = params.tag;
+  query = appendOwnerQuery(query, params?.owner);
+
+  const response = await apiFetch("/group/lookup/", { signal: params?.signal }, query);
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  const rawMatches = Array.isArray(data.matches) ? data.matches : [];
+  const matches = rawMatches.map((row) =>
+    normalizeGroupSummary(row as Record<string, unknown>)
+  );
+  return {
+    name: String(data.name ?? name),
+    ambiguous: Boolean(data.ambiguous) || matches.length > 1,
+    matches,
+  };
+}
+
+export async function lookupWorkspace(
+  name: string,
+  params?: { owner?: OwnerParams; signal?: AbortSignal }
+): Promise<ResourceLookupResult<WorkspaceEntry>> {
+  let query: Record<string, string> = { name: name.trim() };
+  query = appendOwnerQuery(query, params?.owner);
+
+  const response = await apiFetch("/workspace/lookup/", { signal: params?.signal }, query);
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = (await response.json()) as Record<string, unknown>;
+  const rawMatches = Array.isArray(data.matches) ? data.matches : [];
+  const matches = rawMatches.map((row) =>
+    normalizeWorkspaceEntry(row as Record<string, unknown> & { name: string; created_at: string })
+  );
+  return {
+    name: String(data.name ?? name),
+    ambiguous: Boolean(data.ambiguous) || matches.length > 1,
+    matches,
+  };
+}
+
 export async function listWorkspaceGroups(params?: {
   page?: number;
   page_size?: number;
   tag?: GroupTag;
+  owner?: OwnerParams;
   signal?: AbortSignal;
 }): Promise<GroupListResponse> {
-  const query: Record<string, string> = {};
+  let query: Record<string, string> = {};
   if (params?.page !== undefined) query.page = String(params.page);
   if (params?.page_size !== undefined) query.page_size = String(params.page_size);
   if (params?.tag) query.tag = params.tag;
+  query = appendOwnerQuery(query, params?.owner);
 
-  const response = await fetch(buildApiUrl("/group/list/", query), {
+  const response = await apiFetch("/group/list/", {
     signal: params?.signal,
-  });
+  }, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -946,16 +1329,19 @@ export async function listWorkspaceGroupsLegacy(): Promise<WorkspaceGroupSummary
 
 export async function getGroup(
   groupName: string,
-  params?: { page?: number; page_size?: number; signal?: AbortSignal }
+  params?: {
+    page?: number;
+    page_size?: number;
+    signal?: AbortSignal;
+    owner?: OwnerParams;
+  }
 ): Promise<WorkspaceGroupDetail> {
-  const query: Record<string, string> = {};
+  let query: Record<string, string> = {};
   if (params?.page !== undefined) query.page = String(params.page);
   if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  query = appendOwnerQuery(query, params?.owner);
 
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`, query),
-    { signal: params?.signal }
-  );
+  const response = await apiFetch(`/group/${encodeURIComponent(groupName)}/`, { signal: params?.signal }, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -982,16 +1368,15 @@ export async function getGroupMembers(
     page_size?: number;
     signal?: AbortSignal;
     expectedTag?: GroupTag;
+    owner?: OwnerParams;
   }
 ): Promise<GroupMembersPage> {
-  const query: Record<string, string> = {};
+  let query: Record<string, string> = {};
   if (params?.page !== undefined) query.page = String(params.page);
   if (params?.page_size !== undefined) query.page_size = String(params.page_size);
+  query = appendOwnerQuery(query, params?.owner);
 
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/members/`, query),
-    { signal: params?.signal }
-  );
+  const response = await apiFetch(`/group/${encodeURIComponent(groupName)}/members/`, { signal: params?.signal }, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -1008,7 +1393,7 @@ const GROUP_MEMBERS_MAX_PAGE_SIZE = 100;
 /** Fetch every group member, paginating at the API max page size (100). */
 export async function getAllGroupMembers(
   groupName: string,
-  options?: { expectedTag?: GroupTag; signal?: AbortSignal }
+  options?: { expectedTag?: GroupTag; signal?: AbortSignal; owner?: OwnerParams }
 ): Promise<GroupMember[]> {
   const members: GroupMember[] = [];
   let page = 1;
@@ -1020,6 +1405,7 @@ export async function getAllGroupMembers(
       page_size: GROUP_MEMBERS_MAX_PAGE_SIZE,
       expectedTag: options?.expectedTag,
       signal: options?.signal,
+      owner: options?.owner,
     });
     members.push(...pageData.members);
     hasNext = pageData.pagination.has_next;
@@ -1031,7 +1417,8 @@ export async function getAllGroupMembers(
 
 export async function updateGroup(
   groupName: string,
-  options: UpdateGroupOptions
+  options: UpdateGroupOptions,
+  owner?: OwnerParams
 ): Promise<UpdateGroupResult> {
   const body: Record<string, string | null> = {};
   if (options.name !== undefined) {
@@ -1046,13 +1433,14 @@ export async function updateGroup(
     throw new Error("No fields to update.");
   }
 
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`),
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }
+    },
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1065,10 +1453,14 @@ export async function updateGroup(
   };
 }
 
-export async function deleteWorkspaceGroup(groupName: string): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/`),
-    { method: "DELETE" }
+export async function deleteWorkspaceGroup(
+  groupName: string,
+  owner?: OwnerParams
+): Promise<void> {
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/`,
+    { method: "DELETE" },
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1077,134 +1469,150 @@ export async function deleteWorkspaceGroup(groupName: string): Promise<void> {
 
 export async function addWorkspaceToGroup(
   groupName: string,
-  workspaceName: string
+  workspaceName: string,
+  options?: GroupWorkspaceMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/workspaces/`),
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/workspaces/`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace_name: workspaceName }),
-    }
+      body: JSON.stringify(
+        buildGroupWorkspacePostBody(workspaceName, options?.workspaceOwner)
+      ),
+    },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function removeWorkspaceFromGroup(
   groupName: string,
-  workspaceName: string
+  workspaceName: string,
+  options?: GroupWorkspaceMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(
-      `/group/${encodeURIComponent(groupName)}/workspaces/${encodeURIComponent(workspaceName)}/`
-    ),
-    { method: "DELETE" }
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/workspaces/${encodeURIComponent(workspaceName)}/`,
+    { method: "DELETE" },
+    appendGroupWorkspaceDeleteQuery({}, options)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function addFileToGroup(
   groupName: string,
-  documentId: string
+  documentId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/files/`),
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/files/`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ document_id: documentId }),
-    }
+    },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function removeFileFromGroup(
   groupName: string,
-  documentId: string
+  documentId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(
-      `/group/${encodeURIComponent(groupName)}/files/${encodeURIComponent(documentId)}/`
-    ),
-    { method: "DELETE" }
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/files/${encodeURIComponent(documentId)}/`,
+    { method: "DELETE" },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function addEntityToGroup(
   groupName: string,
-  entityId: string
+  entityId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/entities/`),
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/entities/`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entity_id: entityId }),
-    }
+    },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function removeEntityFromGroup(
   groupName: string,
-  entityId: string
+  entityId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(
-      `/group/${encodeURIComponent(groupName)}/entities/${encodeURIComponent(entityId)}/`
-    ),
-    { method: "DELETE" }
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/entities/${encodeURIComponent(entityId)}/`,
+    { method: "DELETE" },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function addRelationToGroup(
   groupName: string,
-  relationId: string
+  relationId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(`/group/${encodeURIComponent(groupName)}/relations/`),
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/relations/`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ relation_id: relationId }),
-    }
+    },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
 export async function removeRelationFromGroup(
   groupName: string,
-  relationId: string
+  relationId: string,
+  options?: GroupMemberMutationOptions
 ): Promise<void> {
-  const response = await fetch(
-    buildApiUrl(
-      `/group/${encodeURIComponent(groupName)}/relations/${encodeURIComponent(relationId)}/`
-    ),
-    { method: "DELETE" }
+  const response = await apiFetch(
+    `/group/${encodeURIComponent(groupName)}/relations/${encodeURIComponent(relationId)}/`,
+    { method: "DELETE" },
+    appendOwnerQuery({}, options?.groupOwner)
   );
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response));
+    throw new Error(await formatMembershipMutationError(response));
   }
 }
 
-export async function getGroupWorkspaceNames(groupName: string): Promise<string[]> {
-  const members = await getAllGroupMembers(groupName, { expectedTag: "workspace" });
+export async function getGroupWorkspaceNames(
+  groupName: string,
+  owner?: OwnerParams
+): Promise<string[]> {
+  const members = await getAllGroupMembers(groupName, {
+    expectedTag: "workspace",
+    owner,
+  });
   return (members as GroupWorkspaceMember[])
     .map((w) => w.name)
     .sort((a, b) => a.localeCompare(b));
@@ -1236,10 +1644,15 @@ export interface DocumentListResponse {
   files: DocumentEntry[];
 }
 
-export async function listDocuments(workspaceName: string): Promise<DocumentListResponse> {
+export async function listDocuments(
+  workspaceName: string,
+  owner?: OwnerParams
+): Promise<DocumentListResponse> {
   try {
-    const response = await fetch(
-      `${API_ROOT}/document/${encodeURIComponent(workspaceName)}/`
+    const response = await apiFetch(
+      `/document/${encodeURIComponent(workspaceName)}/`,
+      {},
+      appendOwnerQuery({}, owner)
     );
     if (!response.ok) {
       throw new Error(await parseErrorResponse(response));
@@ -1251,8 +1664,11 @@ export async function listDocuments(workspaceName: string): Promise<DocumentList
   }
 }
 
-export async function listFiles(workspaceName: string): Promise<string[]> {
-  const data = await listDocuments(workspaceName);
+export async function listFiles(
+  workspaceName: string,
+  owner?: OwnerParams
+): Promise<string[]> {
+  const data = await listDocuments(workspaceName, owner);
   return data.files.map((f) => f.file_name);
 }
 
@@ -1275,7 +1691,8 @@ function isAllowedUploadFile(file: File): boolean {
 
 export async function uploadFile(
   workspaceName: string,
-  file: File
+  file: File,
+  owner?: OwnerParams
 ): Promise<UploadFileResponse> {
   if (!isAllowedUploadFile(file)) {
     throw new Error("Only .txt and .md files can be uploaded.");
@@ -1285,10 +1702,14 @@ export async function uploadFile(
   formData.append("workspace_name", workspaceName);
   formData.append("file", file);
 
-  const response = await fetch(`${API_ROOT}/document/upload/`, {
-    method: "POST",
-    body: formData,
-  });
+  const response = await apiFetch(
+    `/document/upload/`,
+    {
+      method: "POST",
+      body: formData,
+    },
+    appendOwnerQuery({}, owner)
+  );
 
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1298,11 +1719,13 @@ export async function uploadFile(
 
 export async function deleteFile(
   workspaceName: string,
-  fileName: string
+  fileName: string,
+  owner?: OwnerParams
 ): Promise<boolean> {
-  const response = await fetch(
-    `${API_ROOT}/document/delete/${encodeURIComponent(workspaceName)}/${encodeURIComponent(fileName)}/`,
-    { method: "DELETE" }
+  const response = await apiFetch(
+    `/document/delete/${encodeURIComponent(workspaceName)}/${encodeURIComponent(fileName)}/`,
+    { method: "DELETE" },
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1319,7 +1742,8 @@ export interface BulkFileOperationResult {
 
 export async function uploadFiles(
   workspaceName: string,
-  files: File[]
+  files: File[],
+  owner?: OwnerParams
 ): Promise<BulkFileOperationResult> {
   const succeeded: string[] = [];
   const replaced: string[] = [];
@@ -1327,7 +1751,7 @@ export async function uploadFiles(
 
   for (const file of files) {
     try {
-      const res = await uploadFile(workspaceName, file);
+      const res = await uploadFile(workspaceName, file, owner);
       succeeded.push(file.name);
       if (res.replaced) replaced.push(file.name);
     } catch (error) {
@@ -1343,14 +1767,15 @@ export async function uploadFiles(
 
 export async function deleteFiles(
   workspaceName: string,
-  fileNames: string[]
+  fileNames: string[],
+  owner?: OwnerParams
 ): Promise<BulkFileOperationResult> {
   const succeeded: string[] = [];
   const failed: BulkFileOperationResult["failed"] = [];
 
   for (const fileName of fileNames) {
     try {
-      await deleteFile(workspaceName, fileName);
+      await deleteFile(workspaceName, fileName, owner);
       succeeded.push(fileName);
     } catch (error) {
       failed.push({
@@ -1487,7 +1912,8 @@ export function summarizePreprocessStart(res: StartPreprocessResponse): string {
 
 export async function startPreprocess(
   workspaceName: string,
-  options: StartPreprocessOptions = {}
+  options: StartPreprocessOptions = {},
+  owner?: OwnerParams
 ): Promise<StartPreprocessResponse> {
   const priority = options.priority ?? false;
   const includeOtherWorkspaces = options.includeOtherWorkspaces ?? false;
@@ -1501,9 +1927,10 @@ export async function startPreprocess(
     });
   }
 
-  const response = await fetch(
-    `${API_ROOT}/workspace/preprocess/${encodeURIComponent(workspaceName)}/`,
-    requestInit
+  const response = await apiFetch(
+    `/workspace/preprocess/${encodeURIComponent(workspaceName)}/`,
+    requestInit,
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1580,10 +2007,13 @@ export interface WorkspacePreprocessStatusResponse {
 }
 
 export async function getWorkspacePreprocessStatus(
-  workspaceName: string
+  workspaceName: string,
+  owner?: OwnerParams
 ): Promise<WorkspacePreprocessStatusResponse> {
-  const response = await fetch(
-    `${API_ROOT}/workspace/${encodeURIComponent(workspaceName)}/preprocess-status/`
+  const response = await apiFetch(
+    `/workspace/${encodeURIComponent(workspaceName)}/preprocess-status/`,
+    {},
+    appendOwnerQuery({}, owner)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -1715,13 +2145,13 @@ export interface PreprocessQueueStatusResponse {
 }
 
 export async function getPreprocessQueueStatus(
-  workspaceName?: string
+  workspaceName?: string,
+  owner?: OwnerParams
 ): Promise<PreprocessQueueStatusResponse> {
-  const response = await fetch(
-    buildApiUrl("/preprocess/queue-status/", {
-      workspace: workspaceName,
-    })
-  );
+  let query: Record<string, string> = {};
+  if (workspaceName) query.workspace = workspaceName;
+  query = appendOwnerQuery(query, owner);
+  const response = await apiFetch("/preprocess/queue-status/", {}, query);
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -1735,7 +2165,7 @@ export interface PreprocessWorkspacesSummaryResponse {
 }
 
 export async function getPreprocessWorkspacesSummary(): Promise<PreprocessWorkspacesSummaryResponse> {
-  const response = await fetch(buildApiUrl("/preprocess/workspaces-summary/"));
+  const response = await apiFetch("/preprocess/workspaces-summary/");
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -2022,8 +2452,10 @@ export async function getKnowledgeGraphEntityTypes(
   entityTypes: EntityTypeEntry[];
   workspaces?: GroupWorkspaceEntitySummary[];
 }> {
-  const response = await fetch(
-    buildApiUrl("/knowledge-graph/entity-types/", scopeToQueryParams(scope))
+  const response = await apiFetch(
+    "/knowledge-graph/entity-types/",
+    {},
+    scopeToQueryParams(scope)
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -2098,11 +2530,13 @@ export async function getFilteredKnowledgeGraph(
   scope: KgApiScope,
   params?: GraphFetchParams
 ): Promise<KnowledgeGraphPayload> {
-  const response = await fetch(
-    buildApiUrl("/knowledge-graph/", {
+  const response = await apiFetch(
+    "/knowledge-graph/",
+    {},
+    {
       ...scopeToQueryParams(scope),
       ...graphFetchQueryParams(params),
-    })
+    }
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -2122,25 +2556,29 @@ export async function getFilteredKnowledgeGraph(
 
 export async function getKnowledgeGraph(
   workspaceName: string,
-  params?: GraphFetchParams
+  params?: GraphFetchParams,
+  owner?: OwnerParams
 ): Promise<KnowledgeGraphResponse> {
+  const scope = workspaceScope(workspaceName, owner);
   if (params) {
-    return getFilteredKnowledgeGraph({ workspaceName }, params);
+    return getFilteredKnowledgeGraph(scope, params);
   }
-  return getFilteredKnowledgeGraph(
-    { workspaceName },
-    { depth: KB_DEFAULT_DEPTH, limit: KB_DEFAULT_LIMIT }
-  );
+  return getFilteredKnowledgeGraph(scope, {
+    depth: KB_DEFAULT_DEPTH,
+    limit: KB_DEFAULT_LIMIT,
+  });
 }
 
 export async function getFlaggedKnowledgeGraphs(
   params?: GraphFetchParams
 ): Promise<KnowledgeGraphResponse[]> {
-  const response = await fetch(
-    buildApiUrl("/knowledge-graph/", {
+  const response = await apiFetch(
+    "/knowledge-graph/",
+    {},
+    {
       group: FLAGGED_GROUP_NAME,
       ...graphFetchQueryParams(params),
-    })
+    }
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -2214,7 +2652,7 @@ export async function fetchKnowledgeGraphForWorkspaces(
   workspaceNames: string[],
   groupName: string,
   params?: GraphFetchParams,
-  options?: { concurrency?: number }
+  options?: { concurrency?: number; owner?: OwnerParams }
 ): Promise<KnowledgeGraphPayload> {
   const names = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b)
@@ -2224,8 +2662,9 @@ export async function fetchKnowledgeGraphForWorkspaces(
   }
 
   const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
+  const owner = options?.owner;
   const slices = await runWithConcurrency(names, concurrency, async (ws) => {
-    const payload = await getFilteredKnowledgeGraph({ workspaceName: ws }, params);
+    const payload = await getFilteredKnowledgeGraph(workspaceScope(ws, owner), params);
     return {
       workspace: ws,
       nodes: payload.nodes,
@@ -2290,8 +2729,10 @@ export async function searchKnowledgeEntities(
     baseParams.match_limit = String(options.matchLimit);
   }
 
-  const response = await fetch(
-    buildApiUrl("/knowledge/entities/search/", { ...scopeToQueryParams(scope), ...baseParams })
+  const response = await apiFetch(
+    "/knowledge/entities/search/",
+    {},
+    { ...scopeToQueryParams(scope), ...baseParams }
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -2398,8 +2839,10 @@ export async function fetchGraphEntityRecord(
   const params: Record<string, string | undefined> = {};
   if (workspaceName) params.workspace_name = workspaceName;
 
-  const response = await fetch(
-    buildApiUrl(`/knowledge/entity/${encodeURIComponent(entityId)}/`, params)
+  const response = await apiFetch(
+    `/knowledge/entity/${encodeURIComponent(entityId)}/`,
+    {},
+    params
   );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
@@ -2411,20 +2854,22 @@ export async function fetchGraphEntityRecord(
 export async function getPerFileGraphCounts(
   workspaceName: string,
   fileNames: string[],
-  options?: { concurrency?: number }
+  options?: { concurrency?: number; owner?: OwnerParams }
 ): Promise<Record<string, { nodes: number; edges: number }>> {
   const result: Record<string, { nodes: number; edges: number }> = {};
   const concurrency = Math.max(1, options?.concurrency ?? 4);
+  const scope = workspaceScope(workspaceName, options?.owner);
 
   for (let i = 0; i < fileNames.length; i += concurrency) {
     const batch = fileNames.slice(i, i + concurrency);
     await Promise.all(
       batch.map(async (fileName) => {
         try {
-          const graph = await getFilteredKnowledgeGraph(
-            { workspaceName },
-            { fileNames: [fileName], depth: 0, limit: KB_MAX_LIMIT }
-          );
+          const graph = await getFilteredKnowledgeGraph(scope, {
+            fileNames: [fileName],
+            depth: 0,
+            limit: KB_MAX_LIMIT,
+          });
           result[fileName] = {
             nodes: graph.nodes.length,
             edges: graph.edges.length,
@@ -2454,15 +2899,16 @@ export function resolveGraphFileNamesParam(
 
 export async function listFilesForWorkspaces(
   workspaceNames: string[],
-  options?: { concurrency?: number }
+  options?: { concurrency?: number; owner?: OwnerParams }
 ): Promise<string[]> {
   const names = new Set<string>();
   const unique = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))];
   const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
+  const owner = options?.owner;
 
   await runWithConcurrency(unique, concurrency, async (ws) => {
     try {
-      for (const f of await listFiles(ws)) names.add(f);
+      for (const f of await listFiles(ws, owner)) names.add(f);
     } catch {
       /* skip workspace */
     }

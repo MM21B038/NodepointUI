@@ -12,13 +12,21 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://10.10.112.72:8000",
+        target: "http://localhost:8000",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://10.10.112.72:8000",
+        target: "ws://localhost:8000",
         ws: true,
         changeOrigin: true,
+        configure: (proxy) => {
+          // Benign when the browser or Django closes the socket mid-handoff (chat
+          // session switch, reconnect, tab refresh). Vite still logs EPIPE otherwise.
+          proxy.on("error", (err: NodeJS.ErrnoException) => {
+            if (err.code === "EPIPE" || err.code === "ECONNRESET") return;
+            console.error("[vite] ws proxy error:", err);
+          });
+        },
       },
     },
   },

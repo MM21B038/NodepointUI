@@ -13,17 +13,21 @@ import {
 import { toast } from "sonner";
 import {
   addWorkspaceToGroup,
-  isWorkspaceGroup,
   removeWorkspaceFromGroup,
 } from "@/database/workspaceStorage";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { isSelectableGroup } from "@/lib/viewScope";
-import { formatGroupTag } from "@/lib/groupTag";
-import { metaDescription } from "@/lib/resourceMeta";
-import GroupAssignmentList from "@/components/workspace/GroupAssignmentList";
+import WorkspaceGroupOptionsList from "@/components/workspace/WorkspaceGroupOptionsList";
+import {
+  formatScopedResourceLabel,
+  groupResourceKey,
+  ownerParamsFrom,
+  parseResourceKey,
+} from "@/lib/ownerScope";
 
 interface WorkspaceGroupMembershipProps {
   workspaceName: string;
+  workspaceOwnerId?: number;
+  workspaceOwnerUsername?: string | null;
   memberGroups: string[];
   onMembershipChanged?: () => void;
   disabled?: boolean;
@@ -31,19 +35,34 @@ interface WorkspaceGroupMembershipProps {
 
 export default function WorkspaceGroupMembership({
   workspaceName,
+  workspaceOwnerId,
+  workspaceOwnerUsername,
   memberGroups,
   onMembershipChanged,
   disabled = false,
 }: WorkspaceGroupMembershipProps) {
-  const { groups, refreshGroups } = useWorkspace();
+  const { refreshGroups } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [localMemberSet, setLocalMemberSet] = useState<Set<string>>(new Set());
 
-  const memberSet = useMemo(
-    () => new Set(memberGroups.filter(isSelectableGroup)),
-    [memberGroups]
+  const workspaceOwner = useMemo(
+    () =>
+      ownerParamsFrom({
+        name: workspaceName,
+        owner_id: workspaceOwnerId,
+        owner_username: workspaceOwnerUsername,
+      }),
+    [workspaceName, workspaceOwnerId, workspaceOwnerUsername]
   );
+
+  const memberSet = useMemo(() => {
+    const keys = new Set<string>();
+    for (const gName of memberGroups) {
+      keys.add(groupResourceKey(gName, workspaceOwnerId ?? undefined));
+    }
+    return keys;
+  }, [memberGroups, workspaceOwnerId]);
 
   useEffect(() => {
     if (open) {
@@ -51,42 +70,31 @@ export default function WorkspaceGroupMembership({
     }
   }, [open, memberSet]);
 
-  const groupItems = useMemo(
-    () =>
-      groups
-        .filter(isWorkspaceGroup)
-        .map((g) => {
-          const desc = metaDescription(g);
-          const hintParts = [
-            formatGroupTag(g.tag),
-            desc ? "desc" : null,
-            `${g.member_count} ws`,
-          ].filter(Boolean);
-          return {
-            id: g.name,
-            label: g.name,
-            hint: hintParts.join(" · "),
-          };
-        }),
-    [groups]
-  );
-
   const handleToggle = useCallback(
-    async (groupName: string, checked: boolean) => {
-      setPending(groupName);
+    async (groupKey: string, checked: boolean) => {
+      const { name: groupName, ownerId: groupOwnerId } =
+        parseResourceKey(groupKey);
+      const groupOwner =
+        groupOwnerId != null ? { ownerId: groupOwnerId } : undefined;
+
+      setPending(groupKey);
       try {
+        const mutation = {
+          groupOwner,
+          workspaceOwner,
+        };
         if (checked) {
-          await addWorkspaceToGroup(groupName, workspaceName);
-          setLocalMemberSet((prev) => new Set(prev).add(groupName));
-          toast.success(`Added to "${groupName}".`);
+          await addWorkspaceToGroup(groupName, workspaceName, mutation);
+          setLocalMemberSet((prev) => new Set(prev).add(groupKey));
+          toast.success("Added to group.");
         } else {
-          await removeWorkspaceFromGroup(groupName, workspaceName);
+          await removeWorkspaceFromGroup(groupName, workspaceName, mutation);
           setLocalMemberSet((prev) => {
             const next = new Set(prev);
-            next.delete(groupName);
+            next.delete(groupKey);
             return next;
           });
-          toast.success(`Removed from "${groupName}".`);
+          toast.success(`Removed from group.`);
         }
         await refreshGroups();
         onMembershipChanged?.();
@@ -98,7 +106,13 @@ export default function WorkspaceGroupMembership({
         setPending(null);
       }
     },
-    [workspaceName, refreshGroups, onMembershipChanged]
+    [workspaceName, workspaceOwner, refreshGroups, onMembershipChanged]
+  );
+
+  const workspaceLabel = formatScopedResourceLabel(
+    workspaceName,
+    workspaceOwnerUsername,
+    { forceOwner: Boolean(workspaceOwnerUsername) }
   );
 
   return (
@@ -126,35 +140,28 @@ export default function WorkspaceGroupMembership({
             <DialogTitle>Group membership</DialogTitle>
             <DialogDescription>
               Choose which groups include workspace{" "}
-              <span className="font-medium text-foreground">{workspaceName}</span>.
-              Use <strong>Groups</strong> in the toolbar to create groups or bulk-assign
-              many workspaces.
+              <span className="font-medium text-foreground">{workspaceLabel}</span>.
+              Groups you already belong to are checked and cannot be removed here.
             </DialogDescription>
           </DialogHeader>
 
-          {groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
-              No groups yet. Open <strong>Groups</strong> from the toolbar to create one.
-            </p>
-          ) : (
-            <GroupAssignmentList
-              items={groupItems}
-              selectedIds={localMemberSet}
-              onToggle={(id, checked) => void handleToggle(id, checked)}
-              pendingId={pending}
-              disabled={!!pending}
-              searchPlaceholder="Search groups…"
-              emptyMessage="No groups."
-              heightClass="h-56"
-            />
-          )}
+          <WorkspaceGroupOptionsList
+            workspaceName={workspaceName}
+            workspaceOwner={workspaceOwner}
+            selectedIds={localMemberSet}
+            enabled={open}
+            onToggle={(id, checked) => void handleToggle(id, checked)}
+            pendingId={pending}
+            disabled={!!pending}
+            heightClass="h-56"
+          />
 
-          {pending && (
+          {pending ? (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
               Updating…
             </p>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

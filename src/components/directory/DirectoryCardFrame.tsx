@@ -1,13 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CheckCircle2, Tag } from "lucide-react";
+import { Check, Tag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2 } from "lucide-react";
 import {
   directoryActiveBadgeClass,
+  directoryOwnerBadgeClass,
+  directoryOwnerRowClass,
   directoryCardActionClusterClass,
   directoryCardBodyClass,
   directoryCardHeaderClass,
@@ -24,7 +26,11 @@ import { metaDescription, metaTagLabel } from "@/lib/resourceMeta";
 
 interface DirectoryCardFrameProps {
   accent: DirectoryCardAccent;
+  /** Resource name only (not combined with owner). */
   name: string;
+  /** When set with `showOwnerLabel`, shown as a separate owner row/badge. */
+  ownerUsername?: string | null;
+  showOwnerLabel?: boolean;
   tag?: string | null;
   description?: string | null;
   isActive: boolean;
@@ -46,6 +52,8 @@ interface DirectoryCardFrameProps {
 export function DirectoryCardFrame({
   accent,
   name,
+  ownerUsername,
+  showOwnerLabel = false,
   tag,
   description,
   isActive,
@@ -67,6 +75,18 @@ export function DirectoryCardFrame({
   const descriptionText = metaDescription({ description });
   const showDelete = Boolean(onDelete);
   const showActions = Boolean(tagLabel || showDelete);
+  const owner = ownerUsername?.trim();
+  const showOwner = showOwnerLabel && Boolean(owner);
+  const ariaTitle = showOwner ? `${name} (${owner})` : name;
+  const activeBadge = isActive ? (
+    <span
+      className={directoryActiveBadgeClass()}
+      title={activeLabel}
+    >
+      <Check className="h-3 w-3 shrink-0" aria-hidden />
+      <span>{activeLabel}</span>
+    </span>
+  ) : null;
 
   return (
     <article
@@ -76,6 +96,7 @@ export function DirectoryCardFrame({
         isSelected,
       })}
       onClick={onSelect}
+      aria-current={isActive ? "true" : undefined}
     >
       <div
         className={directoryCardStripeClass(accent, isActive)}
@@ -89,36 +110,55 @@ export function DirectoryCardFrame({
               checked={isSelected}
               onCheckedChange={(checked) => onSelectionChange(checked === true)}
               onClick={(event) => event.stopPropagation()}
-              aria-label={`Select ${name}`}
+              aria-label={`Select ${ariaTitle}`}
               disabled={isDisabled || isDeleting}
               className="mt-2 shrink-0"
             />
           )}
 
-          <div className={directoryIconWrapClass(accent, isActive)}>{icon}</div>
+          <div className="relative shrink-0">
+            <div className={directoryIconWrapClass(accent, isActive)}>{icon}</div>
+            {isActive ? (
+              <span
+                className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-card"
+                aria-hidden
+              >
+                <Check className="h-2.5 w-2.5 stroke-[3]" />
+              </span>
+            ) : null}
+          </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <h3
                   className={cn(
-                    "truncate text-base font-semibold tracking-tight",
+                    "truncate text-base font-semibold leading-tight tracking-tight",
                     isActive ? "text-primary" : "text-foreground"
                   )}
                   title={name}
                 >
                   {name}
                 </h3>
-                {isActive ? (
-                  <span className={directoryActiveBadgeClass()}>
-                    <CheckCircle2 className="h-3 w-3" />
-                    {activeLabel}
-                  </span>
+                {showOwner ? (
+                  <p
+                    className={directoryOwnerRowClass()}
+                    title={`Owner: ${owner}`}
+                  >
+                    <span className={directoryOwnerBadgeClass()}>
+                      <User
+                        className="h-3 w-3 shrink-0 opacity-70"
+                        aria-hidden
+                      />
+                      <span className="truncate">{owner}</span>
+                    </span>
+                  </p>
                 ) : null}
               </div>
 
-              {showActions ? (
+              {showActions || isActive ? (
                 <div className={directoryCardActionClusterClass()}>
+                  {activeBadge}
                   {tagLabel ? (
                     <span
                       className={directoryTagClass(accent, tagClassName)}
@@ -137,7 +177,7 @@ export function DirectoryCardFrame({
                         onDelete();
                       }}
                       disabled={isDisabled || isDeleting}
-                      aria-label={`Delete ${name}`}
+                      aria-label={`Delete ${ariaTitle}`}
                       className={directoryDeleteButtonClass(
                         isThisDeleting || false
                       )}

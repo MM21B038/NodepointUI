@@ -1,5 +1,6 @@
 import type { ChatMessage, GroupTag, ProvenanceEntry } from "@/database/workspaceStorage";
-import { buildApiUrl, wsBaseUrl } from "@/database/apiUrl";
+import { wsBaseUrl } from "@/database/apiUrl";
+import { apiFetch, getAccessToken, parseErrorResponse } from "@/database/apiClient";
 import type { ChatBlock, ChatTurn } from "@/lib/chatTypes";
 import {
   finalizeAssistantBlocks,
@@ -7,6 +8,11 @@ import {
 } from "@/lib/chatStreamReducer";
 import { ChatWebSocketClient } from "@/lib/chatWebSocket";
 import { readMigratedLocalStorage } from "@/lib/migrateStorageKey";
+import {
+  appendOwnerQuery,
+  appendOwnerQueryParts,
+  type OwnerParams,
+} from "@/lib/ownerScope";
 import {
   getStoredViewScope,
   isSelectableGroup,
@@ -31,21 +37,14 @@ export function groupNameFromChatKey(chatKey: string): string {
 
 const CHAT_WORKSPACE_KEY = "nodepoint_chat_workspace";
 const LEGACY_CHAT_WORKSPACE_KEY = "prajna_chat_workspace";
-
-async function parseErrorResponse(response: Response): Promise<string> {
-  try {
-    const data = await response.json();
-    return data.error || data.detail || data.message || response.statusText;
-  } catch {
-    return response.statusText;
-  }
-}
+const ACTIVE_SESSION_PREFIX = "nodepoint_active_session_";
+const INCOGNITO_PREFIX = "nodepoint_incognito_";
 
 function encodeWorkspaceKey(workspaceKey: string): string {
   return encodeURIComponent(workspaceKey);
 }
 
-// --- REST types (one chat per workspace) ---
+// --- Session REST types ---
 
 export interface ChatMessageRecord {
   id: string;
@@ -59,17 +58,39 @@ export interface ChatMessageRecord {
   created_at: string;
 }
 
-export interface WorkspaceChatResponse {
+export interface ChatSessionMeta {
+  session_id: string;
+  title: string;
+  created_at: string;
+  updated_at?: string;
+  message_count?: number;
+}
+
+export interface ChatSessionDetail {
   workspace?: string;
   group?: string;
-  flagged?: boolean;
-  is_flag?: boolean;
+  session_id: string;
+  title: string;
   messages: ChatMessageRecord[];
 }
 
-export interface ClearChatResponse {
+export interface ChatSessionsListResponse {
+  workspace?: string;
+  group?: string;
+  sessions: ChatSessionMeta[];
+}
+
+export interface CreateChatSessionResponse {
+  workspace?: string;
+  group?: string;
+  session_id: string;
+  title: string;
+  created_at: string;
+}
+
+export interface ClearChatSessionResponse {
   message: string;
-  workspace: string;
+  session_id: string;
 }
 
 export interface ChatSummaryEntry {
@@ -94,6 +115,17 @@ export interface ChatSummaryGroupResponse {
 
 export interface ChatSummaryGroupResponseLegacy {
   workspaces: ChatSummaryEntry[];
+}
+
+// --- WebSocket connect mode ---
+
+export type ChatConnectMode =
+  | { kind: "session"; sessionId: string }
+  | { kind: "incognito" };
+
+export interface ChatPartialSaved {
+  content?: string;
+  message_id?: string;
 }
 
 // --- WebSocket event types ---
@@ -122,10 +154,11 @@ export type ChatStreamEvent =
   | ChatStatusEvent
   | { type: "chat.branch_updated"; active_branch_id?: string }
   | { type: "chat.turn_started"; turn_id?: string }
-  | { type: "chat.interrupted" }
+  | { type: "chat.queued"; message?: string }
+  | ChatInterruptedEvent
+  | ChatCancelledEvent
   | { type: "chat.done" }
-  | { type: "chat.cancelled" }
-  | { type: "error"; message: string }
+  | ChatErrorEvent
   | { type: string; [key: string]: unknown };
 
 export interface ChatReadyEvent {
@@ -136,7 +169,9 @@ export interface ChatReadyEvent {
   members?: unknown[];
   member_count?: number;
   workspaces?: string[];
+  session_id?: string;
   conversation_id?: string;
+  incognito?: boolean;
   active_branch_id?: string;
   agent_busy?: boolean;
   turn_id?: string;
@@ -158,6 +193,22 @@ export interface ChatStatusEvent {
   turn_started_at?: string;
 }
 
+export interface ChatInterruptedEvent {
+  type: "chat.interrupted";
+  saved?: ChatPartialSaved;
+}
+
+export interface ChatCancelledEvent {
+  type: "chat.cancelled";
+  saved?: ChatPartialSaved;
+}
+
+export interface ChatErrorEvent {
+  type: "error";
+  message: string;
+  code?: string;
+}
+
 export type ChatLiveAttachEvent = ChatReadyEvent | ChatReconnectedEvent;
 
 export interface ChatStreamCallbacks {
@@ -169,14 +220,21 @@ export interface ChatStreamCallbacks {
   onToolCompleted?: (toolName: string, toolCallId: string, ok: boolean) => void;
   onBlocksChange?: (blocks: ChatBlock[]) => void;
   onCompressed?: () => void;
-  onCancelled?: () => void;
+  onCancelled?: (saved?: ChatPartialSaved) => void;
+  onInterrupted?: (saved?: ChatPartialSaved) => void;
+  onQueued?: (message?: string) => void;
   onEvent?: (event: ChatStreamEvent) => void;
   onDone?: () => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: string) => void;
 }
 
 export type { ChatBlock, ChatTurn };
 export { messagesToTurns, finalizeAssistantBlocks };
+
+export function sessionDisplayTitle(title: string | undefined | null): string {
+  const t = title?.trim();
+  return t && t.length > 0 ? t : "Untitled";
+}
 
 /** @deprecated Use getStoredViewScope from @/lib/viewScope */
 export { getStoredViewScope as getStoredChatScope } from "@/lib/viewScope";
@@ -210,6 +268,51 @@ export function setStoredChatWorkspace(workspaceName: string): void {
   }
 }
 
+export function getStoredActiveSessionId(chatKey: string): string | null {
+  try {
+    return localStorage.getItem(`${ACTIVE_SESSION_PREFIX}${chatKey}`);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredActiveSessionId(
+  chatKey: string,
+  sessionId: string | null
+): void {
+  try {
+    const key = `${ACTIVE_SESSION_PREFIX}${chatKey}`;
+    if (sessionId) {
+      localStorage.setItem(key, sessionId);
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getStoredIncognito(chatKey: string): boolean {
+  try {
+    return localStorage.getItem(`${INCOGNITO_PREFIX}${chatKey}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setStoredIncognito(chatKey: string, incognito: boolean): void {
+  try {
+    const key = `${INCOGNITO_PREFIX}${chatKey}`;
+    if (incognito) {
+      localStorage.setItem(key, "1");
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /** WebSocket / internal key for the active chat target. */
 export function resolveChatKey(
   mode: ViewScopeMode,
@@ -228,11 +331,7 @@ export function resolveChatKey(
   return workspaceName.trim();
 }
 
-function groupChatRestUrl(groupName: string): string {
-  return buildApiUrl(`/chat/group/${encodeWorkspaceKey(groupName)}/`);
-}
-
-function chatRestUrl(
+function sessionsRestBase(
   mode: ViewScopeMode,
   workspaceName: string | null,
   groupName: string | null
@@ -241,33 +340,140 @@ function chatRestUrl(
     if (!groupName?.trim() || !isSelectableGroup(groupName)) {
       throw new Error("Select a group for group-scoped chat.");
     }
-    return groupChatRestUrl(groupName.trim());
+    return `/chat/group/${encodeWorkspaceKey(groupName.trim())}/sessions/`;
   }
   const name = workspaceName?.trim();
   if (!name) throw new Error("Select a workspace for workspace-scoped chat.");
-  return buildApiUrl(`/chat/${encodeWorkspaceKey(name)}/`);
+  return `/chat/${encodeWorkspaceKey(name)}/sessions/`;
 }
 
-export async function getChat(
+function sessionRestUrl(
   mode: ViewScopeMode,
   workspaceName: string | null,
-  groupName: string | null
-): Promise<WorkspaceChatResponse> {
-  const response = await fetch(chatRestUrl(mode, workspaceName, groupName));
+  groupName: string | null,
+  sessionId: string,
+  suffix = ""
+): string {
+  const base = sessionsRestBase(mode, workspaceName, groupName);
+  return `${base.replace(/\/$/, "")}/${encodeURIComponent(sessionId)}${suffix}`;
+}
+
+export async function listChatSessions(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null,
+  owner?: OwnerParams
+): Promise<ChatSessionMeta[]> {
+  const response = await apiFetch(
+    sessionsRestBase(mode, workspaceName, groupName),
+    {},
+    appendOwnerQuery({}, owner)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  const data = await response.json();
+  if (Array.isArray(data)) return data as ChatSessionMeta[];
+  if (data && Array.isArray(data.sessions)) {
+    return data.sessions as ChatSessionMeta[];
+  }
+  return [];
+}
+
+export async function createChatSession(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null,
+  options?: { title?: string },
+  owner?: OwnerParams
+): Promise<CreateChatSessionResponse> {
+  const response = await apiFetch(
+    sessionsRestBase(mode, workspaceName, groupName),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        options?.title?.trim() ? { title: options.title.trim() } : {}
+      ),
+    },
+    appendOwnerQuery({}, owner)
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
   return response.json();
 }
 
-export async function clearChat(
+export async function getChatSession(
   mode: ViewScopeMode,
   workspaceName: string | null,
-  groupName: string | null
-): Promise<ClearChatResponse> {
-  const response = await fetch(chatRestUrl(mode, workspaceName, groupName), {
-    method: "DELETE",
-  });
+  groupName: string | null,
+  sessionId: string,
+  owner?: OwnerParams
+): Promise<ChatSessionDetail> {
+  const response = await apiFetch(
+    sessionRestUrl(mode, workspaceName, groupName, sessionId),
+    {},
+    appendOwnerQuery({}, owner)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
+}
+
+export async function renameChatSession(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null,
+  sessionId: string,
+  title: string,
+  owner?: OwnerParams
+): Promise<ChatSessionDetail> {
+  const response = await apiFetch(
+    sessionRestUrl(mode, workspaceName, groupName, sessionId),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim() }),
+    },
+    appendOwnerQuery({}, owner)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+  return response.json();
+}
+
+export async function deleteChatSession(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null,
+  sessionId: string,
+  owner?: OwnerParams
+): Promise<void> {
+  const response = await apiFetch(
+    sessionRestUrl(mode, workspaceName, groupName, sessionId),
+    { method: "DELETE" },
+    appendOwnerQuery({}, owner)
+  );
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+}
+
+export async function clearChatSessionMessages(
+  mode: ViewScopeMode,
+  workspaceName: string | null,
+  groupName: string | null,
+  sessionId: string,
+  owner?: OwnerParams
+): Promise<ClearChatSessionResponse> {
+  const response = await apiFetch(
+    sessionRestUrl(mode, workspaceName, groupName, sessionId, "/clear/"),
+    { method: "POST" },
+    appendOwnerQuery({}, owner)
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -275,15 +481,21 @@ export async function clearChat(
 }
 
 export async function getChatSummary(
-  params: { workspaceName: string } | { group: string }
+  params:
+    | ({ workspaceName: string } & OwnerParams)
+    | ({ group: string } & OwnerParams)
 ): Promise<ChatSummaryEntry | ChatSummaryGroupResponse> {
-  const searchParams = new URLSearchParams();
+  const query: Record<string, string> = {};
   if ("group" in params) {
-    searchParams.set("group", params.group);
+    query.group = params.group;
   } else {
-    searchParams.set("workspace_name", params.workspaceName);
+    query.workspace_name = params.workspaceName;
   }
-  const response = await fetch(buildApiUrl("/chat/summary/", Object.fromEntries(searchParams)));
+  const response = await apiFetch(
+    "/chat/summary/",
+    {},
+    appendOwnerQuery(query, params)
+  );
   if (!response.ok) {
     throw new Error(await parseErrorResponse(response));
   }
@@ -293,15 +505,25 @@ export async function getChatSummary(
 export async function loadChatTurns(
   mode: ViewScopeMode,
   workspaceName: string | null,
-  groupName: string | null
+  groupName: string | null,
+  sessionId: string,
+  owner?: OwnerParams
 ): Promise<{
   chatKey: string;
   mode: ViewScopeMode;
   workspace: string;
+  sessionId: string;
+  title: string;
   turns: ChatTurn[];
 }> {
   const chatKey = resolveChatKey(mode, workspaceName, groupName);
-  const detail = await getChat(mode, workspaceName, groupName);
+  const detail = await getChatSession(
+    mode,
+    workspaceName,
+    groupName,
+    sessionId,
+    owner
+  );
   const workspace =
     detail.workspace ??
     detail.group ??
@@ -312,6 +534,8 @@ export async function loadChatTurns(
     chatKey,
     mode,
     workspace,
+    sessionId: detail.session_id,
+    title: detail.title,
     turns: messagesToTurns(detail.messages),
   };
 }
@@ -327,15 +551,6 @@ export function chatMessagesToLegacy(messages: ChatMessageRecord[]): ChatMessage
     }));
 }
 
-export async function loadChatHistory(
-  mode: ViewScopeMode,
-  workspaceName: string | null,
-  groupName: string | null
-): Promise<ChatMessage[]> {
-  const detail = await getChat(mode, workspaceName, groupName);
-  return chatMessagesToLegacy(detail.messages);
-}
-
 function chatWebSocketPath(chatKey: string): string {
   if (isGroupChatKey(chatKey)) {
     const name = groupNameFromChatKey(chatKey);
@@ -344,17 +559,48 @@ function chatWebSocketPath(chatKey: string): string {
   return `${encodeWorkspaceKey(chatKey)}/`;
 }
 
-export function chatWebSocketUrl(chatKey: string): string {
-  return `${wsBaseUrl()}/ws/chat/${chatWebSocketPath(chatKey)}`;
+export function chatWebSocketUrl(
+  chatKey: string,
+  connect: ChatConnectMode,
+  owner?: OwnerParams
+): string {
+  const base = `${wsBaseUrl()}/ws/chat/${chatWebSocketPath(chatKey)}`;
+  const parts: string[] =
+    connect.kind === "incognito"
+      ? ["incognito=true"]
+      : [`session_id=${encodeURIComponent(connect.sessionId)}`];
+  appendOwnerQueryParts(parts, owner);
+  const token = getAccessToken();
+  if (token) {
+    parts.push(`token=${encodeURIComponent(token)}`);
+  }
+  return `${base}?${parts.join("&")}`;
+}
+
+export function resolveChatConnectMode(
+  incognito: boolean,
+  sessionId: string | null
+): ChatConnectMode {
+  if (incognito) return { kind: "incognito" };
+  if (!sessionId?.trim()) {
+    throw new Error("Select or create a chat session.");
+  }
+  return { kind: "session", sessionId: sessionId.trim() };
 }
 
 export function sendChatTurn(
   chatKey: string,
+  connect: ChatConnectMode,
   content: string,
   callbacks: ChatStreamCallbacks = {},
-  options?: { excludeServers?: string[] }
+  options?: { excludeServers?: string[]; owner?: OwnerParams }
 ): { cancel: () => void; done: Promise<{ answer: string; thinking: string; blocks: ChatBlock[] }> } {
-  const client = new ChatWebSocketClient(chatKey, callbacks);
+  const client = new ChatWebSocketClient(
+    chatKey,
+    connect,
+    callbacks,
+    options?.owner
+  );
   client.connect();
 
   const done = client.sendChat(content, options).finally(() => {
@@ -376,9 +622,21 @@ export async function sendChatMessage(
     throw new Error("Workspace is required for chat.");
   }
   const chatKey = resolveChatKey("workspace", workspaceName, null);
-  const { done } = sendChatTurn(chatKey, content, callbacks);
+  const sessions = await listChatSessions("workspace", workspaceName, null);
+  let sessionId = getStoredActiveSessionId(chatKey);
+  if (!sessionId || !sessions.some((s) => s.session_id === sessionId)) {
+    if (sessions.length > 0) {
+      sessionId = sessions[0].session_id;
+    } else {
+      const created = await createChatSession("workspace", workspaceName, null);
+      sessionId = created.session_id;
+    }
+    setStoredActiveSessionId(chatKey, sessionId);
+  }
+  const connect: ChatConnectMode = { kind: "session", sessionId };
+  const { done } = sendChatTurn(chatKey, connect, content, callbacks);
   const { answer } = await done;
-  const detail = await getChat("workspace", workspaceName, null);
+  const detail = await getChatSession("workspace", workspaceName, null, sessionId);
   return {
     answer,
     provenance: [],

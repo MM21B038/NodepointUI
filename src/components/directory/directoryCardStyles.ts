@@ -114,6 +114,22 @@ export function directoryActiveBadgeClass() {
   );
 }
 
+/** Owner disambiguation under the resource name (admin / multi-tenant lists). */
+export function directoryOwnerRowClass() {
+  return cn(
+    "flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
+    "leading-tight"
+  );
+}
+
+export function directoryOwnerBadgeClass() {
+  return cn(
+    "inline-flex max-w-full min-w-0 items-center gap-1 rounded-md",
+    "border border-border/50 bg-muted/50 px-1.5 py-0.5",
+    "text-[11px] font-medium text-muted-foreground"
+  );
+}
+
 export function directoryStatGridClass() {
   return "grid grid-cols-2 gap-2 rounded-lg border border-border/50 bg-muted/30 p-2.5";
 }

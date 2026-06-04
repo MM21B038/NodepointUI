@@ -9,7 +9,7 @@ import {
   getWorkspaceStats,
   createWorkspace,
   addWorkspaceToGroup,
-  deleteWorkspaces,
+  deleteWorkspace,
   updateWorkspace,
   startPreprocess,
   summarizePreprocessStart,
@@ -36,10 +36,25 @@ import {
 } from "@/components/directory/directoryPageStyles";
 import { useWorkspaceGridPageSize } from "@/hooks/useWorkspaceGridPageSize";
 import { useWorkspaceDirectory } from "@/hooks/useWorkspaceDirectory";
+import { useCanViewGlobalPreprocessQueue } from "@/hooks/useCanViewPreprocessPipeline";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+  groupResourceKey,
+  ownerParamsFrom,
+  parseResourceKey,
+  workspaceResourceKey,
+} from "@/lib/ownerScope";
 
 const WorkspaceManagement = () => {
-  const { currentWorkspace, setCurrentWorkspace, groups, refreshGroups } =
-    useWorkspace();
+  const showPreprocessPipeline = useCanViewGlobalPreprocessQueue();
+  const {
+    currentWorkspace,
+    currentWorkspaceOwnerId,
+    setCurrentWorkspace,
+    groups,
+    refreshGroups,
+  } = useWorkspace();
   const { gridRef, pageSize } = useWorkspaceGridPageSize();
 
   const [workspaceStats, setWorkspaceStats] = useState<WorkspaceStats | null>(
@@ -48,7 +63,7 @@ const WorkspaceManagement = () => {
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editWorkspaceName, setEditWorkspaceName] = useState<string | null>(null);
+  const [editWorkspaceKey, setEditWorkspaceKey] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,8 +72,12 @@ const WorkspaceManagement = () => {
   const [page, setPage] = useState(1);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [workspacesToDelete, setWorkspacesToDelete] = useState<string[]>([]);
-  const [selectedWorkspaces, setSelectedWorkspaces] = useState<Set<string>>(new Set());
+  const [workspacesToDelete, setWorkspacesToDelete] = useState<WorkspacePageItem[]>(
+    []
+  );
+  const [selectedWorkspaces, setSelectedWorkspaces] = useState<Set<string>>(
+    new Set()
+  );
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExtractingMap, setIsExtractingMap] = useState<Map<string, boolean>>(
     new Map()
@@ -114,7 +133,7 @@ const WorkspaceManagement = () => {
       const list = await getAllWorkspaces();
       const map: Record<string, string[]> = {};
       for (const w of list) {
-        map[w.name] = w.groups ?? [];
+        map[workspaceResourceKey(w.name, w.owner_id)] = w.groups ?? [];
       }
       setGroupsByWorkspace(map);
       return list;
@@ -127,11 +146,18 @@ const WorkspaceManagement = () => {
     let cancelled = false;
     syncGroupsFromList().then((list) => {
       if (cancelled) return;
-      const names = list.map((w) => w.name);
-      if (currentWorkspace && !names.includes(currentWorkspace)) {
-        setCurrentWorkspace(names[0] ?? null);
-      } else if (!currentWorkspace && names.length > 0) {
-        setCurrentWorkspace(names[0]);
+      if (currentWorkspace) {
+        const match = list.find(
+          (w) =>
+            w.name === currentWorkspace &&
+            (currentWorkspaceOwnerId == null ||
+              w.owner_id === currentWorkspaceOwnerId)
+        );
+        if (!match && list.length > 0) {
+          setCurrentWorkspace(list[0].name, list[0].owner_id ?? null);
+        }
+      } else if (list.length > 0) {
+        setCurrentWorkspace(list[0].name, list[0].owner_id ?? null);
       }
     });
     return () => {
@@ -142,8 +168,11 @@ const WorkspaceManagement = () => {
 
   useEffect(() => {
     if (displayedWorkspaces.length === 0) return;
-    setCurrentWorkspace((prev) => prev ?? displayedWorkspaces[0].name);
-  }, [displayedWorkspaces, setCurrentWorkspace]);
+    if (!currentWorkspace && displayedWorkspaces[0]) {
+      const w = displayedWorkspaces[0];
+      setCurrentWorkspace(w.name, w.owner_id ?? null);
+    }
+  }, [displayedWorkspaces, currentWorkspace, setCurrentWorkspace]);
 
   useEffect(() => {
     fetchStats();
@@ -158,38 +187,51 @@ const WorkspaceManagement = () => {
     }
   }, [activePagination.total_pages, page]);
 
-  const displayedWorkspaceNames = useMemo(
-    () => displayedWorkspaces.map((workspace) => workspace.name),
+  const duplicateWorkspaceNames = useMemo(
+    () => duplicateNamesInList(displayedWorkspaces),
+    [displayedWorkspaces]
+  );
+
+  const workspaceByKey = useMemo(() => {
+    const map = new Map<string, WorkspacePageItem>();
+    for (const w of displayedWorkspaces) {
+      map.set(workspaceResourceKey(w.name, w.owner_id), w);
+    }
+    return map;
+  }, [displayedWorkspaces]);
+
+  const displayedWorkspaceKeys = useMemo(
+    () => displayedWorkspaces.map((w) => workspaceResourceKey(w.name, w.owner_id)),
     [displayedWorkspaces]
   );
 
   useEffect(() => {
     setSelectedWorkspaces((prev) => {
       const next = new Set<string>();
-      for (const name of prev) {
-        if (displayedWorkspaceNames.includes(name)) next.add(name);
+      for (const key of prev) {
+        if (displayedWorkspaceKeys.includes(key)) next.add(key);
       }
       return next;
     });
-  }, [displayedWorkspaceNames.join("\0")]);
+  }, [displayedWorkspaceKeys.join("\0")]);
 
   const allDisplayedSelected =
-    displayedWorkspaceNames.length > 0 &&
-    displayedWorkspaceNames.every((name) => selectedWorkspaces.has(name));
+    displayedWorkspaceKeys.length > 0 &&
+    displayedWorkspaceKeys.every((key) => selectedWorkspaces.has(key));
   const someSelected = selectedWorkspaces.size > 0;
 
-  const toggleWorkspaceSelection = (workspaceName: string, checked: boolean) => {
+  const toggleWorkspaceSelection = (workspaceKey: string, checked: boolean) => {
     setSelectedWorkspaces((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(workspaceName);
-      else next.delete(workspaceName);
+      if (checked) next.add(workspaceKey);
+      else next.delete(workspaceKey);
       return next;
     });
   };
 
   const toggleSelectAllDisplayed = (checked: boolean) => {
     setSelectedWorkspaces(
-      checked ? new Set(displayedWorkspaceNames) : new Set()
+      checked ? new Set(displayedWorkspaceKeys) : new Set()
     );
   };
 
@@ -214,10 +256,28 @@ const WorkspaceManagement = () => {
     reload,
   ]);
 
+  const duplicateGroupNames = useMemo(
+    () => duplicateNamesInList(groups),
+    [groups]
+  );
+
+  const groupFilterItems = useMemo(
+    () =>
+      groups.map((g) => ({
+        key: groupResourceKey(g.name, g.owner_id),
+        label: formatScopedResourceLabel(g.name, g.owner_username, {
+          duplicateNames: duplicateGroupNames,
+        }),
+      })),
+    [groups, duplicateGroupNames]
+  );
+
   const groupsForCard = (workspace: WorkspacePageItem): string[] =>
-    (workspace.groups ?? groupsByWorkspace[workspace.name] ?? []).filter(
-      (g) => g !== "flagged"
-    );
+    (
+      workspace.groups ??
+      groupsByWorkspace[workspaceResourceKey(workspace.name, workspace.owner_id)] ??
+      []
+    ).filter((g) => g !== "flagged");
 
   const handleCreateWorkspace = async (values: CreateWorkspaceFormValues) => {
     setIsCreating(true);
@@ -228,13 +288,31 @@ const WorkspaceManagement = () => {
         tag: values.tag,
         description: values.description,
       });
-      for (const groupName of values.groupNames) {
+      const listAfterCreate = await syncGroupsFromList();
+      const createdMatches = listAfterCreate.filter((w) => w.name === values.name);
+      const created =
+        createdMatches.length === 1
+          ? createdMatches[0]
+          : [...createdMatches].sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            )[0];
+      for (const groupKey of values.groupKeys) {
+        const { name: groupName, ownerId: groupOwnerId } =
+          parseResourceKey(groupKey);
+        const groupMeta = groups.find(
+          (g) => groupResourceKey(g.name, g.owner_id) === groupKey
+        );
         try {
-          await addWorkspaceToGroup(groupName, values.name);
+          await addWorkspaceToGroup(groupName, values.name, {
+            groupOwner:
+              groupOwnerId != null ? { ownerId: groupOwnerId } : undefined,
+            workspaceOwner: ownerParamsFrom(created),
+          });
         } catch (err) {
           console.warn(`Failed to add ${values.name} to group ${groupName}:`, err);
           toast.error(
-            `Workspace created but could not add to group "${groupName}".`
+            `Workspace created but could not add to group "${formatScopedResourceLabel(groupName, groupMeta?.owner_username, { duplicateNames: duplicateGroupNames })}".`
           );
         }
       }
@@ -244,11 +322,10 @@ const WorkspaceManagement = () => {
       setCreateDialogOpen(false);
       setPage(1);
       await fetchStats();
-      await syncGroupsFromList();
       await refreshGroups();
       invalidateCache();
       reload();
-      setCurrentWorkspace(values.name);
+      setCurrentWorkspace(values.name, created?.owner_id ?? null);
     } catch (error) {
       const errorMessage =
         error instanceof WorkspaceCreateError
@@ -265,23 +342,29 @@ const WorkspaceManagement = () => {
     }
   };
 
-  const handleSelectWorkspace = (workspaceName: string) => {
-    setCurrentWorkspace(workspaceName);
-    toast.success(`Switched to workspace: ${workspaceName}`);
+  const handleSelectWorkspace = (workspace: WorkspacePageItem) => {
+    setCurrentWorkspace(workspace.name, workspace.owner_id ?? null);
+    const label = formatScopedResourceLabel(
+      workspace.name,
+      workspace.owner_username,
+      { duplicateNames: duplicateWorkspaceNames }
+    );
+    toast.success(`Switched to workspace: ${label}`);
   };
 
   const editWorkspaceMeta = useMemo(
-    () => displayedWorkspaces.find((w) => w.name === editWorkspaceName) ?? null,
-    [displayedWorkspaces, editWorkspaceName]
+    () => (editWorkspaceKey ? workspaceByKey.get(editWorkspaceKey) ?? null : null),
+    [workspaceByKey, editWorkspaceKey]
   );
 
-  const handleEditClick = (workspaceName: string) => {
-    setEditWorkspaceName(workspaceName);
+  const handleEditClick = (workspace: WorkspacePageItem) => {
+    setEditWorkspaceKey(workspaceResourceKey(workspace.name, workspace.owner_id));
     setEditDialogOpen(true);
   };
 
   const handleSaveWorkspaceEdit = async (values: EditWorkspaceFormValues) => {
-    if (!editWorkspaceName) return;
+    if (!editWorkspaceKey || !editWorkspaceMeta) return;
+    const editWorkspaceName = editWorkspaceMeta.name;
     setIsSavingEdit(true);
     try {
       const patch: Parameters<typeof updateWorkspace>[1] = {};
@@ -293,14 +376,19 @@ const WorkspaceManagement = () => {
         patch.description = values.description;
       }
 
-      const result = await updateWorkspace(editWorkspaceName, patch);
+      const owner = ownerParamsFrom(editWorkspaceMeta ?? undefined);
+      const result = await updateWorkspace(editWorkspaceName, patch, owner);
       const newName = result.workspace.name;
-      if (currentWorkspace === editWorkspaceName) {
-        setCurrentWorkspace(newName);
+      if (
+        currentWorkspace === editWorkspaceName &&
+        (currentWorkspaceOwnerId == null ||
+          editWorkspaceMeta?.owner_id === currentWorkspaceOwnerId)
+      ) {
+        setCurrentWorkspace(newName, editWorkspaceMeta?.owner_id ?? null);
       }
       toast.success(`Workspace "${newName}" updated.`);
       setEditDialogOpen(false);
-      setEditWorkspaceName(null);
+      setEditWorkspaceKey(null);
       await refreshAfterMutation();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update workspace.");
@@ -309,14 +397,17 @@ const WorkspaceManagement = () => {
     }
   };
 
-  const handleDeleteClick = (workspaceName: string) => {
-    setWorkspacesToDelete([workspaceName]);
+  const handleDeleteClick = (workspace: WorkspacePageItem) => {
+    setWorkspacesToDelete([workspace]);
     setIsDeleteDialogOpen(true);
   };
 
   const handleBulkDeleteClick = () => {
     if (selectedWorkspaces.size === 0) return;
-    setWorkspacesToDelete(Array.from(selectedWorkspaces));
+    const items = [...selectedWorkspaces]
+      .map((key) => workspaceByKey.get(key))
+      .filter((w): w is WorkspacePageItem => w != null);
+    setWorkspacesToDelete(items);
     setIsDeleteDialogOpen(true);
   };
 
@@ -324,36 +415,66 @@ const WorkspaceManagement = () => {
     if (workspacesToDelete.length === 0) return;
 
     setIsDeleting(true);
+    const firstLabel =
+      workspacesToDelete.length === 1
+        ? formatScopedResourceLabel(
+            workspacesToDelete[0].name,
+            workspacesToDelete[0].owner_username,
+            { duplicateNames: duplicateWorkspaceNames }
+          )
+        : null;
     const loadingToastId = toast.loading(
       workspacesToDelete.length === 1
-        ? `Deleting workspace ${workspacesToDelete[0]}...`
+        ? `Deleting workspace ${firstLabel}...`
         : `Deleting ${workspacesToDelete.length} workspaces...`
     );
 
     try {
-      const result = await deleteWorkspaces(workspacesToDelete);
-      if (result.failed.length === 0) {
+      const succeeded: string[] = [];
+      const failed: { name: string; error: string }[] = [];
+      for (const w of workspacesToDelete) {
+        try {
+          await deleteWorkspace(w.name, ownerParamsFrom(w));
+          succeeded.push(w.name);
+        } catch (error) {
+          failed.push({
+            name: formatScopedResourceLabel(
+              w.name,
+              w.owner_username,
+              { duplicateNames: duplicateWorkspaceNames }
+            ),
+            error: error instanceof Error ? error.message : "Delete failed",
+          });
+        }
+      }
+      if (failed.length === 0) {
         toast.success(
           workspacesToDelete.length === 1
-            ? `Workspace "${workspacesToDelete[0]}" deleted successfully!`
-            : `${result.succeeded.length} workspaces deleted successfully!`,
+            ? `Workspace "${formatScopedResourceLabel(workspacesToDelete[0].name, workspacesToDelete[0].owner_username, { duplicateNames: duplicateWorkspaceNames })}" deleted successfully!`
+            : `${succeeded.length} workspaces deleted successfully!`,
           { id: loadingToastId }
         );
-      } else if (result.succeeded.length === 0) {
-        toast.error(`Deletion failed: ${result.failed[0]?.error ?? "Unknown error"}`, {
+      } else if (succeeded.length === 0) {
+        toast.error(`Deletion failed: ${failed[0]?.error ?? "Unknown error"}`, {
           id: loadingToastId,
         });
       } else {
         toast.warning(
-          `${result.succeeded.length} deleted, ${result.failed.length} failed.`,
+          `${succeeded.length} deleted, ${failed.length} failed.`,
           { id: loadingToastId }
         );
       }
 
-      if (result.succeeded.includes(currentWorkspace ?? "")) {
-        setCurrentWorkspace(null);
+      const deletedCurrent = workspacesToDelete.some(
+        (w) =>
+          w.name === currentWorkspace &&
+          (currentWorkspaceOwnerId == null ||
+            w.owner_id === currentWorkspaceOwnerId)
+      );
+      if (deletedCurrent) {
+        setCurrentWorkspace(null, null);
       }
-      if (result.succeeded.length > 0) {
+      if (succeeded.length > 0) {
         clearSelection();
         await refreshAfterMutation();
       }
@@ -368,17 +489,34 @@ const WorkspaceManagement = () => {
       setIsDeleteDialogOpen(false);
       setWorkspacesToDelete([]);
     }
-  }, [workspacesToDelete, currentWorkspace, setCurrentWorkspace, refreshAfterMutation]);
+  }, [
+    workspacesToDelete,
+    currentWorkspace,
+    currentWorkspaceOwnerId,
+    duplicateWorkspaceNames,
+    setCurrentWorkspace,
+    refreshAfterMutation,
+  ]);
 
   const handleExtract = useCallback(
-    async (workspaceName: string) => {
-      setIsExtractingMap((prev) => new Map(prev).set(workspaceName, true));
+    async (workspace: WorkspacePageItem) => {
+      const key = workspaceResourceKey(workspace.name, workspace.owner_id);
+      setIsExtractingMap((prev) => new Map(prev).set(key, true));
+      const label = formatScopedResourceLabel(
+        workspace.name,
+        workspace.owner_username,
+        { duplicateNames: duplicateWorkspaceNames }
+      );
       const loadingToastId = toast.loading(
-        `Starting extraction for workspace "${workspaceName}"...`
+        `Starting extraction for workspace "${label}"...`
       );
 
       try {
-        const result = await startPreprocess(workspaceName);
+        const result = await startPreprocess(
+          workspace.name,
+          {},
+          ownerParamsFrom(workspace)
+        );
         toast.success(summarizePreprocessStart(result), {
           id: loadingToastId,
         });
@@ -393,7 +531,7 @@ const WorkspaceManagement = () => {
         });
         console.error("Extraction error:", error);
       } finally {
-        setIsExtractingMap((prev) => new Map(prev).set(workspaceName, false));
+        setIsExtractingMap((prev) => new Map(prev).set(key, false));
       }
     },
     [refreshAfterMutation]
@@ -409,7 +547,15 @@ const WorkspaceManagement = () => {
 
   const skeletonCount = Math.max(4, pageSize);
 
-  const groupNames = useMemo(() => groups.map((g) => g.name), [groups]);
+  const deleteDialogLabels = useMemo(
+    () =>
+      workspacesToDelete.map((w) =>
+        formatScopedResourceLabel(w.name, w.owner_username, {
+          duplicateNames: duplicateWorkspaceNames,
+        })
+      ),
+    [workspacesToDelete, duplicateWorkspaceNames]
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col w-full">
@@ -420,7 +566,7 @@ const WorkspaceManagement = () => {
           onSearchTermChange={setSearchTerm}
           groupFilter={groupFilter}
           onGroupFilterChange={setGroupFilter}
-          groupNames={groupNames}
+          groupFilterItems={groupFilterItems}
           workspaceStats={workspaceStats}
           totalItems={activePagination.total_items}
           page={activePagination.page}
@@ -439,7 +585,7 @@ const WorkspaceManagement = () => {
           isDeleting={isDeleting}
         />
 
-        <PreprocessQueueStatusPanel />
+        {showPreprocessPipeline ? <PreprocessQueueStatusPanel /> : null}
 
         <CreateWorkspaceDialog
           open={createDialogOpen}
@@ -451,7 +597,7 @@ const WorkspaceManagement = () => {
         <EditWorkspaceDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
-          workspaceName={editWorkspaceName ?? ""}
+          workspaceName={editWorkspaceMeta?.name ?? ""}
           initialTag={editWorkspaceMeta?.tag}
           initialDescription={editWorkspaceMeta?.description}
           onSave={handleSaveWorkspaceEdit}
@@ -478,7 +624,7 @@ const WorkspaceManagement = () => {
               ))}
             </div>
           ) : hasNoWorkspacesEver ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[12rem] text-center">
+            <div className="flex flex-1 items-center justify-center py-6 text-center">
               <Alert className="max-w-lg">
                 <Info className="h-4 w-4" />
                 <AlertTitle>No Workspaces Found</AlertTitle>
@@ -489,7 +635,7 @@ const WorkspaceManagement = () => {
               </Alert>
             </div>
           ) : activePagination.total_items === 0 ? (
-            <div className="flex items-center justify-center h-full min-h-[12rem] text-muted-foreground text-lg">
+            <div className="flex flex-1 items-center justify-center py-6 text-muted-foreground text-sm">
               <p>No workspaces match your current filters.</p>
             </div>
           ) : (
@@ -498,34 +644,60 @@ const WorkspaceManagement = () => {
                 isPaging ? "opacity-90" : ""
               }`}
             >
-              {displayedWorkspaces.map((workspace) => (
-                <WorkspaceCard
-                  key={workspace.name}
-                  workspaceName={workspace.name}
-                  tag={workspace.tag}
-                  description={workspace.description}
-                  isCurrent={currentWorkspace === workspace.name}
-                  onSelect={handleSelectWorkspace}
-                  onDelete={handleDeleteClick}
-                  isDeleting={isDeleting}
-                  deletingWorkspaceName={
-                    workspacesToDelete.length === 1 ? workspacesToDelete[0] : null
-                  }
-                  isSelected={selectedWorkspaces.has(workspace.name)}
-                  onSelectionChange={(checked) =>
-                    toggleWorkspaceSelection(workspace.name, checked)
-                  }
-                  showSelection={displayedWorkspaces.length > 0}
-                  counts={workspace.counts}
-                  onExtract={handleExtract}
-                  isExtracting={
-                    isExtractingMap.get(workspace.name) || false
-                  }
-                  groups={groupsForCard(workspace)}
-                  onGroupsChanged={refreshAfterMutation}
-                  onEdit={handleEditClick}
-                />
-              ))}
+              {displayedWorkspaces.map((workspace) => {
+                const key = workspaceResourceKey(workspace.name, workspace.owner_id);
+                const showOwner = duplicateWorkspaceNames.has(workspace.name);
+                const isCurrent =
+                  currentWorkspace === workspace.name &&
+                  (currentWorkspaceOwnerId == null ||
+                    workspace.owner_id === currentWorkspaceOwnerId);
+                return (
+                  <WorkspaceCard
+                    key={key}
+                    workspaceName={workspace.name}
+                    workspaceOwnerId={workspace.owner_id}
+                    ownerUsername={workspace.owner_username}
+                    showOwnerLabel={showOwner}
+                    tag={workspace.tag}
+                    description={workspace.description}
+                    isCurrent={isCurrent}
+                    onSelect={() => handleSelectWorkspace(workspace)}
+                    onDelete={() => handleDeleteClick(workspace)}
+                    isDeleting={isDeleting}
+                    isDeletingThis={
+                      workspacesToDelete.length === 1 &&
+                      workspaceResourceKey(
+                        workspacesToDelete[0].name,
+                        workspacesToDelete[0].owner_id
+                      ) === key
+                    }
+                    deletingWorkspaceName={
+                      workspacesToDelete.length === 1
+                        ? workspacesToDelete[0].name
+                        : null
+                    }
+                    isSelected={selectedWorkspaces.has(key)}
+                    onSelectionChange={(checked) =>
+                      toggleWorkspaceSelection(key, checked)
+                    }
+                    showSelection={displayedWorkspaces.length > 0}
+                    counts={workspace.counts}
+                    onExtract={
+                      showPreprocessPipeline
+                        ? () => void handleExtract(workspace)
+                        : undefined
+                    }
+                    isExtracting={
+                      showPreprocessPipeline
+                        ? isExtractingMap.get(key) || false
+                        : false
+                    }
+                    groups={groupsForCard(workspace)}
+                    onGroupsChanged={refreshAfterMutation}
+                    onEdit={() => handleEditClick(workspace)}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -543,11 +715,15 @@ const WorkspaceManagement = () => {
           }
           description={
             workspacesToDelete.length === 1
-              ? `This action will permanently delete the workspace "${workspacesToDelete[0]}" and all associated documents and data. This action cannot be undone.`
+              ? `This action will permanently delete the workspace "${deleteDialogLabels[0]}" and all associated documents and data. This action cannot be undone.`
               : `This action will permanently delete ${workspacesToDelete.length} workspaces and all associated documents and data. This action cannot be undone.`
           }
-          itemName={workspacesToDelete.length === 1 ? workspacesToDelete[0] : undefined}
-          itemNames={workspacesToDelete.length > 1 ? workspacesToDelete : undefined}
+          itemName={
+            workspacesToDelete.length === 1 ? deleteDialogLabels[0] : undefined
+          }
+          itemNames={
+            workspacesToDelete.length > 1 ? deleteDialogLabels : undefined
+          }
         />
       )}
     </div>

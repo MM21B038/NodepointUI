@@ -28,15 +28,15 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
   return (
     <div
       className={cn(
-        "fixed left-0 z-40 flex flex-col border border-border/60 bg-card/95 py-4 shadow-lg backdrop-blur-sm transition-all duration-300 ease-in-out",
+        "fixed left-0 z-40 flex flex-col border border-border/60 bg-card/95 py-2 shadow-md",
         "rounded-tr-lg rounded-br-lg",
         "w-[var(--sidebar-collapsed-width)]",
-        "top-1/2 -translate-y-1/2",
-        "max-h-[calc(100vh - var(--navbar-height) - var(--footer-height) - 2rem)]",
+        "top-[calc((100vh+var(--navbar-height))/2)] -translate-y-1/2",
+        "max-h-[calc(100vh-var(--navbar-height)-1rem)] overflow-y-auto",
         "border-l-0 border-t-primary/30 border-b-primary/30"
       )}
     >
-      <nav className="flex-grow px-2">
+      <nav className="flex flex-col gap-1 px-2">
         {pages.map((page) => {
           const Icon = page.icon;
           const isActive = currentPath.startsWith(page.path);
@@ -45,7 +45,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
             <Button
               variant="ghost"
               className={cn(
-                "h-auto w-full justify-center rounded-lg px-3 py-2.5 transition-all duration-150",
+                "h-auto w-full justify-center rounded-lg px-3 py-2 transition-colors duration-150",
                 "border border-transparent",
                 isActive
                   ? "border-primary/25 bg-primary/10 text-primary shadow-sm hover:bg-primary/10 hover:text-primary"
@@ -59,7 +59,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
           );
 
           return (
-            <Link to={page.path} key={page.path} className="w-full mb-2 block">
+            <Link to={page.path} key={page.path} className="block w-full">
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   {navButton}

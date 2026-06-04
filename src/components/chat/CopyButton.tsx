@@ -19,7 +19,7 @@ export interface CopyButtonProps {
   disabled?: boolean;
   className?: string;
   size?: "icon" | "sm";
-  variant?: "ghost" | "ghostOnPrimary";
+  variant?: "ghost" | "ghostOnPrimary" | "ghostOnChat";
 }
 
 export function CopyButton({
@@ -56,6 +56,8 @@ export function CopyButton({
         size === "icon" ? "h-8 w-8 shrink-0" : "h-7 gap-1 px-2",
         variant === "ghostOnPrimary" &&
           "text-primary-foreground/70 hover:bg-primary-foreground/15 hover:text-primary-foreground",
+        variant === "ghostOnChat" &&
+          "text-brand-chat/70 hover:bg-brand-chat/10 hover:text-brand-chat",
         variant === "ghost" && "text-muted-foreground hover:text-foreground",
         className
       )}

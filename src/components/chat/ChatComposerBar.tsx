@@ -3,6 +3,10 @@
 import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  chatBrandOutlineButtonClass,
+  chatComposerShellClass,
+} from "@/components/chat/chatDialogStyles";
 import { cn } from "@/lib/utils";
 import { PrajnaStreamGlyph } from "@/components/chat/PrajnaStreamGlyph";
 
@@ -18,8 +22,18 @@ export interface ChatComposerBarProps {
   canSend: boolean;
   isStreaming: boolean;
   isStopping?: boolean;
+  /** Override status headline when streaming (e.g. "Waiting for slot"). */
+  statusLabel?: string;
   className?: string;
 }
+
+const composerTextareaClass = cn(
+  "min-h-[44px] max-h-40 w-full flex-1 resize-none overflow-y-auto",
+  "border-0 bg-transparent px-2 py-2.5 text-[15px] leading-snug shadow-none",
+  "placeholder:text-muted-foreground/65",
+  "focus-visible:ring-0 focus-visible:ring-offset-0",
+  "disabled:cursor-not-allowed disabled:opacity-55"
+);
 
 export function ChatComposerBar({
   value,
@@ -33,13 +47,27 @@ export function ChatComposerBar({
   canSend,
   isStreaming,
   isStopping = false,
+  statusLabel,
   className,
 }: ChatComposerBarProps) {
+  const statusHeadline = isStopping
+    ? "Stopping…"
+    : statusLabel === "Waiting for slot"
+      ? "Waiting for a chat slot"
+      : statusLabel === "Generating" || !statusLabel
+        ? "Generating response"
+        : statusLabel;
+  const statusDetail = isStopping
+    ? "Waiting for the agent to finish"
+    : statusLabel === "Waiting for slot"
+      ? "Cancel to leave the queue"
+      : "You can stop at any time";
+
   return (
     <div className={cn("space-y-2", className)}>
       {isStreaming && (
         <div
-          className="flex items-center justify-between gap-3 rounded-xl border border-brand-chat/20 bg-brand-chat/[0.06] px-3 py-2"
+          className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-chat-surface-elevated px-3 py-2 shadow-sm"
           role="status"
           aria-live="polite"
         >
@@ -47,12 +75,10 @@ export function ChatComposerBar({
             <PrajnaStreamGlyph size="sm" className="shrink-0 opacity-90" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-foreground leading-tight">
-                {isStopping ? "Stopping…" : "Generating response"}
+                {statusHeadline}
               </p>
               <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                {isStopping
-                  ? "Waiting for the agent to finish"
-                  : "You can stop at any time"}
+                {statusDetail}
               </p>
             </div>
           </div>
@@ -85,32 +111,54 @@ export function ChatComposerBar({
 
       <div
         className={cn(
-          "flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-[border-color,box-shadow] duration-300",
-          isStreaming
-            ? "border-brand-chat/25 shadow-[0_0_0_1px_hsl(var(--brand-chat)/0.12)]"
-            : "border-border"
+          chatComposerShellClass,
+          isStreaming &&
+            "border-brand-chat/30 shadow-[0_0_0_1px_hsl(var(--brand-chat)/0.1)] focus-within:border-brand-chat/30"
         )}
       >
-        <Textarea
-          ref={textareaRef}
-          placeholder={
-            isStreaming ? "Reply in progress — use Stop above to cancel…" : placeholder
-          }
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          disabled={disabled}
-          rows={1}
-          className="min-h-[44px] max-h-40 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-60"
-        />
+        <div className="relative min-w-0 flex-1">
+          <Textarea
+            ref={textareaRef}
+            aria-label="Message"
+            placeholder={
+              isStreaming
+                ? "Reply in progress — use Stop above to cancel…"
+                : placeholder
+            }
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            disabled={disabled}
+            rows={1}
+            className={composerTextareaClass}
+          />
+          {!isStreaming && !disabled && value.length === 0 && (
+            <p className="pointer-events-none absolute bottom-2.5 right-2 hidden text-[10px] text-muted-foreground/45 sm:block">
+              Enter to send · Shift+Enter for newline
+            </p>
+          )}
+        </div>
         {!isStreaming && (
           <Button
             type="button"
             onClick={onSend}
             disabled={!canSend}
             size="icon"
-            className="h-10 w-10 shrink-0 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-            title="Send message"
+            aria-label="Send message"
+            className={cn(
+              "mb-0.5 h-10 w-10 shrink-0 rounded-xl transition-[border-color,background-color,opacity]",
+              canSend
+                ? cn(
+                    chatBrandOutlineButtonClass,
+                    "border-brand-chat bg-brand-chat text-primary-foreground shadow-sm",
+                    "hover:border-brand-chat hover:bg-brand-chat/90 hover:text-primary-foreground",
+                    "[&_svg]:text-primary-foreground"
+                  )
+                : cn(
+                    chatBrandOutlineButtonClass,
+                    "opacity-45"
+                  )
+            )}
           >
             <Send className="h-4 w-4" />
           </Button>

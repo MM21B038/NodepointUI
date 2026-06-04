@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useResolvedScopeOwner } from "@/hooks/useResolvedScopeOwner";
 import {
   deleteFiles,
   getKnowledgeGraph,
@@ -18,10 +19,19 @@ import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import PreprocessStatusTable from "@/components/PreprocessStatusTable";
+import DocumentsPageSkeleton from "@/components/documents/DocumentsPageSkeleton";
 import type { WorkspacePreprocessStatusResponse } from "@/database/workspaceStorage";
+import { useCanViewPreprocessPipeline } from "@/hooks/useCanViewPreprocessPipeline";
 
 const Documents = () => {
+  const showPreprocessPipeline = useCanViewPreprocessPipeline();
   const { currentWorkspace } = useWorkspace();
+  const {
+    owner: scopeOwner,
+    needsOwner: scopeNeedsOwner,
+    ready: scopeOwnerReady,
+    resolving: scopeOwnerResolving,
+  } = useResolvedScopeOwner();
   const [preprocessRefreshToken, setPreprocessRefreshToken] = useState(0);
   const wasReadyRef = useRef(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -34,40 +44,46 @@ const Documents = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
 
-  const fetchKnowledgeGraphData = useCallback(async (workspaceName: string, silent = false) => {
-    if (!silent) setIsGraphLoading(true);
-    try {
-      const [graphData, fileNames] = await Promise.all([
-        getKnowledgeGraph(workspaceName),
-        listFiles(workspaceName),
-      ]);
+  const fetchKnowledgeGraphData = useCallback(
+    async (workspaceName: string, silent = false) => {
+      if (!scopeOwnerReady) return;
+      if (!silent) setIsGraphLoading(true);
+      try {
+        const [graphData, fileNames] = await Promise.all([
+          getKnowledgeGraph(workspaceName, undefined, scopeOwner),
+          listFiles(workspaceName, scopeOwner),
+        ]);
 
-      setGraphNodes(graphData.nodes ?? []);
-      setGraphEdges(graphData.edges ?? []);
+        setGraphNodes(graphData.nodes ?? []);
+        setGraphEdges(graphData.edges ?? []);
 
-      const counts = await getPerFileGraphCounts(workspaceName, fileNames);
-      setFileGraphData(counts);
-    } catch (error) {
-      console.error("Failed to fetch knowledge graph:", error);
-      setGraphNodes([]);
-      setGraphEdges([]);
-      setFileGraphData({});
-    } finally {
-      if (!silent) setIsGraphLoading(false);
-    }
-  }, []);
+        const counts = await getPerFileGraphCounts(workspaceName, fileNames, {
+          owner: scopeOwner,
+        });
+        setFileGraphData(counts);
+      } catch (error) {
+        console.error("Failed to fetch knowledge graph:", error);
+        setGraphNodes([]);
+        setGraphEdges([]);
+        setFileGraphData({});
+      } finally {
+        if (!silent) setIsGraphLoading(false);
+      }
+    },
+    [scopeOwner, scopeOwnerReady]
+  );
 
   useEffect(() => {
-    if (currentWorkspace) {
+    if (currentWorkspace && scopeOwnerReady) {
       wasReadyRef.current = true;
       setPreprocessRefreshToken((t) => t + 1);
       fetchKnowledgeGraphData(currentWorkspace);
-    } else {
+    } else if (!currentWorkspace) {
       setGraphNodes([]);
       setGraphEdges([]);
       setFileGraphData({});
     }
-  }, [currentWorkspace, fetchKnowledgeGraphData]);
+  }, [currentWorkspace, scopeOwnerReady, fetchKnowledgeGraphData]);
 
   const confirmDeleteFile = (fileName: string) => {
     setFilesToDelete([fileName]);
@@ -90,7 +106,7 @@ const Documents = () => {
         : `Deleting ${filesToDelete.length} files...`
     );
     try {
-      const result = await deleteFiles(currentWorkspace, filesToDelete);
+      const result = await deleteFiles(currentWorkspace, filesToDelete, scopeOwner);
       dismissToast(deleteToastId);
       if (result.failed.length === 0) {
         showSuccess(
@@ -130,10 +146,14 @@ const Documents = () => {
       } else if (!wasReadyRef.current) {
         wasReadyRef.current = true;
         void fetchKnowledgeGraphData(currentWorkspace, true);
-        showSuccess("Preprocessing complete — workspace is ready for chat and search.");
+        showSuccess(
+          showPreprocessPipeline
+            ? "Preprocessing complete — workspace is ready for chat and search."
+            : "Your documents are ready for chat and search."
+        );
       }
     },
-    [currentWorkspace, fetchKnowledgeGraphData]
+    [currentWorkspace, fetchKnowledgeGraphData, showPreprocessPipeline]
   );
 
   const handleRefreshAll = useCallback(() => {
@@ -148,7 +168,7 @@ const Documents = () => {
     setIsPreprocessing(true);
     const preprocessToastId = showLoading(`Starting preprocessing for ${currentWorkspace}…`);
     try {
-      const result = await startPreprocess(currentWorkspace);
+      const result = await startPreprocess(currentWorkspace, {}, scopeOwner);
       dismissToast(preprocessToastId);
       showSuccess(summarizePreprocessStart(result));
       wasReadyRef.current = false;
@@ -177,8 +197,28 @@ const Documents = () => {
             <Info className="h-4 w-4" />
             <AlertTitle>No Workspace Selected</AlertTitle>
             <AlertDescription>
-              Please select a workspace using the selector in the navigation bar to view preprocessing
-              status.
+              Please select a workspace using the selector in the navigation bar to manage
+              documents.
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : scopeOwnerResolving || !scopeOwnerReady ? (
+        <Card className="flex min-h-[80vh] flex-col">
+          <CardContent className="flex flex-grow flex-col p-4">
+            <DocumentsPageSkeleton
+              variant={showPreprocessPipeline ? "admin" : "user"}
+            />
+          </CardContent>
+        </Card>
+      ) : scopeNeedsOwner && !scopeOwner ? (
+        <div className="flex flex-grow items-center justify-center p-4">
+          <Alert className="max-w-lg" variant="destructive">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Choose workspace owner</AlertTitle>
+            <AlertDescription>
+              Multiple workspaces named &ldquo;{currentWorkspace}&rdquo; are visible.
+              Pick the correct one (name · owner) from the workspace selector in the
+              navbar.
             </AlertDescription>
           </Alert>
         </div>
@@ -187,6 +227,7 @@ const Documents = () => {
           <CardContent className="flex flex-grow flex-col p-4">
             <PreprocessStatusTable
               workspaceName={currentWorkspace}
+              owner={scopeOwner}
               refreshToken={preprocessRefreshToken}
               onStatusChange={handlePreprocessStatusChange}
               onRefreshAll={handleRefreshAll}
@@ -198,8 +239,11 @@ const Documents = () => {
               onDeleteFiles={confirmDeleteFiles}
               isDeleting={isDeleting}
               onUploadSuccess={handleUploadSuccess}
-              onStartPreprocess={handleStartPreprocess}
+              onStartPreprocess={
+                showPreprocessPipeline ? handleStartPreprocess : undefined
+              }
               isPreprocessing={isPreprocessing}
+              showPipelineUI={showPreprocessPipeline}
             />
           </CardContent>
         </Card>

@@ -24,21 +24,21 @@ export const GROUP_TAG_MEMBER_EMPTY: Record<GroupTag, string> = {
   workspace: "No workspaces in this group yet. Add some below.",
   files: "No files in this group yet. Pick a workspace below to add documents.",
   entity: "No entities in this group yet. Search a workspace below to add entities.",
-  relation: "No relations in this group yet. Add a relation UUID below.",
+  relation: "No relations in this group yet. Search below to add eligible relations.",
 };
 
 export const GROUP_TAG_MEMBER_ADD_TITLE: Record<GroupTag, string> = {
   workspace: "Add workspaces",
   files: "Add files",
   entity: "Add entities",
-  relation: "Add relation by ID",
+  relation: "Add relations",
 };
 
 export const GROUP_TAG_MEMBER_SEARCH_HINT: Record<GroupTag, string> = {
   workspace: "",
-  files: "Select a workspace to browse available documents.",
-  entity: "Search for entities to add.",
-  relation: "",
+  files: "Search eligible files (policy-filtered).",
+  entity: "Search eligible entities (policy-filtered).",
+  relation: "Search eligible relations (policy-filtered).",
 };
 
 export function groupMemberEmptyMessage(tag: GroupTag | string | null | undefined): string {
@@ -148,9 +148,13 @@ export function groupTagLabel(_group: Pick<WorkspaceGroupSummary, "tag">): strin
 }
 
 export function groupSearchText(
-  group: Pick<WorkspaceGroupSummary, "name" | "tag" | "description">
+  group: Pick<
+    WorkspaceGroupSummary,
+    "name" | "tag" | "description" | "owner_username"
+  >
 ): string {
   const parts = [group.name, formatGroupTag(group.tag)];
+  if (group.owner_username?.trim()) parts.push(group.owner_username.trim());
   const description = metaDescription(group);
   if (description) parts.push(description);
   return parts.join(" ").toLowerCase();

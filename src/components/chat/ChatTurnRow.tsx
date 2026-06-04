@@ -4,6 +4,10 @@ import { memo, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatTurn } from "@/lib/chatTypes";
 import { AssistantActivityView } from "@/components/chat/AssistantActivityView";
+import {
+  chatAssistantBubbleClass,
+  chatUserBubbleClass,
+} from "@/components/chat/chatDialogStyles";
 import { CopyButton } from "@/components/chat/CopyButton";
 import { getAssistantResponseText } from "@/lib/chatCopyText";
 
@@ -35,14 +39,12 @@ function ChatTurnRowInner({ turn, isStreaming }: ChatTurnRowProps) {
       >
         <div
           className={cn(
-            "relative w-full rounded-2xl px-4 py-3 shadow-sm",
-            turn.role === "user"
-              ? "bg-primary text-primary-foreground"
-              : "bg-card border border-border/60 font-chat text-[15px] leading-relaxed"
+            "relative w-full px-4 py-3",
+            turn.role === "user" ? chatUserBubbleClass : chatAssistantBubbleClass
           )}
         >
           {turn.role === "user" ? (
-            <p className="text-sm whitespace-pre-wrap leading-relaxed pr-6">
+            <p className="text-[15px] whitespace-pre-wrap leading-relaxed pr-6 text-foreground">
               {turn.content}
             </p>
           ) : (
@@ -57,7 +59,7 @@ function ChatTurnRowInner({ turn, isStreaming }: ChatTurnRowProps) {
           <CopyButton
             text={copyText}
             label={turn.role === "user" ? "Copy message" : "Copy response"}
-            variant={turn.role === "user" ? "ghostOnPrimary" : "ghost"}
+            variant={turn.role === "user" ? "ghostOnChat" : "ghost"}
             className={cn(
               "pointer-events-none absolute right-1.5 top-1.5 z-10 h-7 w-7 opacity-0 shadow-sm transition-opacity",
               "group-hover:pointer-events-auto group-hover:opacity-100",

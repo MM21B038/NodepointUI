@@ -14,14 +14,16 @@ import { cn } from "@/lib/utils";
 
 interface GroupCardProps {
   groupName: string;
+  ownerUsername?: string | null;
+  showOwnerLabel?: boolean;
   groupTag: GroupTag;
   description?: string | null;
   memberCount: number;
   isActive: boolean;
-  onSelect: (groupName: string) => void;
-  onManageMembers: (groupName: string) => void;
-  onEdit: (groupName: string) => void;
-  onDelete: (groupName: string) => void;
+  onSelect: () => void;
+  onManageMembers: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   isDeleting: boolean;
   deletingGroupName: string | null;
   isSelected?: boolean;
@@ -31,6 +33,8 @@ interface GroupCardProps {
 
 const GroupCard: React.FC<GroupCardProps> = ({
   groupName,
+  ownerUsername,
+  showOwnerLabel = false,
   groupTag,
   description,
   memberCount,
@@ -54,6 +58,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
       <DirectoryCardFrame
         accent="group"
         name={groupName}
+        ownerUsername={ownerUsername}
+        showOwnerLabel={showOwnerLabel}
         tag={formatGroupTag(groupTag)}
         tagClassName={tagTone.pill}
         description={description}
@@ -62,8 +68,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
         showSelection={showSelection}
         isDeleting={isDeleting}
         isThisDeleting={isThisGroupDeleting}
-        onSelect={() => onSelect(groupName)}
-        onDelete={() => onDelete(groupName)}
+        onSelect={onSelect}
+        onDelete={onDelete}
         onSelectionChange={onSelectionChange}
         activeLabel="Selected scope"
         icon={<FolderKanban className="h-5 w-5" />}
@@ -75,7 +81,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEdit(groupName);
+                  onEdit();
                 }}
                 disabled={isDeleting}
                 className="h-9 gap-2 border-border/60"
@@ -88,7 +94,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onManageMembers(groupName);
+                  onManageMembers();
                 }}
                 disabled={isDeleting}
                 className={directoryCardAccentActionClass("group")}

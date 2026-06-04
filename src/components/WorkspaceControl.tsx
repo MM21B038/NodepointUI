@@ -1,73 +1,88 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { getWorkspaces, WorkspaceEntry } from "@/database/workspaceStorage"; // Import WorkspaceEntry
 import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
-import WorkspaceCombobox from "./WorkspaceCombobox";
+import WorkspaceCombobox, {
+  type WorkspaceOption,
+} from "./WorkspaceCombobox";
 import { useLocation } from "react-router-dom";
+import {
+  duplicateNamesInList,
+  formatScopedResourceLabel,
+} from "@/lib/ownerScope";
 
 const WorkspaceControl = () => {
-  const { currentWorkspace, setCurrentWorkspace } = useWorkspace();
-  const [workspaces, setWorkspaces] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    currentWorkspace,
+    currentWorkspaceOwnerId,
+    setCurrentWorkspace,
+    workspaceList,
+    scopeHydrated,
+    refreshWorkspaceList,
+  } = useWorkspace();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   const location = useLocation();
   const hideButtonsOnPaths = ["/documents", "/knowledge-base", "/chat"];
-  const shouldHideButtons = hideButtonsOnPaths.some(path => location.pathname.startsWith(path));
+  const shouldHideButtons = hideButtonsOnPaths.some((path) =>
+    location.pathname.startsWith(path)
+  );
 
-  const fetchWorkspaces = useCallback(async () => {
-    setIsLoading(true);
+  const workspaces: WorkspaceOption[] = useMemo(
+    () =>
+      workspaceList.map((ws) => ({
+        name: ws.name,
+        owner_id: ws.owner_id,
+        owner_username: ws.owner_username,
+      })),
+    [workspaceList]
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
     try {
-      const list: WorkspaceEntry[] = await getWorkspaces(); // Expect WorkspaceEntry[]
-      
-      // Sort by timestamp in descending order (latest first)
-      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      const workspaceNames = list.map(ws => ws.name);
-      setWorkspaces(workspaceNames);
-
-      if (currentWorkspace && !workspaceNames.includes(currentWorkspace)) {
-        setCurrentWorkspace(null);
-      }
-
-      if (!currentWorkspace && workspaceNames.length > 0) {
-        setCurrentWorkspace(workspaceNames[0]);
-      }
+      await refreshWorkspaceList();
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
       toast.error("Failed to load workspaces.");
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [currentWorkspace, setCurrentWorkspace]);
+  };
 
-  useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
-
-  const handleSelectChange = (value: string) => {
-    setCurrentWorkspace(value);
-    toast.success(`Switched to workspace: ${value}`);
+  const handleSelect = (ws: WorkspaceOption) => {
+    setCurrentWorkspace(ws.name, ws.owner_id ?? null);
+    const label = formatScopedResourceLabel(ws.name, ws.owner_username, {
+      duplicateNames: duplicateNamesInList(workspaces),
+    });
+    toast.success(`Switched to workspace: ${label}`);
   };
 
   const handleWorkspaceCreated = (newWorkspaceName: string) => {
-    fetchWorkspaces().then(() => {
-      setCurrentWorkspace(newWorkspaceName);
+    void refreshWorkspaceList().then((list) => {
+      const created = list.find((w) => w.name === newWorkspaceName);
+      setCurrentWorkspace(
+        newWorkspaceName,
+        created?.owner_id ?? null
+      );
       toast.success(`Workspace '${newWorkspaceName}' created and selected.`);
     });
   };
+
+  const isLoading = !scopeHydrated || isRefreshing;
 
   return (
     <div className="flex items-center space-x-2">
       <WorkspaceCombobox
         workspaces={workspaces}
-        currentWorkspace={currentWorkspace}
-        onSelectWorkspace={handleSelectChange}
+        value={currentWorkspace}
+        valueOwnerId={currentWorkspaceOwnerId}
+        onSelect={handleSelect}
         disabled={isLoading}
       />
 
@@ -86,7 +101,7 @@ const WorkspaceControl = () => {
           <Button
             variant="secondary"
             size="icon"
-            onClick={fetchWorkspaces}
+            onClick={() => void handleRefresh()}
             disabled={isLoading}
             title="Refresh Workspaces"
           >
