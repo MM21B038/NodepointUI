@@ -6,6 +6,7 @@ import {
   ownerParamsForScopedName,
   ownerParamsValidatedForName,
 } from "@/lib/ownerScope";
+import type { ViewScopeMode } from "@/lib/viewScope";
 
 export interface ResolvedScopeOwnerState {
   owner: OwnerParams | undefined;
@@ -14,11 +15,22 @@ export interface ResolvedScopeOwnerState {
   resolving: boolean;
 }
 
+/** Which scope to resolve: navbar mode (`active`), or force workspace/group. */
+export type ResolvedScopeKind = "active" | "workspace" | "group";
+
+export interface UseResolvedScopeOwnerOptions {
+  /** Default `active` — follows chat/KB group vs workspace toggle. */
+  kind?: ResolvedScopeKind;
+}
+
 /**
  * Owner params for API calls on the active workspace/group scope.
  * Uses local lists first, then lookup APIs when the owner is missing or ambiguous.
  */
-export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
+export function useResolvedScopeOwner(
+  options?: UseResolvedScopeOwnerOptions
+): ResolvedScopeOwnerState {
+  const kind = options?.kind ?? "active";
   const {
     scopeMode,
     currentWorkspace,
@@ -32,11 +44,14 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
     scopeHydrated,
   } = useWorkspace();
 
+  const resolvedMode: ViewScopeMode =
+    kind === "active" ? scopeMode : kind;
+
   const syncOwner = useMemo(() => {
-    if (scopeMode === "group" && activeGroup) {
+    if (resolvedMode === "group" && activeGroup) {
       return ownerParamsForScopedName(groups, activeGroup, activeGroupOwnerId);
     }
-    if (scopeMode === "workspace" && currentWorkspace) {
+    if (resolvedMode === "workspace" && currentWorkspace) {
       return ownerParamsForScopedName(
         workspaceList,
         currentWorkspace,
@@ -45,7 +60,7 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
     }
     return undefined;
   }, [
-    scopeMode,
+    resolvedMode,
     activeGroup,
     activeGroupOwnerId,
     groups,
@@ -59,17 +74,23 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
   const [resolving, setResolving] = useState(false);
 
   const scopeKey = useMemo(() => {
-    if (scopeMode === "group" && activeGroup) {
+    if (resolvedMode === "group" && activeGroup) {
       return `group:${activeGroup}:${activeGroupOwnerId ?? ""}`;
     }
-    if (scopeMode === "workspace" && currentWorkspace) {
+    if (resolvedMode === "workspace" && currentWorkspace) {
       return `ws:${currentWorkspace}:${currentWorkspaceOwnerId ?? ""}`;
     }
     return "";
-  }, [scopeMode, activeGroup, activeGroupOwnerId, currentWorkspace, currentWorkspaceOwnerId]);
+  }, [
+    resolvedMode,
+    activeGroup,
+    activeGroupOwnerId,
+    currentWorkspace,
+    currentWorkspaceOwnerId,
+  ]);
 
-  const scopeItems = scopeMode === "group" ? groups : workspaceList;
-  const scopeName = scopeMode === "group" ? activeGroup : currentWorkspace;
+  const scopeItems = resolvedMode === "group" ? groups : workspaceList;
+  const scopeName = resolvedMode === "group" ? activeGroup : currentWorkspace;
   const syncOwnerValidated = useMemo(
     () =>
       syncOwner != null &&
@@ -99,14 +120,14 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
 
     void (async () => {
       try {
-        if (scopeMode === "group" && activeGroup) {
+        if (resolvedMode === "group" && activeGroup) {
           const result = await resolveGroupOwner(activeGroup, activeGroupOwnerId, {
             cache: groups,
           });
           if (cancelled) return;
           setLookupOwner(result.owner);
           setLookupAmbiguous(result.ambiguous);
-        } else if (scopeMode === "workspace" && currentWorkspace) {
+        } else if (resolvedMode === "workspace" && currentWorkspace) {
           const result = await resolveWorkspaceOwner(
             currentWorkspace,
             currentWorkspaceOwnerId,
@@ -131,7 +152,7 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
     };
   }, [
     scopeKey,
-    scopeMode,
+    resolvedMode,
     activeGroup,
     activeGroupOwnerId,
     currentWorkspace,
@@ -146,19 +167,19 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
 
   useEffect(() => {
     if (!syncOwnerValidated || syncOwner?.ownerId == null) return;
-    if (scopeMode === "workspace" && currentWorkspace) {
+    if (resolvedMode === "workspace" && currentWorkspace) {
       if (currentWorkspaceOwnerId !== syncOwner.ownerId) {
         setCurrentWorkspace(currentWorkspace, syncOwner.ownerId);
       }
       return;
     }
-    if (scopeMode === "group" && activeGroup) {
+    if (resolvedMode === "group" && activeGroup) {
       if (activeGroupOwnerId !== syncOwner.ownerId) {
         setActiveGroup(activeGroup, syncOwner.ownerId);
       }
     }
   }, [
-    scopeMode,
+    resolvedMode,
     currentWorkspace,
     currentWorkspaceOwnerId,
     activeGroup,
@@ -174,6 +195,23 @@ export function useResolvedScopeOwner(): ResolvedScopeOwnerState {
   const ready = scopeHydrated && !resolving && (!needsOwner || owner != null);
 
   return { owner, needsOwner, ready, resolving };
+}
+
+/** Resolve owner for the navbar workspace (ignores group chat scope). */
+export function useResolvedWorkspaceOwner(): ResolvedScopeOwnerState {
+  return useResolvedScopeOwner({ kind: "workspace" });
+}
+
+/**
+ * Resolve owner for the current KB/chat scope toggle.
+ * Workspace mode always uses the navbar workspace owner (not group chat scope).
+ */
+export function useResolvedActiveScopeOwner(
+  scopeMode: ViewScopeMode
+): ResolvedScopeOwnerState {
+  const workspace = useResolvedWorkspaceOwner();
+  const group = useResolvedScopeOwner({ kind: "group" });
+  return scopeMode === "group" ? group : workspace;
 }
 
 /** @deprecated Prefer useResolvedScopeOwner — kept for gradual migration */

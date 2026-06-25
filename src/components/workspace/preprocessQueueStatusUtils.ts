@@ -1,3 +1,5 @@
+import type { OwnedResourceFields } from "@/lib/ownerScope";
+import { ownerParamsForWorkspaceName } from "@/lib/ownerScope";
 import {
   getPreprocessWorkspacesSummary,
   getWorkspacePreprocessStatus,
@@ -396,7 +398,8 @@ function tableRowFromSummaryOnly(
  * not-ready workspaces (typically few) for per-file phase counts.
  */
 export async function fetchWorkspacePreprocessTableRows(
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  workspaceCatalog?: OwnedResourceFields[]
 ): Promise<WorkspacePreprocessTableRow[]> {
   const summary = await getPreprocessWorkspacesSummary();
   if (signal?.aborted) return [];
@@ -412,7 +415,10 @@ export async function fetchWorkspacePreprocessTableRows(
     const statuses = await Promise.all(
       batch.map(async (ws) => {
         try {
-          return await getWorkspacePreprocessStatus(ws.workspace);
+          const owner = workspaceCatalog?.length
+            ? ownerParamsForWorkspaceName(workspaceCatalog, ws.workspace)
+            : undefined;
+          return await getWorkspacePreprocessStatus(ws.workspace, owner);
         } catch {
           return null;
         }

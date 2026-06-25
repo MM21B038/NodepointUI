@@ -46,29 +46,36 @@ Group-scope (cross-workspace)                      Per-workspace
 
 ### Workspace groups
 
-Create named groups and assign workspaces (many-to-many). Use **`group=<name>`** on KG, entity search, chat summary, and group chat.
+Create named groups and assign workspaces or files. Use **`group=<name>`** on KG, entity search, chat summary, and group chat.
+
+**`entity` and `relation` group tags** are **not available for manual creation**. Those groups are created and populated **internally** by the system. Clients cannot create them, change membership, rename them, or delete them via API. You can still **list**, **read**, and **query** them (KG, entity search, chat) when they exist.
+
+| Group `tag` | `POST /api/group/create/` | Membership APIs | `PATCH` / `DELETE` group |
+|-------------|----------------------------|-----------------|--------------------------|
+| `workspace` | yes (default) | `…/workspaces/` | yes |
+| `files` | yes | `…/files/` | yes |
+| `entity` | **no** (internal) | **none** (read-only) | **no** |
+| `relation` | **no** (internal) | **none** (read-only) | **no** |
 
 Group **names are unique per owner** (same rules as workspaces). List rows include `id`, `owner_id`, `owner_username`. Any URL with `/api/group/<name>/` accepts `?owner_id=` or `?owner_username=` when admin/superadmin see duplicate names — see [per-owner naming](#workspace--per-owner-naming).
 
 | Use | API |
 |-----|-----|
-| Create group | `POST /api/group/create/` body `{ "name": "research", "tag": "workspace", "description": "..." }` (`tag` optional, default `workspace`) — owned by caller |
-| List groups | `GET /api/group/list/` (`?tag=`, `?page=`, `?page_size=`, optional `?owner_id=` / `?owner_username=` to list one owner’s groups) |
-| Resolve group by name | `GET /api/group/lookup/?name=<name>` (optional `?owner_id=`, `?owner_username=`, `?tag=`) — all visible matches; use before `/api/group/<name>/…` when names collide |
+| Create group | `POST /api/group/create/` body `{ "name": "research", "tag": "workspace", "description": "..." }` (`tag` optional: `workspace` or `files` only) — owned by caller |
+| List groups | `GET /api/group/list/` (`?tag=`, `?owner_id=`, `?owner_username=`, `?page=`, `?page_size=`) — rows include `owner_id`, `owner_username` |
+| Resolve group owner | `GET /api/group/lookup/?name=<name>` (`?owner_id=`, `?owner_username=`, optional `?tag=`) — returns `matches[]` with owner per row; `ambiguous: true` when more than one |
 | Group detail | `GET /api/group/<name>/` (`?page=`, `?page_size=`, optional `?owner_id=`) |
 | List group members | `GET /api/group/<name>/members/` (`?page=`, `?page_size=`, optional `?owner_id=`) |
-| Update group | `PATCH /api/group/<name>/` body `{ "name", "description" }` only (`tag` immutable) |
+| Update group | `PATCH /api/group/<name>/` body `{ "name", "description" }` only (`workspace` / `files` tags; `tag` immutable) |
 | Add / remove workspace | `POST` / `DELETE` `/api/group/<name>/workspaces/` (tag must be `workspace`; `?owner_id=` on group + `workspace_name` in body if needed) |
 | Add / remove file | `POST` / `DELETE` `/api/group/<name>/files/` (tag must be `files`) |
-| Add / remove entity | `POST` / `DELETE` `/api/group/<name>/entities/` (tag must be `entity`) |
-| Add / remove relation | `POST` / `DELETE` `/api/group/<name>/relations/` (tag must be `relation`) |
-| Eligible members (picker) | `GET /api/group/<name>/add-options/` (`?page=`, `?page_size=`, optional `?search=`, optional `?candidate_owner_id=` to narrow candidates) |
+| Eligible members (picker) | `GET /api/group/<name>/add-options/` (`workspace` and `files` tags only; `?page=`, `?page_size=`, optional `?search=`, optional `?candidate_owner_id=`) |
 | Eligible groups for workspace | `GET /api/workspace/<name>/group-options/` (`?page=`, `?page_size=`, optional `?search=`, optional `?owner_id=` on workspace) |
-| Delete group | `DELETE /api/group/<name>/` |
+| Delete group | `DELETE /api/group/<name>/` (`workspace` and `files` tags only; `entity` / `relation` → **`403`**) |
 | KG / search across group | `?group=<name>` |
 | Group chat | Session REST under `/api/chat/group/<name>/sessions/`, `ws://.../ws/chat/group/<name>/?session_id=<uuid>` |
 
-**Membership ownership rules** — enforced on all add endpoints and reflected in picker APIs:
+**Membership ownership rules** — enforced on workspace and file add endpoints and reflected in picker APIs (`add-options` is not available for `entity` / `relation` groups):
 
 | Actor | Group owner | Resource owner | Add allowed? |
 |-------|-------------|----------------|--------------|
@@ -89,9 +96,13 @@ The actor must also **see** the resource being added; invisible resources return
 curl -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8000/api/group/research/add-options/?owner_id=3&page=1&page_size=20"
 
-# Narrow file/entity candidates to one managed user
+# Narrow file candidates to one managed user
 curl -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8000/api/group/docs/add-options/?owner_id=3&candidate_owner_id=7"
+
+# Which user owns "research" when the name is ambiguous (picker before calling /api/group/research/)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/group/lookup/?name=research"
 
 # Workspace-tagged groups where this workspace can be added (already_member for UI disable)
 curl -H "Authorization: Bearer $TOKEN" \
@@ -102,8 +113,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 |-----------|-----------------------------------|
 | `workspace` | `id`, `name`, `owner_id`, `owner_username`, `tag`, `description` |
 | `files` | `document_id`, `workspace`, `workspace_owner_id`, `owner_id`, `owner_username`, `file_name` |
-| `entity` | `entity_id`, `name`, `entity_type`, `workspace`, `document_id`, `owner_id`, `owner_username` |
-| `relation` | `relation_id`, `source_name`, `target_name`, `workspace`, `owner_id`, `owner_username` |
+| `entity`, `relation` | Not available — returns **`400`** (members managed internally) |
 
 | Use | API |
 |-----|-----|
@@ -373,11 +383,11 @@ Requires prior deactivation (`inactive`) or `pending_deletion`. Superadmin accou
 | `workspace:read` / `workspace:write` | Workspaces |
 | `document:read` / `document:write` | Documents |
 | `chat:read` / `chat:write` | Chat |
-| `group:read` / `group:write` | Groups (membership changes) |
+| `group:read` / `group:write` | Groups (create/update; workspace and file membership) |
 | `kg:read` | Knowledge graph reads only (all KG routes are GET) |
 | `preprocess:read` / `preprocess:write` | Preprocess status and triggers |
 
-There is **no `kg:write`** in the API. Use `group:write` to add entities/files/relations to groups.
+There is **no `kg:write`** in the API. Use `group:write` to add workspaces or files to groups.
 
 **Scope validation errors (`400`)**
 
@@ -451,13 +461,13 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | POST | `workspace/create/` | Create workspace + media folder |
 | PATCH | `workspace/update/<name>/` | Update workspace name, tag, description |
 | GET | `workspace/list/` | Paginated workspaces (`id`, `owner_id`, `owner_username`, `groups`) |
-| GET | `workspace/lookup/` | Resolve workspace name → owner (`?name=`, optional `?owner_id=` / `?owner_username=`) |
+| GET | `workspace/lookup/` | Resolve workspace name → owner(s) (`matches`, `ambiguous`) |
 | GET | `workspace/stats/` | Totals: all, in_group, ungrouped workspace counts |
 | GET | `workspace/page/` | Paginated workspaces with counts (`id`, owner fields) |
 | DELETE | `workspace/delete/<name>/` | Delete workspace (`?owner_id=` if ambiguous) |
-| POST | `group/create/` | Create group (name unique per owner) |
-| GET | `group/list/` | Paginated groups (`id`, `owner_id`, `owner_username`; optional `?owner_id=` filter) |
-| GET | `group/lookup/` | Resolve group name → owner (`?name=`, optional `?owner_id=`, `?tag=`) |
+| POST | `group/create/` | Create group (`workspace` or `files` tag; name unique per owner) |
+| GET | `group/list/` | Paginated groups (`id`, `owner_id`, `owner_username`; optional `?owner_id=`) |
+| GET | `group/lookup/` | Resolve group name → owner(s) (`matches`, `ambiguous`) |
 | GET | `group/<name>/members/` | Paginated members (`?owner_id=` if ambiguous) |
 | GET | `group/<name>/` | Group detail + paginated members |
 | PATCH | `group/<name>/` | Update group name/description |
@@ -465,11 +475,7 @@ Base path: `/api/`. All paths below are relative to that prefix.
 | DELETE | `group/<name>/workspaces/<workspace_name>/` | Remove workspace |
 | POST | `group/<name>/files/` | Add file/document (files tag only) |
 | DELETE | `group/<name>/files/<document_id>/` | Remove file |
-| POST | `group/<name>/entities/` | Add entity (entity tag only) |
-| DELETE | `group/<name>/entities/<entity_id>/` | Remove entity |
-| POST | `group/<name>/relations/` | Add relation (relation tag only) |
-| DELETE | `group/<name>/relations/<relation_id>/` | Remove relation |
-| DELETE | `group/<name>/` | Delete group |
+| DELETE | `group/<name>/` | Delete group (`workspace` / `files` only) |
 | GET | `chat/group/<name>/sessions/` | List group-scoped sessions |
 | POST | `chat/group/<name>/sessions/` | Create group-scoped session |
 | GET | `chat/group/<name>/sessions/<uuid>/` | Session history |
@@ -693,6 +699,48 @@ Renaming updates the media folder under `media/workspaces/<owner_id>/` and Qdran
 
 Lightweight paginated list: `id`, `name`, `owner_id`, `owner_username`, `tag`, `description`, `groups`, `created_at` — **no** file/entity counts. Same pagination query params as `GET /api/workspace/page/`. For counts use `/api/workspace/page/`.
 
+### `GET /api/workspace/lookup/`
+
+Resolve a workspace **name** to owner(s) without calling a mutating route. Use in UI pickers when the same name may exist for multiple users (admin/superadmin).
+
+**Query:** `name` (required), optional `owner_id` / `owner_username` to narrow to one match, optional `tag` (not used on workspaces — reserved).
+
+**Response `200`**
+
+```json
+{
+  "name": "PRAJNA",
+  "ambiguous": true,
+  "matches": [
+    {
+      "id": 12,
+      "name": "PRAJNA",
+      "owner_id": 3,
+      "owner_username": "alice",
+      "tag": "notes",
+      "description": null,
+      "created_at": "2026-05-15T12:00:00.123456Z"
+    },
+    {
+      "id": 41,
+      "name": "PRAJNA",
+      "owner_id": 7,
+      "owner_username": "bob",
+      "tag": null,
+      "description": null,
+      "created_at": "2026-06-01T08:00:00.123456Z"
+    }
+  ]
+}
+```
+
+| Status | Condition |
+|--------|-----------|
+| `400` | Missing or invalid `name` |
+| `404` | No visible workspace with that name (for this owner filter, if any) |
+
+---
+
 **Query parameters**
 
 | Param | Description |
@@ -851,7 +899,7 @@ Sorted by `created_at` descending, then `name` ascending.
 
 ### `POST /api/group/create/`
 
-Create a workspace group owned by the authenticated user. Group **names are unique per owner** (same rules as [per-owner naming](#workspace--per-owner-naming)).
+Create a group owned by the authenticated user. Only **`workspace`** (default) and **`files`** tags are accepted. Group **names are unique per owner** (same rules as [per-owner naming](#workspace--per-owner-naming)).
 
 **Body**
 
@@ -866,7 +914,7 @@ Create a workspace group owned by the authenticated user. Group **names are uniq
 | Field | Required | Notes |
 |-------|----------|-------|
 | `name` | yes | Validated group name |
-| `tag` | no | Default `workspace`; also `files`, `entity`, `relation` |
+| `tag` | no | Default `workspace`; also `files`. **`entity` and `relation` cannot be created via API** (reserved for internal groups) |
 | `description` | no | Optional text |
 
 **Response `201`**
@@ -889,7 +937,7 @@ Create a workspace group owned by the authenticated user. Group **names are uniq
 
 | Status | Condition |
 |--------|-----------|
-| `400` | Invalid or missing `name`, invalid `tag`, or **group already exists for this owner** |
+| `400` | Invalid or missing `name`, invalid `tag`, **`entity` / `relation` tag requested**, or **group already exists for this owner** |
 
 ---
 
@@ -904,6 +952,7 @@ Paginated list of workspace groups. Each row includes `id`, `name`, `owner_id`, 
 | `page` | `1` | — | Page number (1-based) |
 | `page_size` | `20` | `100` | Groups per page |
 | `tag` | — | — | Optional filter: `workspace`, `files`, `entity`, or `relation` |
+| `owner_id`, `owner_username` | — | — | Optional filter: groups owned by that user (must be visible to you) |
 
 **Response `200`**
 
@@ -943,6 +992,52 @@ Paginated list of workspace groups. Each row includes `id`, `name`, `owner_id`, 
 ```
 
 Display **`name · owner_username`** when the same group `name` appears for different owners.
+
+---
+
+### `GET /api/group/lookup/`
+
+Resolve a group **name** to owner(s) without calling a path-based group route (avoids `400` + `candidates` on mutations). Same disambiguation data as ambiguous errors, but read-only and always returns **`200`** with a `matches` array when any visible group exists.
+
+**Query:** `name` (required), optional `owner_id` / `owner_username`, optional `tag`.
+
+**Response `200`**
+
+```json
+{
+  "name": "research",
+  "ambiguous": true,
+  "matches": [
+    {
+      "id": 5,
+      "name": "research",
+      "owner_id": 3,
+      "owner_username": "alice",
+      "tag": "workspace",
+      "description": null,
+      "member_count": 12,
+      "created_at": "2026-05-15T12:00:00.123456Z"
+    },
+    {
+      "id": 9,
+      "name": "research",
+      "owner_id": 7,
+      "owner_username": "bob",
+      "tag": "files",
+      "description": "Bob's papers",
+      "member_count": 4,
+      "created_at": "2026-06-02T10:00:00.123456Z"
+    }
+  ]
+}
+```
+
+When `ambiguous` is `false`, `matches` has one row — use its `owner_id` on subsequent `/api/group/<name>/…` calls.
+
+| Status | Condition |
+|--------|-----------|
+| `400` | Missing or invalid `name` / `tag` |
+| `404` | No visible group with that name |
 
 ---
 
@@ -992,6 +1087,8 @@ Group detail with **paginated** typed member list (`page`, `page_size`; default 
 
 **Group `tag` values:** `workspace` (default) | `files` | `entity` | `relation`
 
+`entity` and `relation` groups are **system-managed** (created and populated internally). Clients may **read** them via list/detail/members and use them in KG/search/chat scope (`?group=`), but cannot create, update, delete, or change membership via API.
+
 **Response `200` (tag=workspace)**
 
 ```json
@@ -1020,7 +1117,7 @@ Group detail with **paginated** typed member list (`page`, `page_size`; default 
 }
 ```
 
-**Response `200` (tag=entity)**
+**Response `200` (tag=entity)** — internal group; read-only via API
 
 ```json
 {
@@ -1032,7 +1129,7 @@ Group detail with **paginated** typed member list (`page`, `page_size`; default 
 }
 ```
 
-**Response `200` (tag=relation)**
+**Response `200` (tag=relation)** — internal group; read-only via API
 
 ```json
 {
@@ -1050,7 +1147,7 @@ Group detail with **paginated** typed member list (`page`, `page_size`; default 
 
 ### `PATCH /api/group/<name>/`
 
-Update group metadata. Include **one or more** of `name`, `description`. **`tag` cannot be changed** after create.
+Update group metadata. Include **one or more** of `name`, `description`. **`tag` cannot be changed** after create. Applies only to **`workspace`** and **`files`** groups — **`entity` / `relation` groups return `403`**.
 
 **Query:** `?owner_id=` or `?owner_username=` when needed.
 
@@ -1087,7 +1184,30 @@ Renaming also renames the internal group chat workspace (`__group_chat__<owner_i
 | Status | Condition |
 |--------|-----------|
 | `400` | No fields to update, attempt to change `tag`, invalid name, duplicate name **for this owner**, ambiguous name, or invalid description |
+| `403` | Group `tag` is `entity` or `relation` (system-managed; read-only) |
 | `404` | Unknown group |
+
+---
+
+### `DELETE /api/group/<name>/`
+
+Delete a user-created group and its internal chat workspace (`__group_chat__<owner_id>__<name>`). Only **`workspace`** and **`files`** groups may be deleted — **`entity` / `relation` groups return `403`**.
+
+**Query:** `?owner_id=` or `?owner_username=` when needed.
+
+**Response `200`**
+
+```json
+{ "message": "Group deleted successfully" }
+```
+
+| Status | Condition |
+|--------|-----------|
+| `400` | Ambiguous group name (`candidates`) |
+| `403` | Group `tag` is `entity` or `relation` (system-managed; read-only) |
+| `404` | Unknown group |
+
+Removed membership APIs (no longer available): `POST` / `DELETE` `/api/group/<name>/entities/` and `…/relations/`.
 
 ---
 
@@ -2689,10 +2809,19 @@ Alphabetical by path segment. See sections above for full request/response bodie
 | DELETE | `/api/workspace/delete/<name>/` | [Workspace](#delete-apiworkspacedeletename) |
 | POST | `/api/group/create/` | [Groups](#post-apigroupcreate) |
 | GET | `/api/group/list/` | [Groups](#get-apigrouplist) |
+| GET | `/api/group/lookup/` | [Groups](#get-apigrouplookup) |
 | GET | `/api/group/<name>/members/` | [Groups](#get-apigroupnamemembers) |
 | GET | `/api/group/<name>/` | [Groups](#get-apigroupname) |
 | PATCH | `/api/group/<name>/` | [Groups](#patch-apigroupname) |
+| DELETE | `/api/group/<name>/` | [Groups](#delete-apigroupname) |
+| POST | `/api/group/<name>/workspaces/` | [Workspace groups](#workspace-groups) |
+| DELETE | `/api/group/<name>/workspaces/<workspace_name>/` | [Workspace groups](#workspace-groups) |
+| POST | `/api/group/<name>/files/` | [Workspace groups](#workspace-groups) |
+| DELETE | `/api/group/<name>/files/<document_id>/` | [Workspace groups](#workspace-groups) |
+| GET | `/api/group/<name>/add-options/` | [Workspace groups](#workspace-groups) |
+| GET | `/api/workspace/<name>/group-options/` | [Workspace groups](#workspace-groups) |
 | GET | `/api/workspace/list/` | [Workspace](#get-apiworkspacelist) |
+| GET | `/api/workspace/lookup/` | [Workspace](#get-apiworkspacelookup) |
 | GET | `/api/workspace/page/` | [Workspace](#get-apiworkspacepage) |
 | GET | `/api/workspace/stats/` | [Workspace](#get-apiworkspacestats) |
 | GET | `/api/preprocess/queue-status/` | [Preprocess](#get-apipreprocessqueue-status) |

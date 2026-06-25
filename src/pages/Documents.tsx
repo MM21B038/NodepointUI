@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useResolvedScopeOwner } from "@/hooks/useResolvedScopeOwner";
+import { useResolvedWorkspaceOwner } from "@/hooks/useResolvedScopeOwner";
 import {
   deleteFiles,
   getKnowledgeGraph,
@@ -31,7 +31,7 @@ const Documents = () => {
     needsOwner: scopeNeedsOwner,
     ready: scopeOwnerReady,
     resolving: scopeOwnerResolving,
-  } = useResolvedScopeOwner();
+  } = useResolvedWorkspaceOwner();
   const [preprocessRefreshToken, setPreprocessRefreshToken] = useState(0);
   const wasReadyRef = useRef(true);
   const [isDeleting, setIsDeleting] = useState(false);

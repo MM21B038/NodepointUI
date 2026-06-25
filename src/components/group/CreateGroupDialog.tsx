@@ -20,13 +20,16 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { GROUP_TAGS, type GroupTag } from "@/database/workspaceStorage";
+import {
+  CREATABLE_GROUP_TAGS,
+  type CreatableGroupTag,
+} from "@/database/workspaceStorage";
 import { GroupTagDot } from "@/components/group/GroupTagBadge";
 import { formatGroupTag, GROUP_TAG_DESCRIPTIONS } from "@/lib/groupTag";
 
 export interface CreateGroupFormValues {
   name: string;
-  tag: GroupTag;
+  tag: CreatableGroupTag;
   description?: string | null;
 }
 
@@ -44,7 +47,7 @@ export default function CreateGroupDialog({
   isCreating = false,
 }: CreateGroupDialogProps) {
   const [name, setName] = useState("");
-  const [tag, setTag] = useState<GroupTag>("workspace");
+  const [tag, setTag] = useState<CreatableGroupTag>("workspace");
   const [description, setDescription] = useState("");
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export default function CreateGroupDialog({
             <Label htmlFor="group-create-type">Type</Label>
             <Select
               value={tag}
-              onValueChange={(value) => setTag(value as GroupTag)}
+              onValueChange={(value) => setTag(value as CreatableGroupTag)}
               disabled={isCreating}
             >
               <SelectTrigger id="group-create-type" className="h-9">
@@ -105,7 +108,7 @@ export default function CreateGroupDialog({
                 </span>
               </SelectTrigger>
               <SelectContent>
-                {GROUP_TAGS.map((t) => (
+                {CREATABLE_GROUP_TAGS.map((t) => (
                   <SelectItem key={t} value={t}>
                     <span className="flex items-center gap-2">
                       <GroupTagDot tag={t} />

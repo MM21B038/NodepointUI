@@ -107,6 +107,20 @@ export function ownerParamsForScopedName(
   return undefined;
 }
 
+/** Owner for per-workspace API calls; prefers catalog match, then optional fallback. */
+export function ownerParamsForWorkspaceName(
+  catalog: OwnedResourceFields[],
+  workspaceName: string,
+  fallback?: OwnerParams
+): OwnerParams | undefined {
+  const fromCatalog = ownerParamsForScopedName(
+    catalog,
+    workspaceName,
+    fallback?.ownerId ?? null
+  );
+  return fromCatalog ?? fallback;
+}
+
 /** True when owner params match a row with the given scoped name. */
 export function ownerParamsValidatedForName(
   items: OwnedResourceFields[],

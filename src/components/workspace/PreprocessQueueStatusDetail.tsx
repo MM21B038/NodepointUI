@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PreprocessQueueStatusResponse } from "@/database/workspaceStorage";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { cn } from "@/lib/utils";
 import { brand } from "@/lib/brandColors";
 import {
@@ -147,6 +148,7 @@ function WorkspacesInProgressOverview({
   loadActive: boolean;
   highlightWorkspace?: string;
 }) {
+  const { workspaceList } = useWorkspace();
   const [rows, setRows] = useState<WorkspacePreprocessTableRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +165,7 @@ function WorkspacesInProgressOverview({
     if (showSpinner) setIsLoading(true);
     setError(null);
 
-    void fetchWorkspacePreprocessTableRows(controller.signal)
+    void fetchWorkspacePreprocessTableRows(controller.signal, workspaceList)
       .then((tableRows) => {
         if (!controller.signal.aborted) setRows(tableRows);
       })
@@ -182,7 +184,7 @@ function WorkspacesInProgressOverview({
       });
 
     return () => controller.abort();
-  }, [loadActive, refreshKey]);
+  }, [loadActive, refreshKey, workspaceList]);
 
   if (!loadActive) return null;
   // Hide entire block unless at least one workspace is not ready (or load failed).

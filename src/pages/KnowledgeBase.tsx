@@ -14,7 +14,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useResolvedScopeOwner } from "@/hooks/useResolvedScopeOwner";
+import { useResolvedActiveScopeOwner } from "@/hooks/useResolvedScopeOwner";
 import { InteractiveGraphVisualization } from "@/components/InteractiveGraphVisualization";
 import SourceFilesPanel from "@/components/SourceFilesPanel";
 import GraphEntitySearchBar from "@/components/GraphEntitySearchBar";
@@ -76,12 +76,13 @@ type ActiveFilterPanel = "none" | "sourceFiles" | "workspaces" | "overview";
 
 const KnowledgeBase = () => {
   console.log("KnowledgeBase: Component rendered.");
-  const { currentWorkspace, scopeMode, activeGroup, scopeHydrated } = useWorkspace();
+  const { currentWorkspace, scopeMode, activeGroup, scopeHydrated, workspaceList } =
+    useWorkspace();
   const {
     owner: scopeOwner,
     needsOwner: scopeNeedsOwner,
     ready: scopeOwnerReady,
-  } = useResolvedScopeOwner();
+  } = useResolvedActiveScopeOwner(scopeMode);
   const [allNodes, setAllNodes] = useState<GraphNode[]>([]);
   const [allEdges, setAllEdges] = useState<GraphEdge[]>([]);
   const [scopeLoading, setScopeLoading] = useState(true);
@@ -300,12 +301,15 @@ const KnowledgeBase = () => {
         setSelectedSourceFiles(new Set());
         return [];
       }
-      const files = await listFilesForWorkspaces(workspaceNames, { owner: scopeOwner });
+      const files = await listFilesForWorkspaces(workspaceNames, {
+        owner: scopeOwner,
+        workspaceCatalog: workspaceList,
+      });
       setAvailableSourceFiles(files);
       setSelectedSourceFiles(new Set(files));
       return files;
     },
-    [scopeOwner]
+    [scopeOwner, workspaceList]
   );
 
   const loadBrowseGraph = useCallback(
@@ -387,7 +391,7 @@ const KnowledgeBase = () => {
                 targets,
                 groupName,
                 fetchParams,
-                { owner: scopeOwner }
+                { owner: scopeOwner, workspaceCatalog: workspaceList }
               );
             }
           } else {
@@ -426,7 +430,7 @@ const KnowledgeBase = () => {
         }
       }
     },
-    [applyGraphResponse, scopeOwner]
+    [applyGraphResponse, scopeOwner, workspaceList]
   );
 
   const loadEntityTypeCatalog = useCallback(
@@ -503,7 +507,10 @@ const KnowledgeBase = () => {
           if (kgMeta.tag === "files" && kgMeta.memberFileNames.length > 0) {
             files = kgMeta.memberFileNames;
           } else if (kgMeta.isWorkspaceTagGroup && graphTargets.length > 0) {
-            files = await listFilesForWorkspaces(graphTargets);
+            files = await listFilesForWorkspaces(graphTargets, {
+              owner: scopeOwner,
+              workspaceCatalog: workspaceList,
+            });
           }
           if (requestId !== scopeLoadRequestIdRef.current) return;
           setAvailableSourceFiles(files);
@@ -575,7 +582,7 @@ const KnowledgeBase = () => {
         }
       }
     },
-    [loadBrowseGraph, resetBrowseUiFilters, scopeOwner]
+    [loadBrowseGraph, resetBrowseUiFilters, scopeOwner, workspaceList]
   );
 
   const loadEntityTypeCatalogRef = useRef(loadEntityTypeCatalog);

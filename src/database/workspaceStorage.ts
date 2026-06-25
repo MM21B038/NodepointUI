@@ -9,8 +9,10 @@ import {
   appendOwnerQuery,
   buildGroupWorkspacePostBody,
   normalizeOwnerFields,
+  ownerParamsForWorkspaceName,
   type GroupMemberMutationOptions,
   type GroupWorkspaceMutationOptions,
+  type OwnedResourceFields,
   type OwnerParams,
 } from "@/lib/ownerScope";
 
@@ -662,7 +664,12 @@ export async function getFlaggedWorkspaceCount(): Promise<FlaggedWorkspaceCountR
 
 export type GroupTag = "workspace" | "files" | "entity" | "relation";
 
+/** Tags users may pass to `POST /api/group/create/` (entity/relation are system-managed). */
+export type CreatableGroupTag = "workspace" | "files";
+
 export const GROUP_TAGS: GroupTag[] = ["workspace", "files", "entity", "relation"];
+
+export const CREATABLE_GROUP_TAGS: CreatableGroupTag[] = ["workspace", "files"];
 
 export function normalizeGroupTag(raw: unknown): GroupTag {
   if (raw === "files" || raw === "entity" || raw === "relation") return raw;
@@ -817,7 +824,7 @@ export interface ResourceLookupResult<T> {
 }
 
 export interface CreateGroupOptions {
-  tag?: GroupTag | null;
+  tag?: CreatableGroupTag | null;
   description?: string | null;
 }
 
@@ -1204,7 +1211,7 @@ export async function createWorkspaceGroup(
   options?: CreateGroupOptions
 ): Promise<WorkspaceGroupSummary> {
   const normalized = name.trim();
-  const body: { name: string; tag?: GroupTag; description?: string } = {
+  const body: { name: string; tag?: CreatableGroupTag; description?: string } = {
     name: normalized,
     tag: options?.tag ?? "workspace",
   };
@@ -2652,7 +2659,11 @@ export async function fetchKnowledgeGraphForWorkspaces(
   workspaceNames: string[],
   groupName: string,
   params?: GraphFetchParams,
-  options?: { concurrency?: number; owner?: OwnerParams }
+  options?: {
+    concurrency?: number;
+    owner?: OwnerParams;
+    workspaceCatalog?: OwnedResourceFields[];
+  }
 ): Promise<KnowledgeGraphPayload> {
   const names = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b)
@@ -2662,9 +2673,11 @@ export async function fetchKnowledgeGraphForWorkspaces(
   }
 
   const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
-  const owner = options?.owner;
+  const fallbackOwner = options?.owner;
+  const catalog = options?.workspaceCatalog ?? [];
   const slices = await runWithConcurrency(names, concurrency, async (ws) => {
-    const payload = await getFilteredKnowledgeGraph(workspaceScope(ws, owner), params);
+    const wsOwner = ownerParamsForWorkspaceName(catalog, ws, fallbackOwner);
+    const payload = await getFilteredKnowledgeGraph(workspaceScope(ws, wsOwner), params);
     return {
       workspace: ws,
       nodes: payload.nodes,
@@ -2899,16 +2912,22 @@ export function resolveGraphFileNamesParam(
 
 export async function listFilesForWorkspaces(
   workspaceNames: string[],
-  options?: { concurrency?: number; owner?: OwnerParams }
+  options?: {
+    concurrency?: number;
+    owner?: OwnerParams;
+    workspaceCatalog?: OwnedResourceFields[];
+  }
 ): Promise<string[]> {
   const names = new Set<string>();
   const unique = [...new Set(workspaceNames.map((n) => n.trim()).filter(Boolean))];
   const concurrency = options?.concurrency ?? KB_FETCH_CONCURRENCY;
-  const owner = options?.owner;
+  const fallbackOwner = options?.owner;
+  const catalog = options?.workspaceCatalog ?? [];
 
   await runWithConcurrency(unique, concurrency, async (ws) => {
     try {
-      for (const f of await listFiles(ws, owner)) names.add(f);
+      const wsOwner = ownerParamsForWorkspaceName(catalog, ws, fallbackOwner);
+      for (const f of await listFiles(ws, wsOwner)) names.add(f);
     } catch {
       /* skip workspace */
     }
